@@ -16,4 +16,5 @@ require (
 	go.opentelemetry.io/otel v1.33.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.58.0
 	golang.org/x/crypto v0.31.0
+	golang.org/x/time v0.9.0
 )
