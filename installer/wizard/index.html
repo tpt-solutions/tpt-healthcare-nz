@@ -1,0 +1,1706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TPT Healthcare NZ — First-Run Setup Wizard</title>
+  <style>
+    /* -----------------------------------------------------------------------
+       Design tokens — NZ health teal palette
+    ----------------------------------------------------------------------- */
+    :root {
+      --color-teal-50:  #f0fdfa;
+      --color-teal-100: #ccfbf1;
+      --color-teal-200: #99f6e4;
+      --color-teal-400: #2dd4bf;
+      --color-teal-500: #14b8a6;
+      --color-teal-600: #0d9488;
+      --color-teal-700: #0f766e;
+      --color-teal-800: #115e59;
+      --color-teal-900: #134e4a;
+
+      --color-surface:  #ffffff;
+      --color-bg:       #f8fafc;
+      --color-border:   #e2e8f0;
+      --color-text:     #1e293b;
+      --color-muted:    #64748b;
+      --color-error:    #dc2626;
+      --color-success:  #16a34a;
+      --color-warning:  #d97706;
+
+      --radius:         0.5rem;
+      --shadow-sm:      0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md:      0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --shadow-lg:      0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+      --transition:     150ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* -----------------------------------------------------------------------
+       Reset & base
+    ----------------------------------------------------------------------- */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; scroll-behavior: smooth; }
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: var(--color-bg);
+      color: var(--color-text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 2rem 1rem 4rem;
+    }
+
+    /* -----------------------------------------------------------------------
+       Layout
+    ----------------------------------------------------------------------- */
+    .wizard-shell {
+      width: 100%;
+      max-width: 680px;
+    }
+
+    /* Header */
+    .wizard-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .wizard-header .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--color-teal-700);
+      text-decoration: none;
+      margin-bottom: 0.5rem;
+    }
+    .wizard-header .logo svg {
+      flex-shrink: 0;
+    }
+    .wizard-header p {
+      color: var(--color-muted);
+      font-size: 0.95rem;
+    }
+
+    /* Progress bar */
+    .progress-track {
+      display: flex;
+      align-items: center;
+      margin-bottom: 2rem;
+      gap: 0;
+    }
+    .progress-track .step-dot {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+    .progress-track .step-dot:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      top: 1rem;
+      left: 50%;
+      width: 100%;
+      height: 2px;
+      background: var(--color-border);
+      z-index: 0;
+    }
+    .progress-track .step-dot.done:not(:last-child)::after,
+    .progress-track .step-dot.active:not(:last-child)::after {
+      background: var(--color-teal-400);
+    }
+    .step-dot .dot {
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      border: 2px solid var(--color-border);
+      background: var(--color-surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--color-muted);
+      z-index: 1;
+      position: relative;
+      transition: all var(--transition);
+    }
+    .step-dot.done .dot {
+      background: var(--color-teal-600);
+      border-color: var(--color-teal-600);
+      color: #fff;
+    }
+    .step-dot.active .dot {
+      background: var(--color-teal-500);
+      border-color: var(--color-teal-500);
+      color: #fff;
+      box-shadow: 0 0 0 4px var(--color-teal-100);
+    }
+    .step-dot .label {
+      font-size: 0.7rem;
+      color: var(--color-muted);
+      margin-top: 0.35rem;
+      white-space: nowrap;
+      text-align: center;
+    }
+    .step-dot.active .label,
+    .step-dot.done .label {
+      color: var(--color-teal-700);
+      font-weight: 600;
+    }
+
+    /* Card */
+    .card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-md);
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+    }
+    .card-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--color-teal-800);
+      margin-bottom: 0.25rem;
+    }
+    .card-subtitle {
+      font-size: 0.9rem;
+      color: var(--color-muted);
+      margin-bottom: 1.5rem;
+    }
+
+    /* Form elements */
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+    .form-group label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--color-text);
+      margin-bottom: 0.35rem;
+    }
+    .form-group .hint {
+      font-size: 0.78rem;
+      color: var(--color-muted);
+      margin-top: 0.25rem;
+    }
+    .form-group .field-error {
+      font-size: 0.78rem;
+      color: var(--color-error);
+      margin-top: 0.25rem;
+      display: none;
+    }
+    .form-group.has-error .field-error { display: block; }
+    .form-group.has-error input,
+    .form-group.has-error select,
+    .form-group.has-error textarea {
+      border-color: var(--color-error);
+      outline-color: var(--color-error);
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="url"],
+    input[type="tel"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 0.55rem 0.75rem;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      color: var(--color-text);
+      background: var(--color-surface);
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: 2px solid var(--color-teal-400);
+      outline-offset: 0;
+      border-color: var(--color-teal-400);
+    }
+    textarea { resize: vertical; min-height: 80px; }
+
+    /* Checkboxes */
+    .checkbox-group {
+      display: flex;
+      gap: 0.6rem;
+      align-items: flex-start;
+    }
+    .checkbox-group input[type="checkbox"] {
+      width: 1.1rem;
+      height: 1.1rem;
+      margin-top: 0.15rem;
+      accent-color: var(--color-teal-600);
+      flex-shrink: 0;
+    }
+    .checkbox-group label {
+      font-size: 0.875rem;
+      font-weight: 400;
+      line-height: 1.5;
+    }
+
+    /* Radio cards */
+    .radio-cards {
+      display: grid;
+      gap: 0.75rem;
+      grid-template-columns: 1fr;
+    }
+    .radio-card {
+      position: relative;
+    }
+    .radio-card input[type="radio"] {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .radio-card label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      padding: 0.9rem 1rem;
+      border: 2px solid var(--color-border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: border-color var(--transition), background var(--transition);
+    }
+    .radio-card input[type="radio"]:checked + label {
+      border-color: var(--color-teal-500);
+      background: var(--color-teal-50);
+    }
+    .radio-card input[type="radio"]:focus-visible + label {
+      outline: 2px solid var(--color-teal-400);
+      outline-offset: 2px;
+    }
+    .radio-card label .rc-title {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--color-text);
+    }
+    .radio-card label .rc-desc {
+      font-size: 0.82rem;
+      color: var(--color-muted);
+    }
+    .radio-card input[type="radio"]:checked + label .rc-title {
+      color: var(--color-teal-800);
+    }
+
+    /* Conditional sub-panels */
+    .sub-panel {
+      display: none;
+      margin-top: 1rem;
+      padding: 1rem;
+      background: var(--color-teal-50);
+      border: 1px solid var(--color-teal-200);
+      border-radius: var(--radius);
+    }
+    .sub-panel.visible { display: block; }
+
+    /* Password strength */
+    .strength-bar {
+      height: 4px;
+      border-radius: 2px;
+      background: var(--color-border);
+      margin-top: 0.5rem;
+      overflow: hidden;
+    }
+    .strength-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.3s ease, background 0.3s ease;
+      width: 0;
+    }
+    .strength-label {
+      font-size: 0.78rem;
+      color: var(--color-muted);
+      margin-top: 0.25rem;
+    }
+
+    /* TOTP / QR placeholder */
+    .totp-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      padding: 1.25rem;
+      background: var(--color-bg);
+      border: 1px dashed var(--color-border);
+      border-radius: var(--radius);
+    }
+    .qr-placeholder {
+      width: 160px;
+      height: 160px;
+      background: var(--color-border);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-muted);
+      font-size: 0.78rem;
+      text-align: center;
+    }
+    .totp-secret {
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+      letter-spacing: 0.12em;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      padding: 0.4rem 0.75rem;
+      color: var(--color-teal-800);
+    }
+
+    /* Info / notice boxes */
+    .notice {
+      display: flex;
+      gap: 0.75rem;
+      padding: 1rem 1.1rem;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      line-height: 1.5;
+      margin-bottom: 1.25rem;
+    }
+    .notice-info {
+      background: var(--color-teal-50);
+      border: 1px solid var(--color-teal-200);
+      color: var(--color-teal-800);
+    }
+    .notice-warn {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: #92400e;
+    }
+    .notice svg { flex-shrink: 0; margin-top: 1px; }
+
+    /* License box */
+    .license-box {
+      height: 200px;
+      overflow-y: auto;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      color: var(--color-muted);
+      background: var(--color-bg);
+      margin-bottom: 1rem;
+    }
+    .license-box h4 { color: var(--color-text); margin-bottom: 0.4rem; }
+    .license-box p  { margin-bottom: 0.5rem; }
+
+    /* Code / mono values */
+    .mono {
+      font-family: 'Courier New', monospace;
+      font-size: 0.88rem;
+      background: var(--color-teal-50);
+      border: 1px solid var(--color-teal-200);
+      border-radius: 4px;
+      padding: 0.1rem 0.4rem;
+    }
+
+    /* Summary list */
+    .summary-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .summary-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.9rem;
+      padding-bottom: 0.6rem;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .summary-list li:last-child { border-bottom: none; }
+    .summary-list .sl-key { color: var(--color-muted); font-weight: 500; }
+    .summary-list .sl-val { font-weight: 600; color: var(--color-text); }
+
+    /* Next-steps list */
+    .next-steps {
+      counter-reset: steps;
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .next-steps li {
+      counter-increment: steps;
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+      font-size: 0.9rem;
+    }
+    .next-steps li::before {
+      content: counter(steps);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 1.6rem;
+      height: 1.6rem;
+      background: var(--color-teal-600);
+      color: #fff;
+      border-radius: 50%;
+      font-size: 0.75rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 0.6rem 1.25rem;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all var(--transition);
+      text-decoration: none;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary {
+      background: var(--color-teal-600);
+      color: #fff;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--color-teal-700); }
+    .btn-secondary {
+      background: transparent;
+      border-color: var(--color-border);
+      color: var(--color-text);
+    }
+    .btn-secondary:hover:not(:disabled) {
+      border-color: var(--color-teal-400);
+      color: var(--color-teal-700);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--color-muted);
+    }
+    .btn-ghost:hover:not(:disabled) { color: var(--color-text); }
+
+    /* Nav bar */
+    .wizard-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .wizard-nav .nav-right { display: flex; gap: 0.5rem; }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      pointer-events: none;
+    }
+    .toast-msg {
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      font-weight: 500;
+      box-shadow: var(--shadow-lg);
+      opacity: 0;
+      transform: translateY(0.5rem);
+      transition: opacity 0.25s, transform 0.25s;
+      pointer-events: all;
+    }
+    .toast-msg.show { opacity: 1; transform: translateY(0); }
+    .toast-error   { background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; }
+    .toast-success { background: #f0fdf4; border: 1px solid #86efac; color: #166534; }
+
+    /* Loading spinner */
+    .spinner {
+      display: inline-block;
+      width: 1rem;
+      height: 1rem;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Step panels */
+    .step { display: none; }
+    .step.active { display: block; }
+
+    /* Responsive */
+    @media (min-width: 560px) {
+      .radio-cards { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* Print / high contrast helpers */
+    @media (prefers-color-scheme: dark) {
+      /* minimal dark: keep brand teal readable */
+      :root {
+        --color-surface: #1e293b;
+        --color-bg:      #0f172a;
+        --color-border:  #334155;
+        --color-text:    #f1f5f9;
+        --color-muted:   #94a3b8;
+      }
+      .license-box { background: var(--color-bg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Toast container -->
+  <div id="toast" aria-live="polite" aria-atomic="true"></div>
+
+  <main class="wizard-shell" role="main">
+
+    <!-- Brand header -->
+    <header class="wizard-header">
+      <a href="/" class="logo" aria-label="TPT Healthcare NZ home">
+        <!-- Simple cross/heartbeat icon — no external deps -->
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true"
+             xmlns="http://www.w3.org/2000/svg">
+          <rect width="32" height="32" rx="8" fill="#0d9488"/>
+          <path d="M6 16h4l3-7 4 14 3-9 2 4h4" stroke="white" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        TPT Healthcare NZ
+      </a>
+      <p>Practice setup wizard — complete each step to get your system ready.</p>
+    </header>
+
+    <!-- Progress bar -->
+    <nav class="progress-track" aria-label="Wizard progress">
+      <!-- JS will set active/done classes -->
+      <div class="step-dot" data-step="0" aria-current="false">
+        <div class="dot">1</div>
+        <span class="label">Welcome</span>
+      </div>
+      <div class="step-dot" data-step="1" aria-current="false">
+        <div class="dot">2</div>
+        <span class="label">Practice</span>
+      </div>
+      <div class="step-dot" data-step="2" aria-current="false">
+        <div class="dot">3</div>
+        <span class="label">Auth</span>
+      </div>
+      <div class="step-dot" data-step="3" aria-current="false">
+        <div class="dot">4</div>
+        <span class="label">Database</span>
+      </div>
+      <div class="step-dot" data-step="4" aria-current="false">
+        <div class="dot">5</div>
+        <span class="label">Admin</span>
+      </div>
+      <div class="step-dot" data-step="5" aria-current="false">
+        <div class="dot">6</div>
+        <span class="label">Complete</span>
+      </div>
+    </nav>
+
+    <!-- ===== STEP 1: Welcome ===== -->
+    <section class="card step active" id="step-0" aria-labelledby="s0-title">
+      <h1 class="card-title" id="s0-title">Welcome to TPT Healthcare NZ</h1>
+      <p class="card-subtitle">
+        This wizard configures your practice management and FHIR interoperability
+        platform for use in the New Zealand health sector.
+      </p>
+
+      <div class="notice notice-info" role="note">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M10 9v5M10 6.5v.5" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round"/>
+        </svg>
+        <div>
+          This system handles <strong>health information</strong> as defined by the
+          <em>Privacy Act 2020 (NZ)</em> and the
+          <em>Health Information Privacy Code 2020 (HIPC)</em>.
+          Complete all steps carefully — your settings affect your legal compliance obligations.
+        </div>
+      </div>
+
+      <h2 class="card-title" style="font-size:1rem; margin-bottom:0.75rem;">
+        License &amp; Compliance Agreement
+      </h2>
+
+      <div class="license-box" tabindex="0" role="region" aria-label="License agreement text">
+        <h4>TPT Healthcare NZ — Software License &amp; Privacy Compliance Agreement</h4>
+        <p>
+          By installing and using this software you agree to operate it in compliance with
+          all applicable New Zealand legislation, including but not limited to:
+        </p>
+        <p>
+          <strong>Privacy Act 2020 (NZ):</strong> Health information collected by this
+          system is sensitive personal information. You must collect only information
+          necessary for a clearly stated, lawful purpose (HIPC Rule 1). Individuals have
+          the right to access and correct their own health information. Notifiable privacy
+          breaches must be reported to the Privacy Commissioner within 72 hours.
+        </p>
+        <p>
+          <strong>Health Information Privacy Code 2020 (HIPC):</strong> You must comply
+          with all 13 HIPC rules. Key obligations: collect only for a lawful purpose
+          (Rule 1); collect from the individual unless an exception applies (Rule 2); keep
+          health information secure with encryption at rest and in transit (Rule 5); do not
+          retain longer than necessary (Rule 6); use only for the purpose collected
+          (Rule 10); disclose only with consent or under a specific exception (Rule 11);
+          use National Health Index (NHI) numbers only as issued by Te Whatu Ora (Rule 12).
+        </p>
+        <p>
+          <strong>HPCA Act 2003:</strong> Clinical actions performed through this system
+          must be carried out only by health practitioners who hold a current Annual
+          Practising Certificate (APC) with the appropriate scope of practice.
+        </p>
+        <p>
+          <strong>Security obligations:</strong> You are responsible for maintaining
+          encryption keys, access controls, and network security. The ENCRYPTION_KEY
+          generated during installation is your responsibility to back up securely.
+        </p>
+        <p>
+          By proceeding you confirm that your organisation has a lawful purpose for
+          collecting and processing health information, and that you will operate this
+          system in accordance with the above legislation.
+        </p>
+      </div>
+
+      <div class="form-group">
+        <div class="checkbox-group">
+          <input type="checkbox" id="agree-privacy" name="agree-privacy" />
+          <label for="agree-privacy">
+            I have read and agree to operate this system in compliance with the
+            <strong>Privacy Act 2020</strong> and the
+            <strong>Health Information Privacy Code 2020</strong>.
+          </label>
+        </div>
+        <div class="field-error" id="agree-privacy-error">You must agree to continue.</div>
+      </div>
+
+      <div class="form-group">
+        <div class="checkbox-group">
+          <input type="checkbox" id="agree-hipc" name="agree-hipc" />
+          <label for="agree-hipc">
+            I understand that this system stores <strong>sensitive health information</strong>
+            and I accept responsibility for securing it appropriately.
+          </label>
+        </div>
+        <div class="field-error" id="agree-hipc-error">You must agree to continue.</div>
+      </div>
+
+      <div class="wizard-nav">
+        <span></span>
+        <div class="nav-right">
+          <button class="btn btn-primary" onclick="nextStep(0)">
+            Agree &amp; Continue
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== STEP 2: Practice details ===== -->
+    <section class="card step" id="step-1" aria-labelledby="s1-title">
+      <h1 class="card-title" id="s1-title">Practice Details</h1>
+      <p class="card-subtitle">
+        Enter your practice information. The HPI Facility ID is issued by
+        Te Whatu Ora and links your practice to the Health Practitioner Index.
+      </p>
+
+      <div class="form-group">
+        <label for="practice-name">Practice name <span aria-hidden="true">*</span></label>
+        <input type="text" id="practice-name" name="practice-name"
+               placeholder="e.g. Thorndon Medical Centre" autocomplete="organization"
+               aria-required="true" />
+        <div class="field-error" id="practice-name-error">Practice name is required.</div>
+      </div>
+
+      <div class="form-group">
+        <label for="hpi-fac-id">
+          HPI Facility ID
+          <span aria-hidden="true">*</span>
+        </label>
+        <input type="text" id="hpi-fac-id" name="hpi-fac-id"
+               placeholder="e.g. F00123-A" aria-required="true"
+               pattern="[A-Za-z0-9\-]+" />
+        <div class="hint">
+          Issued by Te Whatu Ora. Used for NHI queries and NES enrolment.
+        </div>
+        <div class="field-error" id="hpi-fac-id-error">HPI Facility ID is required.</div>
+      </div>
+
+      <div class="form-group">
+        <label for="practice-address">Street address <span aria-hidden="true">*</span></label>
+        <input type="text" id="practice-address" name="practice-address"
+               placeholder="e.g. 100 Molesworth Street, Wellington 6011"
+               autocomplete="street-address" aria-required="true" />
+        <div class="field-error" id="practice-address-error">Address is required.</div>
+      </div>
+
+      <div class="form-group">
+        <label for="practice-phone">Phone <span aria-hidden="true">*</span></label>
+        <input type="tel" id="practice-phone" name="practice-phone"
+               placeholder="e.g. 04 123 4567" autocomplete="tel" aria-required="true" />
+        <div class="field-error" id="practice-phone-error">Phone number is required.</div>
+      </div>
+
+      <div class="form-group">
+        <label for="practice-email">
+          Administrative email <span aria-hidden="true">*</span>
+        </label>
+        <input type="email" id="practice-email" name="practice-email"
+               placeholder="admin@yourclinic.co.nz"
+               autocomplete="email" aria-required="true" />
+        <div class="field-error" id="practice-email-error">
+          A valid email address is required.
+        </div>
+      </div>
+
+      <div class="wizard-nav">
+        <button class="btn btn-secondary" onclick="prevStep(1)">Back</button>
+        <div class="nav-right">
+          <button class="btn btn-primary" onclick="nextStep(1)">
+            Next: Authentication
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== STEP 3: Authentication mode ===== -->
+    <section class="card step" id="step-2" aria-labelledby="s2-title">
+      <h1 class="card-title" id="s2-title">Authentication Mode</h1>
+      <p class="card-subtitle">
+        Choose how clinicians and administrators will authenticate.
+        You can change this later via the server configuration.
+      </p>
+
+      <fieldset style="border:none; padding:0; margin:0 0 1.25rem">
+        <legend class="form-group" style="display:block; font-size:0.875rem; font-weight:600;
+                margin-bottom:0.75rem;">
+          Select authentication provider
+        </legend>
+
+        <div class="radio-cards" role="radiogroup">
+          <div class="radio-card">
+            <input type="radio" id="auth-local" name="auth-mode" value="local_jwt"
+                   checked aria-describedby="auth-local-desc" />
+            <label for="auth-local">
+              <span class="rc-title">Local JWT (Ed25519)</span>
+              <span class="rc-desc" id="auth-local-desc">
+                Self-contained JWTs signed with an Ed25519 key stored on this server.
+                Good for single-practice installs with TOTP as the second factor.
+              </span>
+            </label>
+          </div>
+
+          <div class="radio-card">
+            <input type="radio" id="auth-auth0" name="auth-mode" value="auth0"
+                   aria-describedby="auth-auth0-desc" />
+            <label for="auth-auth0">
+              <span class="rc-title">Auth0 (OIDC)</span>
+              <span class="rc-desc" id="auth-auth0-desc">
+                Delegate authentication to Auth0. Suitable for multi-practice or cloud
+                deployments already using Auth0.
+              </span>
+            </label>
+          </div>
+
+          <div class="radio-card">
+            <input type="radio" id="auth-tpt" name="auth-mode" value="tpt_identity"
+                   aria-describedby="auth-tpt-desc" />
+            <label for="auth-tpt">
+              <span class="rc-title">tpt-identity (OIDC)</span>
+              <span class="rc-desc" id="auth-tpt-desc">
+                Use the TPT identity provider shared across TPT Health services.
+                Requires a tpt-identity instance.
+              </span>
+            </label>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Auth0 sub-panel -->
+      <div class="sub-panel" id="panel-auth0" role="group" aria-label="Auth0 settings">
+        <div class="form-group">
+          <label for="auth0-domain">Auth0 domain <span aria-hidden="true">*</span></label>
+          <input type="text" id="auth0-domain" name="auth0-domain"
+                 placeholder="your-tenant.au.auth0.com" />
+        </div>
+        <div class="form-group">
+          <label for="auth0-client-id">Client ID <span aria-hidden="true">*</span></label>
+          <input type="text" id="auth0-client-id" name="auth0-client-id" />
+        </div>
+        <div class="form-group">
+          <label for="auth0-client-secret">
+            Client secret <span aria-hidden="true">*</span>
+          </label>
+          <input type="password" id="auth0-client-secret" name="auth0-client-secret"
+                 autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label for="auth0-audience">Audience (API identifier)</label>
+          <input type="text" id="auth0-audience" name="auth0-audience"
+                 placeholder="https://api.your-app.co.nz" />
+        </div>
+      </div>
+
+      <!-- tpt-identity sub-panel -->
+      <div class="sub-panel" id="panel-tpt" role="group" aria-label="tpt-identity settings">
+        <div class="form-group">
+          <label for="tpt-issuer">
+            tpt-identity base URL <span aria-hidden="true">*</span>
+          </label>
+          <input type="url" id="tpt-issuer" name="tpt-issuer"
+                 placeholder="https://identity.tpt.health" />
+        </div>
+        <div class="form-group">
+          <label for="tpt-client-id">Client ID <span aria-hidden="true">*</span></label>
+          <input type="text" id="tpt-client-id" name="tpt-client-id" />
+        </div>
+        <div class="form-group">
+          <label for="tpt-client-secret">
+            Client secret <span aria-hidden="true">*</span>
+          </label>
+          <input type="password" id="tpt-client-secret" name="tpt-client-secret"
+                 autocomplete="off" />
+        </div>
+      </div>
+
+      <div class="wizard-nav">
+        <button class="btn btn-secondary" onclick="prevStep(2)">Back</button>
+        <div class="nav-right">
+          <button class="btn btn-primary" onclick="nextStep(2)">
+            Next: Database
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== STEP 4: Database ===== -->
+    <section class="card step" id="step-3" aria-labelledby="s3-title">
+      <h1 class="card-title" id="s3-title">Database Configuration</h1>
+      <p class="card-subtitle">
+        Configure the PostgreSQL connection. Migrations will run automatically after
+        you complete the wizard.
+      </p>
+
+      <div id="db-autodetect-notice" class="notice notice-info" role="status"
+           aria-live="polite" style="display:none;">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M10 9v5M10 6.5v.5" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round"/>
+        </svg>
+        <div id="db-autodetect-msg">Checking for running database…</div>
+      </div>
+
+      <div class="form-group">
+        <label for="db-host">Host <span aria-hidden="true">*</span></label>
+        <input type="text" id="db-host" name="db-host"
+               value="localhost" aria-required="true" />
+        <div class="field-error" id="db-host-error">Database host is required.</div>
+      </div>
+
+      <div class="form-group">
+        <label for="db-port">Port <span aria-hidden="true">*</span></label>
+        <input type="text" id="db-port" name="db-port"
+               value="5432" aria-required="true" pattern="[0-9]+" />
+        <div class="field-error" id="db-port-error">
+          Port must be a number (default 5432).
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="db-name">Database name <span aria-hidden="true">*</span></label>
+        <input type="text" id="db-name" name="db-name"
+               value="tpt_healthcare" aria-required="true" />
+      </div>
+
+      <div class="form-group">
+        <label for="db-user">Username <span aria-hidden="true">*</span></label>
+        <input type="text" id="db-user" name="db-user"
+               value="tpt_healthcare" autocomplete="username" aria-required="true" />
+      </div>
+
+      <div class="form-group">
+        <label for="db-password">Password <span aria-hidden="true">*</span></label>
+        <input type="password" id="db-password" name="db-password"
+               autocomplete="new-password" aria-required="true" />
+        <div class="field-error" id="db-password-error">Database password is required.</div>
+      </div>
+
+      <div class="form-group">
+        <label for="db-sslmode">SSL mode</label>
+        <select id="db-sslmode" name="db-sslmode">
+          <option value="prefer">prefer (recommended)</option>
+          <option value="require">require</option>
+          <option value="verify-full">verify-full</option>
+          <option value="disable">disable (not recommended)</option>
+        </select>
+        <div class="hint">
+          Use <strong>require</strong> or <strong>verify-full</strong> in production.
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="db-dsn-preview">Connection string preview (read-only)</label>
+        <input type="text" id="db-dsn-preview" name="db-dsn-preview"
+               readonly tabindex="-1"
+               style="background:var(--color-bg); color:var(--color-muted);" />
+      </div>
+
+      <div class="form-group" style="margin-top:1rem;">
+        <button class="btn btn-secondary" type="button" id="btn-test-db"
+                onclick="testDbConnection()">
+          <span id="test-db-icon">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          Test connection
+        </button>
+        <span id="db-test-result" aria-live="polite" style="margin-left:0.75rem;
+              font-size:0.875rem;"></span>
+      </div>
+
+      <div class="wizard-nav">
+        <button class="btn btn-secondary" onclick="prevStep(3)">Back</button>
+        <div class="nav-right">
+          <button class="btn btn-primary" onclick="nextStep(3)">
+            Next: Admin Account
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== STEP 5: Admin account ===== -->
+    <section class="card step" id="step-4" aria-labelledby="s4-title">
+      <h1 class="card-title" id="s4-title">Admin Account</h1>
+      <p class="card-subtitle">
+        Create the initial administrator account. This account has full access to
+        system configuration. Additional users are created in the admin dashboard
+        after setup.
+      </p>
+
+      <div class="notice notice-warn" role="note">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M10 2L2 17h16L10 2z" stroke="currentColor" stroke-width="1.5"
+                stroke-linejoin="round"/>
+          <path d="M10 8v4M10 14.5v.5" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round"/>
+        </svg>
+        <div>
+          Store the credentials below securely. If you lose access to this account
+          and your TOTP device, recovery requires direct database access.
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="admin-email">
+          Admin email address <span aria-hidden="true">*</span>
+        </label>
+        <input type="email" id="admin-email" name="admin-email"
+               placeholder="admin@yourclinic.co.nz"
+               autocomplete="email" aria-required="true" />
+        <div class="field-error" id="admin-email-error">
+          A valid email address is required.
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="admin-password">Password <span aria-hidden="true">*</span></label>
+        <input type="password" id="admin-password" name="admin-password"
+               autocomplete="new-password" aria-required="true"
+               oninput="checkPasswordStrength(this.value)" />
+        <div class="strength-bar" aria-hidden="true">
+          <div class="strength-bar-fill" id="strength-fill"></div>
+        </div>
+        <div class="strength-label" id="strength-label" aria-live="polite"></div>
+        <div class="field-error" id="admin-password-error">
+          Password must be at least 12 characters and include uppercase, lowercase,
+          a number, and a symbol.
+        </div>
+        <div class="hint">
+          Minimum 12 characters. Use a passphrase or password manager.
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="admin-password-confirm">
+          Confirm password <span aria-hidden="true">*</span>
+        </label>
+        <input type="password" id="admin-password-confirm" name="admin-password-confirm"
+               autocomplete="new-password" aria-required="true" />
+        <div class="field-error" id="admin-password-confirm-error">
+          Passwords do not match.
+        </div>
+      </div>
+
+      <hr style="border:none; border-top:1px solid var(--color-border); margin:1.5rem 0;" />
+
+      <h2 class="card-title" style="font-size:1rem; margin-bottom:0.5rem;">
+        Two-Factor Authentication (TOTP)
+      </h2>
+      <p style="font-size:0.875rem; color:var(--color-muted); margin-bottom:1rem;">
+        Scan the QR code below with an authenticator app (e.g. Google Authenticator,
+        Authy, or 1Password). TOTP is mandatory for admin accounts.
+      </p>
+
+      <div class="totp-container" aria-label="TOTP setup">
+        <div class="qr-placeholder" id="totp-qr-placeholder" aria-label="QR code loading">
+          <span>QR code<br/>loading…</span>
+        </div>
+        <canvas id="totp-qr-canvas" width="160" height="160"
+                aria-label="TOTP QR code" style="display:none; border-radius:4px;"></canvas>
+        <div>
+          <div style="font-size:0.82rem; color:var(--color-muted); text-align:center;
+                      margin-bottom:0.4rem;">
+            Or enter the secret manually:
+          </div>
+          <div class="totp-secret" id="totp-secret" aria-label="TOTP secret key">
+            ████ ████ ████ ████
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top:1rem;">
+        <label for="totp-code">
+          Verification code <span aria-hidden="true">*</span>
+        </label>
+        <input type="text" id="totp-code" name="totp-code"
+               placeholder="6-digit code from your authenticator"
+               inputmode="numeric" pattern="[0-9]{6}"
+               maxlength="6" aria-required="true"
+               autocomplete="one-time-code" />
+        <div class="field-error" id="totp-code-error">
+          Enter the 6-digit code from your authenticator app.
+        </div>
+      </div>
+
+      <div class="wizard-nav">
+        <button class="btn btn-secondary" onclick="prevStep(4)">Back</button>
+        <div class="nav-right">
+          <button class="btn btn-primary" id="btn-create-account"
+                  onclick="submitAdminAccount()">
+            Create account &amp; finish
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== STEP 6: Complete ===== -->
+    <section class="card step" id="step-5" aria-labelledby="s5-title">
+      <div style="text-align:center; margin-bottom:1.5rem;">
+        <svg width="56" height="56" viewBox="0 0 56 56" fill="none" aria-hidden="true">
+          <circle cx="28" cy="28" r="27" fill="#ccfbf1" stroke="#0d9488" stroke-width="2"/>
+          <path d="M17 28l8 8 14-16" stroke="#0d9488" stroke-width="3"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <h1 class="card-title" id="s5-title" style="text-align:center;">
+        Setup complete!
+      </h1>
+      <p class="card-subtitle" style="text-align:center;">
+        TPT Healthcare NZ is configured and ready. Below are your service details.
+      </p>
+
+      <ul class="summary-list" id="complete-summary">
+        <li>
+          <span class="sl-key">API base URL</span>
+          <span class="sl-val"><span id="summary-api-url">—</span></span>
+        </li>
+        <li>
+          <span class="sl-key">FHIR R5 endpoint</span>
+          <span class="sl-val"><span id="summary-fhir-url">—</span></span>
+        </li>
+        <li>
+          <span class="sl-key">Admin dashboard</span>
+          <span class="sl-val"><span id="summary-admin-url">—</span></span>
+        </li>
+        <li>
+          <span class="sl-key">Logs</span>
+          <span class="sl-val"><span id="summary-logs-url">—</span></span>
+        </li>
+        <li>
+          <span class="sl-key">Practice</span>
+          <span class="sl-val" id="summary-practice">—</span>
+        </li>
+        <li>
+          <span class="sl-key">Authentication</span>
+          <span class="sl-val" id="summary-auth">—</span>
+        </li>
+      </ul>
+
+      <h2 class="card-title" style="font-size:1rem; margin:1.5rem 0 0.75rem;">
+        Recommended next steps
+      </h2>
+      <ol class="next-steps">
+        <li>Configure TLS — place your TLS certificate paths in
+            <code class="mono">config.yaml</code> under
+            <code class="mono">server.tls_cert_file</code> and
+            <code class="mono">server.tls_key_file</code>, then restart the service.
+        </li>
+        <li>Store your <code class="mono">ENCRYPTION_KEY</code> in a secret
+            manager (e.g. AWS Secrets Manager, HashiCorp Vault, or Azure Key Vault).
+            If this key is lost, encrypted health data is unrecoverable.
+        </li>
+        <li>Invite clinical staff — use the admin dashboard to create practitioner
+            accounts. Validate each practitioner's HPI CPN and APC before granting
+            clinical access.
+        </li>
+        <li>Configure backups — ensure your PostgreSQL host has automated, encrypted
+            backups retained for at least 7 years (HIPC Rule 6 / audit requirements).
+        </li>
+        <li>Review the audit log — access
+            <code class="mono">/api/v1/admin/audit</code> to verify that audit events
+            are being recorded correctly.
+        </li>
+        <li>Test NHI integration — perform a test
+            <code class="mono">$match</code> operation against the NHI sandbox
+            environment before going live.
+        </li>
+      </ol>
+
+      <div class="wizard-nav" style="margin-top:2rem;">
+        <span></span>
+        <div class="nav-right">
+          <a class="btn btn-primary" id="btn-go-dashboard" href="/admin">
+            Go to admin dashboard
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </section>
+
+  </main><!-- /.wizard-shell -->
+
+  <script>
+    // =========================================================================
+    // State
+    // =========================================================================
+    var currentStep = 0;
+    var TOTAL_STEPS  = 6;
+
+    var state = {
+      agree:    { privacy: false, hipc: false },
+      practice: {},
+      auth:     { mode: 'local_jwt' },
+      db:       {},
+      admin:    {},
+      totpSecret: ''
+    };
+
+    // =========================================================================
+    // DOM helpers
+    // =========================================================================
+    function $(id) { return document.getElementById(id); }
+    function val(id) { var el = $(id); return el ? el.value.trim() : ''; }
+    function setError(fieldId, show) {
+      var fg = $(fieldId) && $(fieldId).closest('.form-group');
+      if (!fg) return;
+      if (show) fg.classList.add('has-error');
+      else       fg.classList.remove('has-error');
+    }
+
+    // =========================================================================
+    // Progress tracker
+    // =========================================================================
+    function updateProgress(step) {
+      var dots = document.querySelectorAll('.step-dot');
+      dots.forEach(function(dot, i) {
+        dot.classList.remove('active', 'done');
+        dot.setAttribute('aria-current', 'false');
+        if (i < step)  { dot.classList.add('done'); }
+        if (i === step) {
+          dot.classList.add('active');
+          dot.setAttribute('aria-current', 'step');
+        }
+      });
+    }
+
+    function showStep(step) {
+      for (var i = 0; i < TOTAL_STEPS; i++) {
+        var el = $('step-' + i);
+        if (el) {
+          el.classList.toggle('active', i === step);
+          el.hidden = (i !== step);
+        }
+      }
+      updateProgress(step);
+      currentStep = step;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      // Step-specific init
+      if (step === 3) { probeDatabase(); updateDsnPreview(); }
+      if (step === 4) { fetchTotpSecret(); }
+      if (step === 5) { populateSummary(); }
+    }
+
+    function prevStep(from) { showStep(from - 1); }
+
+    // =========================================================================
+    // Validation
+    // =========================================================================
+    function nextStep(from) {
+      var valid = true;
+
+      if (from === 0) {
+        valid = validateStep0() && valid;
+      } else if (from === 1) {
+        valid = validateStep1() && valid;
+      } else if (from === 2) {
+        valid = validateStep2() && valid;
+      } else if (from === 3) {
+        valid = validateStep3() && valid;
+      }
+
+      if (valid) {
+        saveStep(from);
+        showStep(from + 1);
+      }
+    }
+
+    function validateStep0() {
+      var ok = true;
+      if (!$('agree-privacy').checked) {
+        $('agree-privacy-error').style.display = 'block';
+        ok = false;
+      } else {
+        $('agree-privacy-error').style.display = 'none';
+      }
+      if (!$('agree-hipc').checked) {
+        $('agree-hipc-error').style.display = 'block';
+        ok = false;
+      } else {
+        $('agree-hipc-error').style.display = 'none';
+      }
+      return ok;
+    }
+
+    function validateStep1() {
+      var ok = true;
+      var fields = [
+        ['practice-name',    val('practice-name') === ''],
+        ['hpi-fac-id',       val('hpi-fac-id') === ''],
+        ['practice-address', val('practice-address') === ''],
+        ['practice-phone',   val('practice-phone') === ''],
+        ['practice-email',   !isValidEmail(val('practice-email'))]
+      ];
+      fields.forEach(function(f) {
+        setError(f[0], f[1]);
+        if (f[1]) ok = false;
+      });
+      return ok;
+    }
+
+    function validateStep2() {
+      var mode = document.querySelector('input[name="auth-mode"]:checked').value;
+      state.auth.mode = mode;
+      // Sub-panel fields
+      if (mode === 'auth0') {
+        if (!val('auth0-domain') || !val('auth0-client-id') || !val('auth0-client-secret')) {
+          showToast('Please fill in all Auth0 fields.', 'error');
+          return false;
+        }
+      } else if (mode === 'tpt_identity') {
+        if (!val('tpt-issuer') || !val('tpt-client-id') || !val('tpt-client-secret')) {
+          showToast('Please fill in all tpt-identity fields.', 'error');
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function validateStep3() {
+      var ok = true;
+      if (!val('db-host'))     { setError('db-host', true);     ok = false; }
+      else                     { setError('db-host', false); }
+      if (!val('db-port') || isNaN(parseInt(val('db-port'), 10))) {
+                                 setError('db-port', true);     ok = false; }
+      else                     { setError('db-port', false); }
+      if (!val('db-password')) { setError('db-password', true); ok = false; }
+      else                     { setError('db-password', false); }
+      return ok;
+    }
+
+    // =========================================================================
+    // Save step data to state
+    // =========================================================================
+    function saveStep(step) {
+      if (step === 0) {
+        state.agree.privacy = $('agree-privacy').checked;
+        state.agree.hipc    = $('agree-hipc').checked;
+      } else if (step === 1) {
+        state.practice = {
+          name:    val('practice-name'),
+          hpiFacId: val('hpi-fac-id'),
+          address: val('practice-address'),
+          phone:   val('practice-phone'),
+          email:   val('practice-email')
+        };
+      } else if (step === 2) {
+        state.auth = {
+          mode:          document.querySelector('input[name="auth-mode"]:checked').value,
+          auth0Domain:   val('auth0-domain'),
+          auth0ClientId: val('auth0-client-id'),
+          tptIssuer:     val('tpt-issuer'),
+          tptClientId:   val('tpt-client-id')
+        };
+      } else if (step === 3) {
+        state.db = {
+          host:    val('db-host'),
+          port:    val('db-port'),
+          name:    val('db-name'),
+          user:    val('db-user'),
+          sslmode: val('db-sslmode')
+        };
+      }
+    }
+
+    // =========================================================================
+    // Auth mode sub-panels
+    // =========================================================================
+    document.querySelectorAll('input[name="auth-mode"]').forEach(function(radio) {
+      radio.addEventListener('change', function() {
+        $('panel-auth0').classList.remove('visible');
+        $('panel-tpt').classList.remove('visible');
+        if (this.value === 'auth0')        $('panel-auth0').classList.add('visible');
+        if (this.value === 'tpt_identity') $('panel-tpt').classList.add('visible');
+      });
+    });
+
+    // =========================================================================
+    // DSN preview
+    // =========================================================================
+    ['db-host','db-port','db-name','db-user','db-password','db-sslmode'].forEach(function(id) {
+      var el = $(id);
+      if (el) el.addEventListener('input', updateDsnPreview);
+    });
+
+    function updateDsnPreview() {
+      var host    = val('db-host')    || 'localhost';
+      var port    = val('db-port')    || '5432';
+      var name    = val('db-name')    || 'tpt_healthcare';
+      var user    = val('db-user')    || 'tpt_healthcare';
+      var ssl     = val('db-sslmode') || 'prefer';
+      var passRaw = $('db-password') ? $('db-password').value : '';
+      var pass    = passRaw ? '••••••' : '<password>';
+      $('db-dsn-preview').value =
+        'postgres://' + user + ':' + pass + '@' + host + ':' + port + '/' + name +
+        '?sslmode=' + ssl;
+    }
+
+    // =========================================================================
+    // DB auto-detect
+    // =========================================================================
+    function probeDatabase() {
+      var notice = $('db-autodetect-notice');
+      var msg    = $('db-autodetect-msg');
+      notice.style.display = 'flex';
+      msg.textContent = 'Checking for running PostgreSQL instance…';
+
+      fetch('/api/v1/setup/db-probe', { method: 'GET' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.host) {
+            $('db-host').value = data.host || 'localhost';
+            $('db-port').value = data.port || '5432';
+            $('db-name').value = data.database || 'tpt_healthcare';
+            $('db-user').value = data.user || 'tpt_healthcare';
+            msg.textContent    = 'Auto-detected a running PostgreSQL instance — fields pre-filled.';
+            updateDsnPreview();
+          } else {
+            msg.textContent = 'No running instance detected. Enter connection details manually.';
+          }
+        })
+        .catch(function() {
+          msg.textContent = 'Could not contact setup API — enter connection details manually.';
+        });
+    }
+
+    // =========================================================================
+    // DB connection test
+    // =========================================================================
+    function testDbConnection() {
+      var btn    = $('btn-test-db');
+      var result = $('db-test-result');
+      var icon   = $('test-db-icon');
+
+      btn.disabled   = true;
+      icon.innerHTML = '<span class="spinner" aria-label="Testing connection"></span>';
+      result.textContent = '';
+
+      var payload = {
+        host:     val('db-host'),
+        port:     parseInt(val('db-port'), 10) || 5432,
+        database: val('db-name'),
+        user:     val('db-user'),
+        password: $('db-password') ? $('db-password').value : '',
+        sslmode:  val('db-sslmode')
+      };
+
+      fetch('/api/v1/setup/db-test', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload)
+      })
+        .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
+        .then(function(res) {
+          if (res.ok) {
+            result.style.color = 'var(--color-success)';
+            result.textContent = '✓ Connection successful (PostgreSQL ' +
+              (res.d.pg_version || '') + ')';
+          } else {
+            result.style.color = 'var(--color-error)';
+            result.textContent = '✗ ' + (res.d.error || 'Connection failed');
+          }
+        })
+        .catch(function(e) {
+          result.style.color = 'var(--color-error)';
+          result.textContent = '✗ Request failed: ' + e.message;
+        })
+        .finally(function() {
+          btn.disabled = false;
+          icon.innerHTML =
+            '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+            '<circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/>' +
+            '<path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.8"' +
+            ' stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        });
+    }
+
+    // =========================================================================
+    // Password strength
+    // =========================================================================
+    function checkPasswordStrength(pw) {
+      var score  = 0;
+      var labels = ['Too short', 'Weak', 'Fair', 'Good', 'Strong'];
+      var colors = ['#dc2626', '#f97316', '#eab308', '#16a34a', '#0d9488'];
+
+      if (pw.length >= 12) score++;
+      if (/[A-Z]/.test(pw)) score++;
+      if (/[a-z]/.test(pw)) score++;
+      if (/[0-9]/.test(pw)) score++;
+      if (/[^A-Za-z0-9]/.test(pw)) score++;
+
+      var fill  = $('strength-fill');
+      var label = $('strength-label');
+      var pct   = (score / 5) * 100;
+
+      fill.style.width      = pct + '%';
+      fill.style.background = colors[Math.min(score, 4)];
+      label.textContent     = pw.length === 0 ? '' : labels[Math.min(score, 4)];
+    }
+
+    // =========================================================================
+    // TOTP
+    // =========================================================================
+    function fetchTotpSecret() {
+      var email = val('admin-email') || 'admin@localhost';
+
+      fetch('/api/v1/setup/totp-init?email=' + encodeURIComponent(email))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.secret) {
+            state.totpSecret = data.secret;
+            renderTotpSecret(data.secret);
+          }
+          if (data.qr_data_url) {
+            renderQRImage(data.qr_data_url);
+          }
+        })
+        .catch(function() {
+          // Show a placeholder secret so the UI isn't broken offline
+          var fake = generateFakeSecret();
+          state.totpSecret = fake;
+          renderTotpSecret(fake);
+        });
+    }
+
+    function generateFakeSecret() {
+      var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+      var secret = '';
+      for (var i = 0; i < 32; i++) {
+        secret += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return secret;
+    }
+
+    function renderTotpSecret(secret) {
+      var formatted = secret.match(/.{1,4}/g).join(' ');
+      $('totp-secret').textContent = formatted;
+    }
+
+    function renderQRImage(dataUrl) {
+      var placeholder = $('totp-qr-placeholder');
+      var canvas      = $('totp-qr-canvas');
+      var img         = new Image();
+      img.onload = function() {
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, 160, 160);
+        placeholder.style.display = 'none';
+        canvas.style.display      = 'block';
+      };
+      img.src = dataUrl;
+    }
+
+    // =========================================================================
+    // Admin account submission
+    // =========================================================================
+    function submitAdminAccount() {
+      // Validate passwords
+      var pw     = $('admin-password').value;
+      var pwConf = $('admin-password-confirm').value;
+      var email  = val('admin-email');
+      var totp   = val('totp-code');
+      var ok     = true;
+
+      if (!isValidEmail(email)) {
+        setError('admin-email', true); ok = false;
+      } else { setError('admin-email', false); }
+
+      var pwValid = pw.length >= 12 &&
+                    /[A-Z]/.test(pw) && /[a-z]/.test(pw) &&
+                    /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw);
+      if (!pwValid) {
+        setError('admin-password', true); ok = false;
+      } else { setError('admin-password', false); }
+
+      if (pw !== pwConf) {
+        setError('admin-password-confirm', true); ok = false;
+      } else { setError('admin-password-confirm', false); }
+
+      if (!/^[0-9]{6}$/.test(totp)) {
+        setError('totp-code', true); ok = false;
+      } else { setError('totp-code', false); }
+
+      if (!ok) return;
+
+      var btn = $('btn-create-account');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner" aria-label="Creating account"></span> Creating…';
+
+      var payload = {
+        email:       email,
+        password:    pw,
+        totp_code:   totp,
+        totp_secret: state.totpSecret,
+        practice:    state.practice,
+        auth:        state.auth,
+        db: {
+          host:     val('db-host'),
+          port:     parseInt(val('db-port'), 10) || 5432,
+          database: val('db-name'),
+          user:     val('db-user'),
+          password: $('db-password').value,
+          sslmode:  val('db-sslmode')
+        }
+      };
+
+      fetch('/api/v1/setup/complete', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload)
+      })
+        .then(function(r) {
+          return r.json().then(function(d) { return { ok: r.ok, d: d }; });
+        })
+        .then(function(res) {
+          if (res.ok) {
+            state.admin.email  = email;
+            state.setupResult  = res.d;
+            showStep(5);
+          } else {
+            showToast((res.d && res.d.error) || 'Setup failed. Check logs for details.', 'error');
+            btn.disabled = false;
+            btn.innerHTML = 'Create account &amp; finish';
+          }
+        })
+        .catch(function(e) {
+          showToast('Request failed: ' + e.message, 'error');
+          btn.disabled = false;
+          btn.innerHTML = 'Create account &amp; finish';
+        });
+    }
+
+    // =========================================================================
+    // Populate summary (step 6)
+    // =========================================================================
+    function populateSummary() {
+      var base = (state.setupResult && state.setupResult.base_url) ||
+                 window.location.protocol + '//' + window.location.host;
+
+      $('summary-api-url').innerHTML =
+        '<a href="' + base + '/api/v1" target="_blank" rel="noopener">' + base + '/api/v1</a>';
+      $('summary-fhir-url').innerHTML =
+        '<a href="' + base + '/fhir/r5" target="_blank" rel="noopener">' + base + '/fhir/r5</a>';
+      $('summary-admin-url').innerHTML =
+        '<a href="' + base + '/admin" target="_blank" rel="noopener">' + base + '/admin</a>';
+      $('summary-logs-url').textContent  = base + '/api/v1/admin/audit';
+      $('summary-practice').textContent  = state.practice.name || '—';
+      $('summary-auth').textContent      = authModeLabel(state.auth.mode);
+      $('btn-go-dashboard').href         = base + '/admin';
+    }
+
+    function authModeLabel(mode) {
+      if (mode === 'auth0')        return 'Auth0 (OIDC)';
+      if (mode === 'tpt_identity') return 'tpt-identity (OIDC)';
+      return 'Local JWT + TOTP';
+    }
+
+    // =========================================================================
+    // Toast notifications
+    // =========================================================================
+    function showToast(message, type) {
+      var container = $('toast');
+      var el        = document.createElement('div');
+      el.className  = 'toast-msg toast-' + (type || 'success');
+      el.textContent = message;
+      el.setAttribute('role', 'alert');
+      container.appendChild(el);
+
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() { el.classList.add('show'); });
+      });
+
+      setTimeout(function() {
+        el.classList.remove('show');
+        setTimeout(function() { el.remove(); }, 300);
+      }, 5000);
+    }
+
+    // =========================================================================
+    // Utility
+    // =========================================================================
+    function isValidEmail(email) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+
+    // =========================================================================
+    // Init
+    // =========================================================================
+    showStep(0);
+    updateDsnPreview();
+  </script>
+</body>
+</html>

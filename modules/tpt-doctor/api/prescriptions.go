@@ -1,0 +1,675 @@
+package api
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"time"
+
+	"github.com/PhillipC05/tpt-healthcare/core/audit"
+	"github.com/PhillipC05/tpt-healthcare/core/db"
+	"github.com/PhillipC05/tpt-healthcare/core/encryption"
+	"github.com/PhillipC05/tpt-healthcare/core/hpi"
+	"github.com/PhillipC05/tpt-healthcare/core/middleware"
+	"github.com/PhillipC05/tpt-healthcare/core/pharmac"
+)
+
+// PrescriptionStatus mirrors the FHIR MedicationRequest status value set.
+type PrescriptionStatus string
+
+const (
+	PrescriptionStatusActive    PrescriptionStatus = "active"
+	PrescriptionStatusOnHold    PrescriptionStatus = "on-hold"
+	PrescriptionStatusCancelled PrescriptionStatus = "cancelled"
+	PrescriptionStatusCompleted PrescriptionStatus = "completed"
+	PrescriptionStatusDraft     PrescriptionStatus = "draft"
+	PrescriptionStatusStopped   PrescriptionStatus = "stopped"
+)
+
+// Dosage represents a medication dosage instruction.
+type Dosage struct {
+	Text            string  `json:"text"`
+	Route           string  `json:"route,omitempty"`           // e.g. "oral", "topical"
+	DoseValue       float64 `json:"doseValue"`                 // numeric dose
+	DoseUnit        string  `json:"doseUnit"`                  // e.g. "mg", "mL"
+	Frequency       string  `json:"frequency"`                 // e.g. "twice daily"
+	DurationDays    int     `json:"durationDays,omitempty"`    // 0 = ongoing
+	MaxDailyDose    float64 `json:"maxDailyDose,omitempty"`    // safety cap
+	MaxDailyDoseUnit string `json:"maxDailyDoseUnit,omitempty"`
+}
+
+// Prescription is the domain model for an e-prescription (FHIR MedicationRequest).
+type Prescription struct {
+	ID                  string             `json:"id"`
+	PatientID           string             `json:"patientId"`
+	PatientNHI          string             `json:"patientNhi"`
+	PractitionerHPI     string             `json:"practitionerHpi"`
+	EncounterID         string             `json:"encounterId,omitempty"`
+	NZULMCode           string             `json:"nzulmCode"`   // NZMT product code
+	MedicationName      string             `json:"medicationName"`
+	Status              PrescriptionStatus `json:"status"`
+	Dosage              Dosage             `json:"dosage"`
+	PHARMACSubsidised   bool               `json:"pharmácSubsidised"`
+	SubsidyCode         string             `json:"subsidyCode,omitempty"`
+	InteractionWarnings []string           `json:"interactionWarnings,omitempty"`
+	Repeats             int                `json:"repeats"`
+	RepeatsRemaining    int                `json:"repeatsRemaining"`
+	TenantID            string             `json:"tenantId"`
+	IssuedAt            time.Time          `json:"issuedAt"`
+	ExpiresAt           *time.Time         `json:"expiresAt,omitempty"`
+	CreatedAt           time.Time          `json:"createdAt"`
+	UpdatedAt           time.Time          `json:"updatedAt"`
+}
+
+// prescriptionCreateRequest is the body for POST /api/v1/prescriptions.
+type prescriptionCreateRequest struct {
+	PatientID       string `json:"patientId"`
+	PatientNHI      string `json:"patientNhi"`
+	PractitionerHPI string `json:"practitionerHpi"`
+	EncounterID     string `json:"encounterId,omitempty"`
+	NZULMCode       string `json:"nzulmCode"`
+	Dosage          Dosage `json:"dosage"`
+	Repeats         int    `json:"repeats"`
+}
+
+// prescriptionUpdateRequest is the body for PUT /api/v1/prescriptions/{id}.
+type prescriptionUpdateRequest struct {
+	Status  *PrescriptionStatus `json:"status,omitempty"`
+	Dosage  *Dosage             `json:"dosage,omitempty"`
+	Repeats *int                `json:"repeats,omitempty"`
+}
+
+// printablePrescription is the response for POST /api/v1/prescriptions/{id}/print.
+type printablePrescription struct {
+	PrescriptionID  string    `json:"prescriptionId"`
+	PatientName     string    `json:"patientName"`
+	PatientNHI      string    `json:"patientNhi"`
+	PatientDOB      string    `json:"patientDob"`
+	PractitionerName string   `json:"practitionerName"`
+	PractitionerHPI string    `json:"practitionerHpi"`
+	MedicationName  string    `json:"medicationName"`
+	NZULMCode       string    `json:"nzulmCode"`
+	DosageText      string    `json:"dosageText"`
+	Repeats         int       `json:"repeats"`
+	SubsidyCode     string    `json:"subsidyCode,omitempty"`
+	IssuedAt        time.Time `json:"issuedAt"`
+	PrintedAt       time.Time `json:"printedAt"`
+}
+
+// PrescriptionsHandler handles all /api/v1/prescriptions routes.
+type PrescriptionsHandler struct {
+	pool       db.Pool
+	enc        *encryption.Cipher
+	hpiClient  *hpi.Client
+	pharmac    *pharmac.Client
+	auditTrail *audit.Trail
+	logger     *slog.Logger
+}
+
+// List handles GET /api/v1/prescriptions.
+// Supported query parameters: patient (internal ID), status, provider (HPI CPN).
+func (h *PrescriptionsHandler) List(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	q := r.URL.Query()
+	patientFilter := q.Get("patient")
+	statusFilter := q.Get("status")
+	providerFilter := q.Get("provider")
+
+	prescriptions, err := h.listPrescriptions(ctx, tenantID, patientFilter, statusFilter, providerFilter)
+	if err != nil {
+		h.logger.Error("list prescriptions", slog.Any("error", err), slog.String("tenant", tenantID))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list prescriptions"})
+		return
+	}
+
+	if err := h.auditTrail.Write(ctx, audit.Event{
+		Actor:        principal,
+		Action:       audit.ActionRead,
+		ResourceType: "MedicationRequest",
+		ResourceID:   "list",
+		TenantID:     tenantID,
+		Metadata: map[string]string{
+			"patient":  patientFilter,
+			"status":   statusFilter,
+			"provider": providerFilter,
+		},
+	}); err != nil {
+		h.logger.Error("audit write", slog.Any("error", err))
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"prescriptions": prescriptions,
+		"total":         len(prescriptions),
+	})
+}
+
+// Create handles POST /api/v1/prescriptions.
+// Validates:
+//   - prescriber has a valid APC with prescribing scope (HPI)
+//   - NZULM product code exists (PHARMAC formulary)
+//   - PHARMAC subsidy eligibility
+//   - Drug interaction check against the patient's current medications
+func (h *PrescriptionsHandler) Create(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	var req prescriptionCreateRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_BODY", Message: err.Error()})
+		return
+	}
+
+	if err := validatePrescriptionCreate(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "VALIDATION_ERROR", Message: err.Error()})
+		return
+	}
+
+	// 1. Validate prescriber APC — must have prescribing scope.
+	apcStatus, err := h.hpiClient.ValidateAPC(ctx, req.PractitionerHPI)
+	if err != nil {
+		h.logger.Error("HPI APC validation for prescription", slog.Any("error", err))
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "HPI_ERROR", Message: "could not validate prescriber APC"})
+		return
+	}
+	if !apcStatus.Valid {
+		writeJSON(w, http.StatusUnprocessableEntity, apiError{
+			Code:    "INVALID_APC",
+			Message: "prescriber does not have a current Annual Practising Certificate",
+			Details: apcStatus,
+		})
+		return
+	}
+	if !apcStatus.HasPrescribingScope {
+		writeJSON(w, http.StatusForbidden, apiError{
+			Code:    "NO_PRESCRIBING_SCOPE",
+			Message: "practitioner's registration does not include prescribing scope of practice",
+			Details: map[string]string{"hpi": req.PractitionerHPI, "scope": apcStatus.ScopeOfPractice},
+		})
+		return
+	}
+
+	// 2. Validate NZULM product code and retrieve medication details.
+	medication, err := h.pharmac.LookupNZULM(ctx, req.NZULMCode)
+	if err != nil {
+		if errors.Is(err, pharmac.ErrProductNotFound) {
+			writeJSON(w, http.StatusUnprocessableEntity, apiError{
+				Code:    "INVALID_NZULM",
+				Message: fmt.Sprintf("NZULM product code %q not found in PHARMAC formulary", req.NZULMCode),
+			})
+			return
+		}
+		h.logger.Error("PHARMAC NZULM lookup", slog.Any("error", err))
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "PHARMAC_ERROR", Message: "PHARMAC formulary lookup failed"})
+		return
+	}
+
+	// 3. Check PHARMAC subsidy eligibility.
+	subsidy, err := h.pharmac.CheckSubsidy(ctx, req.NZULMCode, req.PatientNHI)
+	if err != nil {
+		h.logger.Error("PHARMAC subsidy check", slog.Any("error", err))
+		// Non-fatal: proceed without subsidy rather than blocking the prescription.
+		subsidy = &pharmac.SubsidyResult{Subsidised: false}
+	}
+
+	// 4. Drug interaction check against patient's active medications.
+	activeMedCodes, err := h.getActiveNZULMCodes(ctx, req.PatientID, tenantID)
+	if err != nil {
+		h.logger.Error("get active medications for interaction check", slog.Any("error", err))
+		activeMedCodes = nil // proceed without interaction check rather than blocking
+	}
+
+	var interactionWarnings []string
+	if len(activeMedCodes) > 0 {
+		interactions, err := h.pharmac.CheckInteractions(ctx, req.NZULMCode, activeMedCodes)
+		if err != nil {
+			h.logger.Error("PHARMAC interaction check", slog.Any("error", err))
+		} else {
+			interactionWarnings = interactions
+		}
+	}
+
+	rx, err := h.insertPrescription(ctx, req, medication, subsidy, interactionWarnings, tenantID)
+	if err != nil {
+		h.logger.Error("insert prescription", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to save prescription"})
+		return
+	}
+
+	if err := h.auditTrail.Write(ctx, audit.Event{
+		Actor:        principal,
+		Action:       audit.ActionWrite,
+		ResourceType: "MedicationRequest",
+		ResourceID:   rx.ID,
+		TenantID:     tenantID,
+		Metadata:     map[string]string{"nzulm": req.NZULMCode},
+	}); err != nil {
+		h.logger.Error("audit write", slog.Any("error", err))
+	}
+
+	writeJSON(w, http.StatusCreated, rx)
+}
+
+// Get handles GET /api/v1/prescriptions/{id}.
+func (h *PrescriptionsHandler) Get(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_ID", Message: "prescription ID is required"})
+		return
+	}
+
+	rx, err := h.getPrescriptionByID(ctx, id, tenantID)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "prescription not found"})
+			return
+		}
+		h.logger.Error("get prescription", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "GET_ERROR", Message: "failed to retrieve prescription"})
+		return
+	}
+
+	if err := h.auditTrail.Write(ctx, audit.Event{
+		Actor:        principal,
+		Action:       audit.ActionRead,
+		ResourceType: "MedicationRequest",
+		ResourceID:   id,
+		TenantID:     tenantID,
+	}); err != nil {
+		h.logger.Error("audit write", slog.Any("error", err))
+	}
+
+	writeJSON(w, http.StatusOK, rx)
+}
+
+// Update handles PUT /api/v1/prescriptions/{id}.
+// Supports status changes (e.g. cancel, stop) and dosage amendments.
+func (h *PrescriptionsHandler) Update(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_ID", Message: "prescription ID is required"})
+		return
+	}
+
+	var req prescriptionUpdateRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_BODY", Message: err.Error()})
+		return
+	}
+
+	existing, err := h.getPrescriptionByID(ctx, id, tenantID)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "prescription not found"})
+			return
+		}
+		h.logger.Error("get prescription for update", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "GET_ERROR", Message: "failed to retrieve prescription"})
+		return
+	}
+
+	if existing.Status == PrescriptionStatusCancelled || existing.Status == PrescriptionStatusCompleted {
+		writeJSON(w, http.StatusConflict, apiError{
+			Code:    "TERMINAL_STATUS",
+			Message: fmt.Sprintf("cannot update prescription in %s status", existing.Status),
+		})
+		return
+	}
+
+	if req.Status != nil {
+		existing.Status = *req.Status
+	}
+	if req.Dosage != nil {
+		existing.Dosage = *req.Dosage
+	}
+	if req.Repeats != nil {
+		existing.Repeats = *req.Repeats
+	}
+
+	updated, err := h.updatePrescription(ctx, existing)
+	if err != nil {
+		h.logger.Error("update prescription", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "UPDATE_ERROR", Message: "failed to update prescription"})
+		return
+	}
+
+	if err := h.auditTrail.Write(ctx, audit.Event{
+		Actor:        principal,
+		Action:       audit.ActionWrite,
+		ResourceType: "MedicationRequest",
+		ResourceID:   id,
+		TenantID:     tenantID,
+	}); err != nil {
+		h.logger.Error("audit write", slog.Any("error", err))
+	}
+
+	writeJSON(w, http.StatusOK, updated)
+}
+
+// Print handles POST /api/v1/prescriptions/{id}/print.
+// Returns a structured printable prescription data object. The caller is
+// responsible for rendering this into a PDF or paper prescription.
+func (h *PrescriptionsHandler) Print(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_ID", Message: "prescription ID is required"})
+		return
+	}
+
+	rx, err := h.getPrescriptionByID(ctx, id, tenantID)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "prescription not found"})
+			return
+		}
+		h.logger.Error("get prescription for print", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "GET_ERROR", Message: "failed to retrieve prescription"})
+		return
+	}
+
+	if rx.Status == PrescriptionStatusCancelled || rx.Status == PrescriptionStatusStopped {
+		writeJSON(w, http.StatusConflict, apiError{
+			Code:    "CANNOT_PRINT",
+			Message: fmt.Sprintf("prescription is %s and cannot be printed", rx.Status),
+		})
+		return
+	}
+
+	printData := printablePrescription{
+		PrescriptionID:  rx.ID,
+		PatientNHI:      rx.PatientNHI,
+		PractitionerHPI: rx.PractitionerHPI,
+		MedicationName:  rx.MedicationName,
+		NZULMCode:       rx.NZULMCode,
+		DosageText:      rx.Dosage.Text,
+		Repeats:         rx.RepeatsRemaining,
+		SubsidyCode:     rx.SubsidyCode,
+		IssuedAt:        rx.IssuedAt,
+		PrintedAt:       time.Now().UTC(),
+	}
+
+	if err := h.auditTrail.Write(ctx, audit.Event{
+		Actor:        principal,
+		Action:       audit.ActionRead,
+		ResourceType: "MedicationRequest",
+		ResourceID:   id,
+		TenantID:     tenantID,
+		Metadata:     map[string]string{"action": "print"},
+	}); err != nil {
+		h.logger.Error("audit write", slog.Any("error", err))
+	}
+
+	writeJSON(w, http.StatusOK, printData)
+}
+
+// validatePrescriptionCreate enforces required fields.
+func validatePrescriptionCreate(req *prescriptionCreateRequest) error {
+	if req.PatientID == "" && req.PatientNHI == "" {
+		return fmt.Errorf("either patientId or patientNhi is required")
+	}
+	if req.PractitionerHPI == "" {
+		return fmt.Errorf("practitionerHpi is required")
+	}
+	if req.NZULMCode == "" {
+		return fmt.Errorf("nzulmCode is required")
+	}
+	if req.Dosage.Text == "" {
+		return fmt.Errorf("dosage.text is required")
+	}
+	if req.Dosage.DoseValue <= 0 {
+		return fmt.Errorf("dosage.doseValue must be positive")
+	}
+	if req.Dosage.DoseUnit == "" {
+		return fmt.Errorf("dosage.doseUnit is required")
+	}
+	if req.Repeats < 0 {
+		return fmt.Errorf("repeats cannot be negative")
+	}
+	return nil
+}
+
+// getActiveNZULMCodes returns the NZULM codes for the patient's current active medications.
+func (h *PrescriptionsHandler) getActiveNZULMCodes(ctx context.Context, patientID, tenantID string) ([]string, error) {
+	rows, err := h.pool.Query(ctx,
+		`SELECT nzulm_code FROM prescriptions
+		 WHERE patient_id = @patient_id
+		   AND tenant_id  = @tenant_id
+		   AND status     = 'active'`,
+		db.NamedArgs{"patient_id": patientID, "tenant_id": tenantID},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query active NZULM codes: %w", err)
+	}
+	defer rows.Close()
+
+	var codes []string
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err != nil {
+			return nil, fmt.Errorf("scan NZULM code: %w", err)
+		}
+		codes = append(codes, code)
+	}
+	return codes, rows.Err()
+}
+
+// listPrescriptions queries the prescriptions table with optional filters.
+func (h *PrescriptionsHandler) listPrescriptions(
+	ctx context.Context,
+	tenantID, patientFilter, statusFilter, providerFilter string,
+) ([]Prescription, error) {
+	rows, err := h.pool.Query(ctx,
+		`SELECT id, patient_id, patient_nhi, practitioner_hpi, encounter_id,
+		        nzulm_code, medication_name, status,
+		        dosage, pharmac_subsidised, subsidy_code, interaction_warnings,
+		        repeats, repeats_remaining, tenant_id,
+		        issued_at, expires_at, created_at, updated_at
+		 FROM prescriptions
+		 WHERE tenant_id = @tenant_id
+		   AND (@patient_filter  = '' OR patient_id        = @patient_filter)
+		   AND (@status_filter   = '' OR status             = @status_filter)
+		   AND (@provider_filter = '' OR practitioner_hpi  = @provider_filter)
+		 ORDER BY issued_at DESC
+		 LIMIT 200`,
+		db.NamedArgs{
+			"tenant_id":       tenantID,
+			"patient_filter":  patientFilter,
+			"status_filter":   statusFilter,
+			"provider_filter": providerFilter,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query prescriptions: %w", err)
+	}
+	defer rows.Close()
+
+	var results []Prescription
+	for rows.Next() {
+		rx, err := scanPrescription(rows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, rx)
+	}
+	return results, rows.Err()
+}
+
+// getPrescriptionByID retrieves a single prescription with tenant isolation.
+func (h *PrescriptionsHandler) getPrescriptionByID(ctx context.Context, id, tenantID string) (Prescription, error) {
+	row := h.pool.QueryRow(ctx,
+		`SELECT id, patient_id, patient_nhi, practitioner_hpi, encounter_id,
+		        nzulm_code, medication_name, status,
+		        dosage, pharmac_subsidised, subsidy_code, interaction_warnings,
+		        repeats, repeats_remaining, tenant_id,
+		        issued_at, expires_at, created_at, updated_at
+		 FROM prescriptions
+		 WHERE id = @id AND tenant_id = @tenant_id`,
+		db.NamedArgs{"id": id, "tenant_id": tenantID},
+	)
+	rx, err := scanPrescription(row)
+	if err != nil {
+		if db.IsNoRows(err) {
+			return Prescription{}, errNotFound
+		}
+		return Prescription{}, fmt.Errorf("get prescription by id: %w", err)
+	}
+	return rx, nil
+}
+
+// insertPrescription persists a validated prescription.
+func (h *PrescriptionsHandler) insertPrescription(
+	ctx context.Context,
+	req prescriptionCreateRequest,
+	medication *pharmac.Medication,
+	subsidy *pharmac.SubsidyResult,
+	warnings []string,
+	tenantID string,
+) (Prescription, error) {
+	subsidyCode := ""
+	if subsidy != nil && subsidy.Subsidised {
+		subsidyCode = subsidy.SubsidyCode
+	}
+
+	row := h.pool.QueryRow(ctx,
+		`INSERT INTO prescriptions
+		   (patient_id, patient_nhi, practitioner_hpi, encounter_id,
+		    nzulm_code, medication_name, status,
+		    dosage, pharmac_subsidised, subsidy_code, interaction_warnings,
+		    repeats, repeats_remaining, tenant_id, issued_at)
+		 VALUES
+		   (@patient_id, @patient_nhi, @practitioner_hpi, @encounter_id,
+		    @nzulm_code, @medication_name, @status,
+		    @dosage, @pharmac_subsidised, @subsidy_code, @interaction_warnings,
+		    @repeats, @repeats_remaining, @tenant_id, now())
+		 RETURNING id, patient_id, patient_nhi, practitioner_hpi, encounter_id,
+		           nzulm_code, medication_name, status,
+		           dosage, pharmac_subsidised, subsidy_code, interaction_warnings,
+		           repeats, repeats_remaining, tenant_id,
+		           issued_at, expires_at, created_at, updated_at`,
+		db.NamedArgs{
+			"patient_id":           req.PatientID,
+			"patient_nhi":          req.PatientNHI,
+			"practitioner_hpi":     req.PractitionerHPI,
+			"encounter_id":         req.EncounterID,
+			"nzulm_code":           req.NZULMCode,
+			"medication_name":      medication.Name,
+			"status":               PrescriptionStatusActive,
+			"dosage":               req.Dosage,
+			"pharmac_subsidised":   subsidy != nil && subsidy.Subsidised,
+			"subsidy_code":         subsidyCode,
+			"interaction_warnings": warnings,
+			"repeats":              req.Repeats,
+			"repeats_remaining":    req.Repeats,
+			"tenant_id":            tenantID,
+		},
+	)
+	rx, err := scanPrescription(row)
+	if err != nil {
+		return Prescription{}, fmt.Errorf("insert prescription: %w", err)
+	}
+	return rx, nil
+}
+
+// updatePrescription writes status/dosage/repeat changes back to the database.
+func (h *PrescriptionsHandler) updatePrescription(ctx context.Context, rx Prescription) (Prescription, error) {
+	row := h.pool.QueryRow(ctx,
+		`UPDATE prescriptions
+		 SET status     = @status,
+		     dosage     = @dosage,
+		     repeats    = @repeats,
+		     updated_at = now()
+		 WHERE id = @id AND tenant_id = @tenant_id
+		 RETURNING id, patient_id, patient_nhi, practitioner_hpi, encounter_id,
+		           nzulm_code, medication_name, status,
+		           dosage, pharmac_subsidised, subsidy_code, interaction_warnings,
+		           repeats, repeats_remaining, tenant_id,
+		           issued_at, expires_at, created_at, updated_at`,
+		db.NamedArgs{
+			"status":    rx.Status,
+			"dosage":    rx.Dosage,
+			"repeats":   rx.Repeats,
+			"id":        rx.ID,
+			"tenant_id": rx.TenantID,
+		},
+	)
+	updated, err := scanPrescription(row)
+	if err != nil {
+		if db.IsNoRows(err) {
+			return Prescription{}, errNotFound
+		}
+		return Prescription{}, fmt.Errorf("update prescription: %w", err)
+	}
+	return updated, nil
+}
+
+// scanPrescription scans a single Prescription from a row (pgx.Row or pgx.Rows).
+func scanPrescription(row dbRow) (Prescription, error) {
+	var rx Prescription
+	if err := row.Scan(
+		&rx.ID, &rx.PatientID, &rx.PatientNHI, &rx.PractitionerHPI, &rx.EncounterID,
+		&rx.NZULMCode, &rx.MedicationName, &rx.Status,
+		&rx.Dosage, &rx.PHARMACSubsidised, &rx.SubsidyCode, &rx.InteractionWarnings,
+		&rx.Repeats, &rx.RepeatsRemaining, &rx.TenantID,
+		&rx.IssuedAt, &rx.ExpiresAt, &rx.CreatedAt, &rx.UpdatedAt,
+	); err != nil {
+		return Prescription{}, err
+	}
+	return rx, nil
+}

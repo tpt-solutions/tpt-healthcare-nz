@@ -1,0 +1,10 @@
+{
+  "name": "@tpt/fhir-types",
+  "version": "0.1.0",
+  "description": "FHIR R5 TypeScript types with NZ extensions",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" } },
+  "scripts": { "build": "tsc", "typecheck": "tsc --noEmit" },
+  "devDependencies": { "typescript": "^5.4.0" }
+}

@@ -3,4 +3,7 @@ go 1.22
 use (
 	./core
 	./interop
+	./modules/tpt-doctor
+	./modules/tpt-pharmacy
+	./modules/tpt-immunisation
 )

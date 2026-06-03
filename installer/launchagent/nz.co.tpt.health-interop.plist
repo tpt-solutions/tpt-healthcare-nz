@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS LaunchAgent for tpt-health-interop
+  Install path : ~/Library/LaunchAgents/nz.co.tpt.health-interop.plist
+  Load         : launchctl load -w ~/Library/LaunchAgents/nz.co.tpt.health-interop.plist
+  Unload       : launchctl unload -w ~/Library/LaunchAgents/nz.co.tpt.health-interop.plist
+  Status       : launchctl list | grep nz.co.tpt
+
+  The installer substitutes {{BIN_DIR}}, {{CONFIG_FILE}}, {{ENV_FILE}}, and
+  {{LOG_DIR}} before writing this file to the user's LaunchAgents directory.
+-->
+<plist version="1.0">
+<dict>
+
+  <!-- ------------------------------------------------------------------- -->
+  <!-- Identity                                                             -->
+  <!-- ------------------------------------------------------------------- -->
+  <key>Label</key>
+  <string>nz.co.tpt.health-interop</string>
+
+  <!-- ------------------------------------------------------------------- -->
+  <!-- Program and arguments                                                -->
+  <!-- ------------------------------------------------------------------- -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>{{BIN_DIR}}/tpt-health-interop</string>
+    <string>serve</string>
+    <string>--config</string>
+    <string>{{CONFIG_FILE}}</string>
+  </array>
+
+  <!-- ------------------------------------------------------------------- -->
+  <!-- Environment variables                                                -->
+  <!-- The ENCRYPTION_KEY is loaded from the environment file by the        -->
+  <!-- binary itself; we only pass the path here so launchd does not store  -->
+  <!-- the secret directly in the plist.                                    -->
+  <!-- ------------------------------------------------------------------- -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>TPT_CONFIG_FILE</key>
+    <string>{{CONFIG_FILE}}</string>
+
+    <key>TPT_ENV_FILE</key>
+    <string>{{ENV_FILE}}</string>
+
+    <!-- Override log level without editing config.yaml -->
+    <key>TPT_LOG_LEVEL</key>
+    <string>info</string>
+
+    <!-- Ensure a sane PATH for sub-processes (e.g. psql for migrations) -->
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <!-- ------------------------------------------------------------------- -->
+  <!-- Lifecycle                                                            -->
+  <!-- ------------------------------------------------------------------- -->
+  <!-- Start automatically when the user logs in -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Restart the process if it exits for any reason -->
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- Minimum time (seconds) between restarts to prevent tight restart loops -->
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+
+  <!-- ------------------------------------------------------------------- -->
+  <!-- Logging                                                              -->
+  <!-- ------------------------------------------------------------------- -->
+  <key>StandardOutPath</key>
+  <string>{{LOG_DIR}}/tpt-health-interop.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>{{LOG_DIR}}/tpt-health-interop-error.log</string>
+
+  <!-- ------------------------------------------------------------------- -->
+  <!-- Working directory                                                    -->
+  <!-- ------------------------------------------------------------------- -->
+  <key>WorkingDirectory</key>
+  <string>{{BIN_DIR}}/..</string>
+
+  <!-- ------------------------------------------------------------------- -->
+  <!-- Resource limits                                                      -->
+  <!-- ------------------------------------------------------------------- -->
+  <key>SoftResourceLimits</key>
+  <dict>
+    <!-- Maximum number of open file descriptors -->
+    <key>NumberOfFiles</key>
+    <integer>65536</integer>
+  </dict>
+
+  <key>HardResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>65536</integer>
+  </dict>
+
+</dict>
+</plist>

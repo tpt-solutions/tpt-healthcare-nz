@@ -1,0 +1,54 @@
+[Unit]
+Description=TPT Health Interoperability Service
+Documentation=https://github.com/PhillipC05/tpt-healthcare-nz
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
+
+[Service]
+Type=simple
+User=tpt-healthcare
+Group=tpt-healthcare
+
+ExecStart=/opt/tpt-healthcare/bin/tpt-health-interop serve
+ExecReload=/bin/kill -HUP $MAINPID
+
+EnvironmentFile=/etc/tpt-healthcare/environment
+
+Restart=always
+RestartSec=5s
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tpt-health-interop
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+
+# Allow writes only to designated data and log directories
+ReadWritePaths=/var/lib/tpt-healthcare
+ReadWritePaths=/var/log/tpt-healthcare
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=512
+
+# Watchdog — systemd will restart the service if it stops sending keepalive pings
+# (requires the binary to support sd_notify WATCHDOG=1)
+# WatchdogSec=30s
+
+[Install]
+WantedBy=multi-user.target
