@@ -1,0 +1,674 @@
+package api
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"regexp"
+	"time"
+
+	"github.com/PhillipC05/tpt-healthcare/core/audit"
+	"github.com/PhillipC05/tpt-healthcare/core/db"
+	"github.com/PhillipC05/tpt-healthcare/core/encryption"
+	"github.com/PhillipC05/tpt-healthcare/core/fhir/r5"
+	"github.com/PhillipC05/tpt-healthcare/core/middleware"
+	"github.com/PhillipC05/tpt-healthcare/core/nes"
+	"github.com/PhillipC05/tpt-healthcare/core/nhi"
+)
+
+// nhiOldFormat matches the legacy 7-character NHI format: AAA9999.
+var nhiOldFormat = regexp.MustCompile(`^[A-Z]{3}[0-9]{4}$`)
+
+// nhiNewFormat matches the Luhn-based NHI format: AAA99AA.
+var nhiNewFormat = regexp.MustCompile(`^[A-Z]{3}[0-9]{2}[A-Z]{2}$`)
+
+// PatientsHandler handles all /api/v1/patients routes.
+type PatientsHandler struct {
+	pool       db.Pool
+	enc        *encryption.Cipher
+	nhiClient  *nhi.Client
+	nesClient  *nes.Client
+	auditTrail *audit.Trail
+	logger     *slog.Logger
+}
+
+// patientRecord is the internal representation stored in the database.
+// PHI fields (nhiEncrypted, name, dob) are AES-256-GCM encrypted at rest.
+type patientRecord struct {
+	ID           string    `json:"id"`
+	NHIEncrypted []byte    `json:"-"`
+	NHI          string    `json:"nhi,omitempty"` // plaintext, only populated after decryption
+	TenantID     string    `json:"tenantId"`
+	FHIRResource []byte    `json:"-"` // encrypted FHIR Patient JSON
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+}
+
+// patientResponse is the API response for a patient resource.
+type patientResponse struct {
+	ID        string      `json:"id"`
+	NHI       string      `json:"nhi"`
+	TenantID  string      `json:"tenantId"`
+	Patient   *r5.Patient `json:"patient"`
+	CreatedAt time.Time   `json:"createdAt"`
+	UpdatedAt time.Time   `json:"updatedAt"`
+}
+
+// patientCreateRequest is the request body for POST /api/v1/patients.
+type patientCreateRequest struct {
+	NHI     string      `json:"nhi"`
+	Patient *r5.Patient `json:"patient"`
+}
+
+// patientUpdateRequest is the request body for PUT /api/v1/patients/{id}.
+type patientUpdateRequest struct {
+	Patient *r5.Patient `json:"patient"`
+}
+
+// enrolmentRequest is the request body for POST /api/v1/patients/{id}/enrolment.
+type enrolmentRequest struct {
+	PractitionerHPI string `json:"practitionerHpi"`
+	FundingCode     string `json:"fundingCode"`
+	StartDate       string `json:"startDate"` // YYYY-MM-DD
+}
+
+// List handles GET /api/v1/patients.
+// Supports query parameters: name, nhi, dob.
+// All results are filtered by the tenant extracted from context.
+func (h *PatientsHandler) List(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	q := r.URL.Query()
+	nameFilter := q.Get("name")
+	nhiFilter := q.Get("nhi")
+	dobFilter := q.Get("dob")
+
+	records, err := h.searchPatients(ctx, tenantID, nameFilter, nhiFilter, dobFilter)
+	if err != nil {
+		h.logger.Error("search patients", slog.Any("error", err), slog.String("tenant", tenantID))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "SEARCH_ERROR", Message: "failed to search patients"})
+		return
+	}
+
+	responses := make([]patientResponse, 0, len(records))
+	for _, rec := range records {
+		resp, err := h.recordToResponse(ctx, rec)
+		if err != nil {
+			h.logger.Error("decrypt patient record", slog.Any("error", err), slog.String("id", rec.ID))
+			continue
+		}
+		responses = append(responses, resp)
+	}
+
+	if err := h.auditTrail.Write(ctx, audit.Event{
+		Actor:        principal,
+		Action:       audit.ActionRead,
+		ResourceType: "Patient",
+		ResourceID:   "search",
+		TenantID:     tenantID,
+		Metadata: map[string]string{
+			"name": nameFilter,
+			"nhi":  nhiFilter,
+			"dob":  dobFilter,
+		},
+	}); err != nil {
+		h.logger.Error("audit write", slog.Any("error", err))
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"patients": responses,
+		"total":    len(responses),
+	})
+}
+
+// Get handles GET /api/v1/patients/{id}.
+func (h *PatientsHandler) Get(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_ID", Message: "patient ID is required"})
+		return
+	}
+
+	rec, err := h.getPatientByID(ctx, id, tenantID)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "patient not found"})
+			return
+		}
+		h.logger.Error("get patient", slog.Any("error", err), slog.String("id", id))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "GET_ERROR", Message: "failed to retrieve patient"})
+		return
+	}
+
+	resp, err := h.recordToResponse(ctx, rec)
+	if err != nil {
+		h.logger.Error("decrypt patient", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DECRYPT_ERROR", Message: "failed to decrypt patient data"})
+		return
+	}
+
+	if err := h.auditTrail.Write(ctx, audit.Event{
+		Actor:        principal,
+		Action:       audit.ActionRead,
+		ResourceType: "Patient",
+		ResourceID:   id,
+		TenantID:     tenantID,
+	}); err != nil {
+		h.logger.Error("audit write", slog.Any("error", err))
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// GetByNHI handles GET /api/v1/patients/nhi/{nhi}.
+// Validates NHI format, queries the Ministry NHI API, and returns the FHIR Patient.
+func (h *PatientsHandler) GetByNHI(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	nhiValue := r.PathValue("nhi")
+	if err := validateNHIFormat(nhiValue); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_NHI", Message: err.Error()})
+		return
+	}
+
+	patient, err := h.nhiClient.Lookup(ctx, nhiValue)
+	if err != nil {
+		if errors.Is(err, nhi.ErrNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NHI_NOT_FOUND", Message: "no patient found for NHI"})
+			return
+		}
+		h.logger.Error("NHI lookup", slog.Any("error", err), slog.String("nhi", nhiValue))
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "NHI_LOOKUP_ERROR", Message: "NHI API lookup failed"})
+		return
+	}
+
+	if err := h.auditTrail.Write(ctx, audit.Event{
+		Actor:        principal,
+		Action:       audit.ActionRead,
+		ResourceType: "Patient",
+		ResourceID:   "nhi-lookup",
+		TenantID:     tenantID,
+		Metadata:     map[string]string{"nhi": nhiValue},
+	}); err != nil {
+		h.logger.Error("audit write", slog.Any("error", err))
+	}
+
+	writeJSON(w, http.StatusOK, patient)
+}
+
+// Create handles POST /api/v1/patients.
+// Validates the NHI, confirms it with the NHI API, then persists the patient record.
+func (h *PatientsHandler) Create(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	var req patientCreateRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_BODY", Message: err.Error()})
+		return
+	}
+
+	if err := validateNHIFormat(req.NHI); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_NHI", Message: err.Error()})
+		return
+	}
+	if req.Patient == nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_PATIENT", Message: "patient FHIR resource is required"})
+		return
+	}
+
+	// Confirm NHI exists with the Ministry before registration.
+	if _, err := h.nhiClient.Lookup(ctx, req.NHI); err != nil {
+		if errors.Is(err, nhi.ErrNotFound) {
+			writeJSON(w, http.StatusUnprocessableEntity, apiError{Code: "NHI_NOT_FOUND", Message: "NHI not found in Ministry registry"})
+			return
+		}
+		h.logger.Error("NHI confirm", slog.Any("error", err))
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "NHI_CONFIRM_ERROR", Message: "could not confirm NHI with Ministry"})
+		return
+	}
+
+	rec, err := h.persistPatient(ctx, req.NHI, req.Patient, tenantID)
+	if err != nil {
+		h.logger.Error("persist patient", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "PERSIST_ERROR", Message: "failed to save patient"})
+		return
+	}
+
+	resp, err := h.recordToResponse(ctx, rec)
+	if err != nil {
+		h.logger.Error("decrypt patient", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DECRYPT_ERROR", Message: "failed to decrypt patient data"})
+		return
+	}
+
+	if err := h.auditTrail.Write(ctx, audit.Event{
+		Actor:        principal,
+		Action:       audit.ActionWrite,
+		ResourceType: "Patient",
+		ResourceID:   rec.ID,
+		TenantID:     tenantID,
+	}); err != nil {
+		h.logger.Error("audit write", slog.Any("error", err))
+	}
+
+	writeJSON(w, http.StatusCreated, resp)
+}
+
+// Update handles PUT /api/v1/patients/{id}.
+// Updates patient demographics; the NHI itself is immutable.
+func (h *PatientsHandler) Update(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_ID", Message: "patient ID is required"})
+		return
+	}
+
+	var req patientUpdateRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_BODY", Message: err.Error()})
+		return
+	}
+	if req.Patient == nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_PATIENT", Message: "patient FHIR resource is required"})
+		return
+	}
+
+	rec, err := h.getPatientByID(ctx, id, tenantID)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "patient not found"})
+			return
+		}
+		h.logger.Error("get patient for update", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "GET_ERROR", Message: "failed to retrieve patient"})
+		return
+	}
+
+	updated, err := h.updatePatientFHIR(ctx, rec.ID, req.Patient, tenantID)
+	if err != nil {
+		h.logger.Error("update patient", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "UPDATE_ERROR", Message: "failed to update patient"})
+		return
+	}
+
+	resp, err := h.recordToResponse(ctx, updated)
+	if err != nil {
+		h.logger.Error("decrypt patient", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DECRYPT_ERROR", Message: "failed to decrypt patient data"})
+		return
+	}
+
+	if err := h.auditTrail.Write(ctx, audit.Event{
+		Actor:        principal,
+		Action:       audit.ActionWrite,
+		ResourceType: "Patient",
+		ResourceID:   id,
+		TenantID:     tenantID,
+	}); err != nil {
+		h.logger.Error("audit write", slog.Any("error", err))
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// GetEnrolment handles GET /api/v1/patients/{id}/enrolment.
+// Returns the patient's NES enrolment status for this practice.
+func (h *PatientsHandler) GetEnrolment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_ID", Message: "patient ID is required"})
+		return
+	}
+
+	rec, err := h.getPatientByID(ctx, id, tenantID)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "patient not found"})
+			return
+		}
+		h.logger.Error("get patient for enrolment", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "GET_ERROR", Message: "failed to retrieve patient"})
+		return
+	}
+
+	nhiPlain, err := h.enc.Decrypt(rec.NHIEncrypted)
+	if err != nil {
+		h.logger.Error("decrypt NHI", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DECRYPT_ERROR", Message: "failed to decrypt NHI"})
+		return
+	}
+
+	enrolment, err := h.nesClient.GetEnrolment(ctx, string(nhiPlain))
+	if err != nil {
+		if errors.Is(err, nes.ErrNotEnrolled) {
+			writeJSON(w, http.StatusOK, map[string]any{"enrolled": false, "patientId": id})
+			return
+		}
+		h.logger.Error("NES get enrolment", slog.Any("error", err))
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "NES_ERROR", Message: "failed to retrieve enrolment from NES"})
+		return
+	}
+
+	if err := h.auditTrail.Write(ctx, audit.Event{
+		Actor:        principal,
+		Action:       audit.ActionRead,
+		ResourceType: "Coverage",
+		ResourceID:   id,
+		TenantID:     tenantID,
+	}); err != nil {
+		h.logger.Error("audit write", slog.Any("error", err))
+	}
+
+	writeJSON(w, http.StatusOK, enrolment)
+}
+
+// CreateEnrolment handles POST /api/v1/patients/{id}/enrolment.
+// Enrols the patient in this practice via the NES API.
+func (h *PatientsHandler) CreateEnrolment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_ID", Message: "patient ID is required"})
+		return
+	}
+
+	var req enrolmentRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_BODY", Message: err.Error()})
+		return
+	}
+	if req.PractitionerHPI == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_HPI", Message: "practitionerHpi is required"})
+		return
+	}
+
+	rec, err := h.getPatientByID(ctx, id, tenantID)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "patient not found"})
+			return
+		}
+		h.logger.Error("get patient for enrolment create", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "GET_ERROR", Message: "failed to retrieve patient"})
+		return
+	}
+
+	nhiPlain, err := h.enc.Decrypt(rec.NHIEncrypted)
+	if err != nil {
+		h.logger.Error("decrypt NHI for enrolment", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DECRYPT_ERROR", Message: "failed to decrypt NHI"})
+		return
+	}
+
+	enrolment, err := h.nesClient.Enrol(ctx, nes.EnrolRequest{
+		NHI:             string(nhiPlain),
+		PractitionerHPI: req.PractitionerHPI,
+		FundingCode:     req.FundingCode,
+		StartDate:       req.StartDate,
+	})
+	if err != nil {
+		h.logger.Error("NES enrol", slog.Any("error", err))
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "NES_ENROL_ERROR", Message: "failed to enrol patient via NES"})
+		return
+	}
+
+	if err := h.auditTrail.Write(ctx, audit.Event{
+		Actor:        principal,
+		Action:       audit.ActionWrite,
+		ResourceType: "Coverage",
+		ResourceID:   id,
+		TenantID:     tenantID,
+	}); err != nil {
+		h.logger.Error("audit write", slog.Any("error", err))
+	}
+
+	writeJSON(w, http.StatusCreated, enrolment)
+}
+
+// validateNHIFormat checks that the given NHI matches either the old or new NZ format.
+func validateNHIFormat(nhiValue string) error {
+	if nhiOldFormat.MatchString(nhiValue) {
+		return nil
+	}
+	if nhiNewFormat.MatchString(nhiValue) {
+		return nil
+	}
+	return fmt.Errorf("invalid NHI format %q: must match AAA9999 (old) or AAA99AA (new Luhn-based)", nhiValue)
+}
+
+// errNotFound is a sentinel for missing records.
+var errNotFound = errors.New("record not found")
+
+// searchPatients queries the patient table for matching records within the tenant.
+// All filter values are applied as ILIKE / exact matches against decrypted index columns.
+func (h *PatientsHandler) searchPatients(ctx context.Context, tenantID, name, nhiFilter, dob string) ([]patientRecord, error) {
+	rows, err := h.pool.Query(ctx,
+		`SELECT id, nhi_encrypted, tenant_id, fhir_resource, created_at, updated_at
+		 FROM patients
+		 WHERE tenant_id = @tenant_id
+		   AND (@name_filter = '' OR name_search ILIKE '%' || @name_filter || '%')
+		   AND (@nhi_filter  = '' OR nhi_index = @nhi_filter)
+		   AND (@dob_filter  = '' OR dob_index = @dob_filter)
+		 ORDER BY created_at DESC
+		 LIMIT 200`,
+		db.NamedArgs{
+			"tenant_id":   tenantID,
+			"name_filter": name,
+			"nhi_filter":  nhiFilter,
+			"dob_filter":  dob,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query patients: %w", err)
+	}
+	defer rows.Close()
+
+	var results []patientRecord
+	for rows.Next() {
+		var rec patientRecord
+		if err := rows.Scan(&rec.ID, &rec.NHIEncrypted, &rec.TenantID, &rec.FHIRResource, &rec.CreatedAt, &rec.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan patient row: %w", err)
+		}
+		results = append(results, rec)
+	}
+	return results, rows.Err()
+}
+
+// getPatientByID retrieves a single patient record by internal UUID, enforcing tenant isolation.
+func (h *PatientsHandler) getPatientByID(ctx context.Context, id, tenantID string) (patientRecord, error) {
+	var rec patientRecord
+	err := h.pool.QueryRow(ctx,
+		`SELECT id, nhi_encrypted, tenant_id, fhir_resource, created_at, updated_at
+		 FROM patients
+		 WHERE id = @id AND tenant_id = @tenant_id`,
+		db.NamedArgs{"id": id, "tenant_id": tenantID},
+	).Scan(&rec.ID, &rec.NHIEncrypted, &rec.TenantID, &rec.FHIRResource, &rec.CreatedAt, &rec.UpdatedAt)
+	if err != nil {
+		if db.IsNoRows(err) {
+			return patientRecord{}, errNotFound
+		}
+		return patientRecord{}, fmt.Errorf("get patient by id: %w", err)
+	}
+	return rec, nil
+}
+
+// persistPatient encrypts PHI and inserts a new patient record.
+func (h *PatientsHandler) persistPatient(ctx context.Context, nhiValue string, patient *r5.Patient, tenantID string) (patientRecord, error) {
+	nhiEnc, err := h.enc.Encrypt([]byte(nhiValue))
+	if err != nil {
+		return patientRecord{}, fmt.Errorf("encrypt NHI: %w", err)
+	}
+
+	fhirJSON, err := patient.MarshalJSON()
+	if err != nil {
+		return patientRecord{}, fmt.Errorf("marshal patient FHIR: %w", err)
+	}
+	fhirEnc, err := h.enc.Encrypt(fhirJSON)
+	if err != nil {
+		return patientRecord{}, fmt.Errorf("encrypt FHIR resource: %w", err)
+	}
+
+	nameSearch := patient.SearchName()
+	dobIndex := patient.BirthDate
+
+	var rec patientRecord
+	err = h.pool.QueryRow(ctx,
+		`INSERT INTO patients (nhi_encrypted, nhi_index, tenant_id, fhir_resource, name_search, dob_index)
+		 VALUES (@nhi_encrypted, @nhi_index, @tenant_id, @fhir_resource, @name_search, @dob_index)
+		 RETURNING id, nhi_encrypted, tenant_id, fhir_resource, created_at, updated_at`,
+		db.NamedArgs{
+			"nhi_encrypted": nhiEnc,
+			"nhi_index":     nhiValue, // stored encrypted at DB level via column-level encryption policy
+			"tenant_id":     tenantID,
+			"fhir_resource": fhirEnc,
+			"name_search":   nameSearch,
+			"dob_index":     dobIndex,
+		},
+	).Scan(&rec.ID, &rec.NHIEncrypted, &rec.TenantID, &rec.FHIRResource, &rec.CreatedAt, &rec.UpdatedAt)
+	if err != nil {
+		return patientRecord{}, fmt.Errorf("insert patient: %w", err)
+	}
+	return rec, nil
+}
+
+// updatePatientFHIR updates only the FHIR resource blob of an existing patient.
+func (h *PatientsHandler) updatePatientFHIR(ctx context.Context, id string, patient *r5.Patient, tenantID string) (patientRecord, error) {
+	fhirJSON, err := patient.MarshalJSON()
+	if err != nil {
+		return patientRecord{}, fmt.Errorf("marshal patient FHIR: %w", err)
+	}
+	fhirEnc, err := h.enc.Encrypt(fhirJSON)
+	if err != nil {
+		return patientRecord{}, fmt.Errorf("encrypt FHIR resource: %w", err)
+	}
+	nameSearch := patient.SearchName()
+
+	var rec patientRecord
+	err = h.pool.QueryRow(ctx,
+		`UPDATE patients
+		 SET fhir_resource = @fhir_resource,
+		     name_search   = @name_search,
+		     updated_at    = now()
+		 WHERE id = @id AND tenant_id = @tenant_id
+		 RETURNING id, nhi_encrypted, tenant_id, fhir_resource, created_at, updated_at`,
+		db.NamedArgs{
+			"fhir_resource": fhirEnc,
+			"name_search":   nameSearch,
+			"id":            id,
+			"tenant_id":     tenantID,
+		},
+	).Scan(&rec.ID, &rec.NHIEncrypted, &rec.TenantID, &rec.FHIRResource, &rec.CreatedAt, &rec.UpdatedAt)
+	if err != nil {
+		if db.IsNoRows(err) {
+			return patientRecord{}, errNotFound
+		}
+		return patientRecord{}, fmt.Errorf("update patient FHIR: %w", err)
+	}
+	return rec, nil
+}
+
+// recordToResponse decrypts a patientRecord and returns an API-safe patientResponse.
+func (h *PatientsHandler) recordToResponse(ctx context.Context, rec patientRecord) (patientResponse, error) {
+	nhiPlain, err := h.enc.Decrypt(rec.NHIEncrypted)
+	if err != nil {
+		return patientResponse{}, fmt.Errorf("decrypt NHI: %w", err)
+	}
+
+	fhirJSON, err := h.enc.Decrypt(rec.FHIRResource)
+	if err != nil {
+		return patientResponse{}, fmt.Errorf("decrypt FHIR resource: %w", err)
+	}
+
+	var patient r5.Patient
+	if err := patient.UnmarshalJSON(fhirJSON); err != nil {
+		return patientResponse{}, fmt.Errorf("unmarshal FHIR Patient: %w", err)
+	}
+
+	return patientResponse{
+		ID:        rec.ID,
+		NHI:       string(nhiPlain),
+		TenantID:  rec.TenantID,
+		Patient:   &patient,
+		CreatedAt: rec.CreatedAt,
+		UpdatedAt: rec.UpdatedAt,
+	}, nil
+}
