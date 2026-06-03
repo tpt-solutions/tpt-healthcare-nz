@@ -1,72 +1,72 @@
 # tpt-healthcare — Task Checklist
 
 ## Infrastructure & Scaffolding
-- [ ] Initialise `tpt-healthcare` Git repository
-- [ ] Create `go.work` linking `core/`, `interop/`, all `modules/`
-- [ ] Create `pnpm-workspace.yaml` linking `apps/` and `packages/`
-- [ ] Create root `Makefile` (`make dev`, `make test`, `make build`, `make install`)
-- [ ] Write `CLAUDE.md` with codebase conventions
-- [ ] Write `CONTRIBUTING.md`
-- [ ] Write `SECURITY.md` (vulnerability disclosure policy)
-- [ ] Create `deploy/docker-compose.dev.yml` (PostgreSQL + Redis + interop)
+- [x] Initialise `tpt-healthcare` Git repository
+- [x] Create `go.work` linking `core/`, `interop/`, all `modules/`
+- [x] Create `pnpm-workspace.yaml` linking `apps/` and `packages/`
+- [x] Create root `Makefile` (`make dev`, `make test`, `make build`, `make install`)
+- [x] Write `CLAUDE.md` with codebase conventions
+- [x] Write `CONTRIBUTING.md`
+- [x] Write `SECURITY.md` (vulnerability disclosure policy)
+- [x] Create `deploy/docker-compose.dev.yml` (PostgreSQL + Redis + interop)
 
 ## core/ — Shared Kernel
-- [ ] `core/go.mod` (`github.com/PhillipC05/tpt-healthcare/core`, go 1.22)
-- [ ] `core/db/connect.go` — pgx connection pool
-- [ ] `core/db/migrate/` — embedded SQL migration runner (mirror tpt-identity pattern)
-- [ ] `core/db/migrate/001_fhir_resources.sql`
-- [ ] `core/db/migrate/002_audit_events.sql`
-- [ ] `core/audit/trail.go` — synchronous audit write (port from tpt-doctor `packages/audit-log/`)
-- [ ] `core/encryption/` — AES-256-GCM field encryption (port from tpt-doctor `packages/encryption/`)
-- [ ] `core/middleware/` — rate limit, CORS, tenant extraction, audit wrapping
-- [ ] `core/auth/provider.go` — AuthProvider interface + Principal struct
-- [ ] `core/auth/auth0/` — Auth0 OIDC validation (port from tpt-doctor `packages/auth/`)
-- [ ] `core/auth/jwt/` — Standalone Ed25519 JWT + TOTP
-- [ ] `core/auth/oidc/` — tpt-identity OIDC client
-- [ ] `core/events/` — Internal domain event bus
-- [ ] `core/consent/` — Consent management (HIPC Rule 10/11)
-- [ ] `core/billing/` — Shared billing primitives
+- [x] `core/go.mod` (`github.com/PhillipC05/tpt-healthcare/core`, go 1.22)
+- [x] `core/db/connect.go` — pgx connection pool
+- [x] `core/db/migrate/` — embedded SQL migration runner (mirror tpt-identity pattern)
+- [x] `core/db/migrate/001_fhir_resources.sql`
+- [x] `core/db/migrate/002_audit_events.sql`
+- [x] `core/audit/trail.go` — synchronous audit write (port from tpt-doctor `packages/audit-log/`)
+- [x] `core/encryption/` — AES-256-GCM field encryption (port from tpt-doctor `packages/encryption/`)
+- [x] `core/middleware/` — rate limit, CORS, tenant extraction, audit wrapping
+- [x] `core/auth/provider.go` — AuthProvider interface + Principal struct
+- [x] `core/auth/auth0/` — Auth0 OIDC validation (port from tpt-doctor `packages/auth/`)
+- [x] `core/auth/jwt/` — Standalone Ed25519 JWT + TOTP
+- [x] `core/auth/oidc/` — tpt-identity OIDC client
+- [x] `core/events/` — Internal domain event bus
+- [x] `core/consent/` — Consent management (HIPC Rule 10/11)
+- [x] `core/billing/` — Shared billing primitives
 
 ## core/ — NZ National Integrations
-- [ ] `core/nhi/` — NHI FHIR API client (port from tpt-doctor country-profiles NZ service)
-  - [ ] NHI format validation (ABC12D checksum pattern)
-  - [ ] `GET /Patient/{nhi}` and `$match` operations
-  - [ ] SMART on FHIR bearer token handling
-- [ ] `core/nes/` — NES client (enrol, update, transfer, status)
-- [ ] `core/acc/` — ACC FHIR claim lodgement and ClaimResponse polling (port from tpt-doctor MOH claiming)
-- [ ] `core/hpi/` — Health Practitioner Index APC validation, 24h Redis cache
-- [ ] `core/pharmac/` — PHARMAC formulary + subsidy lookup (port from tpt-doctor prescriptions)
+- [x] `core/nhi/` — NHI FHIR API client (port from tpt-doctor country-profiles NZ service)
+  - [x] NHI format validation (ABC12D checksum pattern)
+  - [x] `GET /Patient/{nhi}` and `$match` operations
+  - [x] SMART on FHIR bearer token handling
+- [x] `core/nes/` — NES client (enrol, update, transfer, status)
+- [x] `core/acc/` — ACC FHIR claim lodgement and ClaimResponse polling (port from tpt-doctor MOH claiming)
+- [x] `core/hpi/` — Health Practitioner Index APC validation, 24h Redis cache
+- [x] `core/pharmac/` — PHARMAC formulary + subsidy lookup (port from tpt-doctor prescriptions)
 
 ## core/ — FHIR
-- [ ] `tools/gen-fhir-types/main.go` — FHIR R5 Go struct generator from `fhir.schema.json`
-- [ ] `core/fhir/r5/` — Generated Go structs (Patient, Practitioner, Encounter, Observation, Condition, MedicationRequest, DiagnosticReport, ServiceRequest, Immunization, Claim, ClaimResponse, ImagingStudy, Subscription, SubscriptionTopic)
-- [ ] `core/fhir/r4/` — Minimal R4 types for NHI/NES API compat
-- [ ] `core/fhir/translate/` — R4↔R5 translators for Patient and Practitioner
-- [ ] `core/repo/store.go` — FHIR repository interface
-- [ ] `core/repo/patient.go`, `observation.go`, `encounter.go` etc.
-- [ ] `core/repo/search.go` — FHIR search parameter engine over PostgreSQL JSONB
+- [x] `tools/gen-fhir-types/main.go` — FHIR R5 Go struct generator from `fhir.schema.json`
+- [x] `core/fhir/r5/` — Generated Go structs (Patient, Practitioner, Encounter, Observation, Condition, MedicationRequest, DiagnosticReport, ServiceRequest, Immunization, Claim, ClaimResponse, ImagingStudy, Subscription, SubscriptionTopic)
+- [x] `core/fhir/r4/` — Minimal R4 types for NHI/NES API compat
+- [x] `core/fhir/translate/` — R4↔R5 translators for Patient and Practitioner
+- [x] `core/repo/store.go` — FHIR repository interface
+- [x] `core/repo/patient.go`, `observation.go`, `encounter.go` etc.
+- [x] `core/repo/search.go` — FHIR search parameter engine over PostgreSQL JSONB
 
 ## core/ — Supporting Services
-- [ ] `core/hl7/` — HL7 v2 parser: ORU^R01, ADT^A01/A08, ORM^O01
-  - [ ] NZ lab Z-segment handlers (Labtests Auckland, Healthscope, Southern Community Labs)
-  - [ ] MLLP TCP listener
-- [ ] `core/terminology/snomed.go` — SNOMED CT NZ Edition RF2 loader
-- [ ] `core/terminology/loinc.go` — LOINC CSV loader
-- [ ] `core/terminology/icd10.go` — ICD-10-AM loader
-- [ ] `core/terminology/nzmt.go` — NZ Medicines Terminology (NZULM)
-- [ ] `core/subscription/engine.go` — FHIR R5 subscription engine (Redis pub/sub)
-  - [ ] rest-hook channel
-  - [ ] websocket channel
-  - [ ] email channel
+- [x] `core/hl7/` — HL7 v2 parser: ORU^R01, ADT^A01/A08, ORM^O01
+  - [x] NZ lab Z-segment handlers (Labtests Auckland, Healthscope, Southern Community Labs)
+  - [x] MLLP TCP listener
+- [x] `core/terminology/snomed.go` — SNOMED CT NZ Edition RF2 loader
+- [x] `core/terminology/loinc.go` — LOINC CSV loader
+- [x] `core/terminology/icd10.go` — ICD-10-AM loader
+- [x] `core/terminology/nzmt.go` — NZ Medicines Terminology (NZULM)
+- [x] `core/subscription/engine.go` — FHIR R5 subscription engine (Redis pub/sub)
+  - [x] rest-hook channel
+  - [x] websocket channel
+  - [x] email channel
 
 ## tpt-health-interop (Milestone 1)
-- [ ] `interop/go.mod`
-- [ ] `interop/cmd/tpt-health-interop/main.go` — Cobra root (serve, migrate, validate)
-- [ ] `interop/api/server.go` — HTTP server, middleware chain (mirror tpt-identity api/server.go)
-- [ ] `interop/api/fhir.go` — FHIR REST API (R5 + R4 compat)
-- [ ] `interop/api/nhi.go` — NHI lookup endpoint
-- [ ] `interop/api/terminology.go` — Terminology service endpoints
-- [ ] `interop/api/subscription.go` — Subscription management
+- [x] `interop/go.mod`
+- [x] `interop/cmd/tpt-health-interop/main.go` — Cobra root (serve, migrate, validate)
+- [x] `interop/api/server.go` — HTTP server, middleware chain (mirror tpt-identity api/server.go)
+- [x] `interop/api/fhir.go` — FHIR REST API (R5 + R4 compat)
+- [x] `interop/api/nhi.go` — NHI lookup endpoint
+- [x] `interop/api/terminology.go` — Terminology service endpoints
+- [x] `interop/api/subscription.go` — Subscription management
 - [ ] Tests: FHIR CRUD round-trip, NHI lookup (UAT), R4↔R5 translation, audit trail
 - [ ] `deploy/docker-compose.yml` — Full interop stack
 

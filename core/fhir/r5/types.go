@@ -669,3 +669,164 @@ type OperationOutcome struct {
 	Text         *Narrative              `json:"text,omitempty"`
 	Issue        []OperationOutcomeIssue `json:"issue"`
 }
+
+// ---------------------------------------------------------------------------
+// ImagingStudy
+// ---------------------------------------------------------------------------
+
+// ImagingStudySeriesInstance is a single instance (image) in a series.
+type ImagingStudySeriesInstance struct {
+	UID           string  `json:"uid"`
+	SopClass      Coding  `json:"sopClass"`
+	Number        int     `json:"number,omitempty"`
+	Title         string  `json:"title,omitempty"`
+}
+
+// ImagingStudySeriesPerformer is a performer of a series.
+type ImagingStudySeriesPerformer struct {
+	Function *CodeableConcept `json:"function,omitempty"`
+	Actor    *Reference       `json:"actor"`
+}
+
+// ImagingStudySeries represents a series of images in an imaging study.
+type ImagingStudySeries struct {
+	UID                 string                          `json:"uid"`
+	Number              int                             `json:"number,omitempty"`
+	Modality            Coding                          `json:"modality"`
+	Description         string                          `json:"description,omitempty"`
+	Started             *time.Time                      `json:"started,omitempty"`
+	Performer           []ImagingStudySeriesPerformer   `json:"performer,omitempty"`
+	BodySite            *Coding                         `json:"bodySite,omitempty"`
+	Laterality          *Coding                         `json:"laterality,omitempty"`
+	Specimen            []Reference                     `json:"specimen,omitempty"`
+	StartedWithContrast *bool                           `json:"startedWithContrast,omitempty"`
+	Instance            []ImagingStudySeriesInstance    `json:"instance,omitempty"`
+}
+
+// ImagingStudy is a FHIR R5 ImagingStudy resource.
+type ImagingStudy struct {
+	ResourceType      string                `json:"resourceType"`
+	ID                string                `json:"id,omitempty"`
+	Meta              *Meta                 `json:"meta,omitempty"`
+	Text              *Narrative            `json:"text,omitempty"`
+	Extension         []Extension           `json:"extension,omitempty"`
+	Identifier        []Identifier          `json:"identifier,omitempty"`
+	Status            string                `json:"status"`
+	Modality          []Coding              `json:"modality,omitempty"`
+	Subject           *Reference            `json:"subject"`
+	Encounter         *Reference            `json:"encounter,omitempty"`
+	Started           *time.Time            `json:"started,omitempty"`
+	BasedOn           []Reference           `json:"basedOn,omitempty"`
+	Referrer          *Reference            `json:"referrer,omitempty"`
+	Interpreter       []Reference           `json:"interpreter,omitempty"`
+	Endpoint          []Reference           `json:"endpoint,omitempty"`
+	NumberOfSeries    int                   `json:"numberOfSeries,omitempty"`
+	NumberOfInstances int                   `json:"numberOfInstances,omitempty"`
+	Procedure         []CodeableConcept     `json:"procedure,omitempty"`
+	Location          *Reference            `json:"location,omitempty"`
+	ReasonCode        []CodeableConcept     `json:"reasonCode,omitempty"`
+	Note              []Annotation          `json:"note,omitempty"`
+	Series            []ImagingStudySeries  `json:"series,omitempty"`
+}
+
+// ---------------------------------------------------------------------------
+// Subscription
+// ---------------------------------------------------------------------------
+
+// SubscriptionFilterBy is a filter criterion for a subscription.
+type SubscriptionFilterBy struct {
+	ResourceType string  `json:"resourceType,omitempty"`
+	FilterParameter string `json:"filterParameter"`
+	Value          string `json:"value"`
+	Modifier       string `json:"modifier,omitempty"`
+}
+
+// SubscriptionChannel is the channel configuration for a subscription.
+type SubscriptionChannel struct {
+	Type       string `json:"type"`
+	Endpoint   string `json:"endpoint,omitempty"`
+	Payload    string `json:"payload,omitempty"`
+	Header     []string `json:"header,omitempty"`
+}
+
+// Subscription is a FHIR R5 Subscription resource.
+type Subscription struct {
+	ResourceType string                     `json:"resourceType"`
+	ID           string                     `json:"id,omitempty"`
+	Meta         *Meta                      `json:"meta,omitempty"`
+	Text         *Narrative                 `json:"text,omitempty"`
+	Extension    []Extension                `json:"extension,omitempty"`
+	Identifier   []Identifier               `json:"identifier,omitempty"`
+	Name         string                     `json:"name,omitempty"`
+	Status       string                     `json:"status"`
+	Topic        string                     `json:"topic"` // canonical reference to SubscriptionTopic
+	Contact      []ContactPoint             `json:"contact,omitempty"`
+	End          *time.Time                 `json:"end,omitempty"`
+	ManagingEntity *Reference               `json:"managingEntity,omitempty"`
+	Reason       string                     `json:"reason"`
+	FilterBy     []SubscriptionFilterBy     `json:"filterBy,omitempty"`
+	ChannelType  Coding                     `json:"channelType"`
+	Channel      SubscriptionChannel        `json:"channel"`
+	MaxCount     int                        `json:"maxCount,omitempty"`
+	Timeout      int                        `json:"timeout,omitempty"`
+	ContentType  string                     `json:"contentType,omitempty"`
+	HeartbeatPeriod int                    `json:"heartbeatPeriod,omitempty"`
+}
+
+// ---------------------------------------------------------------------------
+// SubscriptionTopic
+// ---------------------------------------------------------------------------
+
+// SubscriptionTopicResourceTrigger defines a resource-based trigger.
+type SubscriptionTopicResourceTrigger struct {
+	ResourceType string            `json:"resourceType"`
+	MethodCriteria []string        `json:"methodCriteria,omitempty"`
+	QueryCriteria  *SubscriptionTopicQueryCriteria `json:"queryCriteria,omitempty"`
+	FhirPathCriteria string        `json:"fhirPathCriteria,omitempty"`
+}
+
+// SubscriptionTopicQueryCriteria defines before/after query criteria.
+type SubscriptionTopicQueryCriteria struct {
+	Previous string `json:"previous,omitempty"`
+	ResultForCreate string `json:"resultForCreate,omitempty"`
+	ResultForDelete string `json:"resultForDelete,omitempty"`
+}
+
+// SubscriptionTopicEventTrigger defines an event-based trigger.
+type SubscriptionTopicEventTrigger struct {
+	Description string `json:"description"`
+	Event       CodeableConcept `json:"event"`
+	ResourceType string `json:"resourceType"`
+}
+
+// SubscriptionTopicCanFilterBy defines allowable filter parameters.
+type SubscriptionTopicCanFilterBy struct {
+	ResourceType string   `json:"resourceType,omitempty"`
+	FilterParameter string `json:"filterParameter"`
+	Modifier      []string `json:"modifier,omitempty"`
+	ModifierExtension []Extension `json:"modifierExtension,omitempty"`
+}
+
+// SubscriptionTopic is a FHIR R5 SubscriptionTopic resource.
+type SubscriptionTopic struct {
+	ResourceType     string                              `json:"resourceType"`
+	ID               string                              `json:"id,omitempty"`
+	Meta             *Meta                               `json:"meta,omitempty"`
+	Text             *Narrative                          `json:"text,omitempty"`
+	Extension        []Extension                         `json:"extension,omitempty"`
+	Identifier       []Identifier                        `json:"identifier,omitempty"`
+	URL              string                              `json:"url"`
+	Version          string                              `json:"version,omitempty"`
+	Title            string                              `json:"title,omitempty"`
+	DerivedFrom      []string                            `json:"derivedFrom,omitempty"`
+	Status           string                              `json:"status"`
+	Experimental     *bool                               `json:"experimental,omitempty"`
+	Date             *time.Time                          `json:"date,omitempty"`
+	Publisher        string                              `json:"publisher,omitempty"`
+	Contact          []ContactPoint                      `json:"contact,omitempty"`
+	Description      string                              `json:"description,omitempty"`
+	ResourceTrigger  []SubscriptionTopicResourceTrigger  `json:"resourceTrigger,omitempty"`
+	EventTrigger     []SubscriptionTopicEventTrigger     `json:"eventTrigger,omitempty"`
+	CanFilterBy      []SubscriptionTopicCanFilterBy      `json:"canFilterBy,omitempty"`
+	NotifyType       []string                            `json:"notifyType,omitempty"`
+}
