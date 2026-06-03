@@ -11,21 +11,21 @@
 - [ ] Create `deploy/docker-compose.dev.yml` (PostgreSQL + Redis + interop)
 
 ## core/ — Shared Kernel
-- [ ] `core/go.mod` (`github.com/PhillipC05/tpt-healthcare/core`, go 1.22)
-- [ ] `core/db/connect.go` — pgx connection pool
-- [ ] `core/db/migrate/` — embedded SQL migration runner (mirror tpt-identity pattern)
-- [ ] `core/db/migrate/001_fhir_resources.sql`
-- [ ] `core/db/migrate/002_audit_events.sql`
-- [ ] `core/audit/trail.go` — synchronous audit write (port from tpt-doctor `packages/audit-log/`)
-- [ ] `core/encryption/` — AES-256-GCM field encryption (port from tpt-doctor `packages/encryption/`)
-- [ ] `core/middleware/` — rate limit, CORS, tenant extraction, audit wrapping
-- [ ] `core/auth/provider.go` — AuthProvider interface + Principal struct
-- [ ] `core/auth/auth0/` — Auth0 OIDC validation (port from tpt-doctor `packages/auth/`)
-- [ ] `core/auth/jwt/` — Standalone Ed25519 JWT + TOTP
-- [ ] `core/auth/oidc/` — tpt-identity OIDC client
-- [ ] `core/events/` — Internal domain event bus
-- [ ] `core/consent/` — Consent management (HIPC Rule 10/11)
-- [ ] `core/billing/` — Shared billing primitives
+- [x] `core/go.mod` (`github.com/PhillipC05/tpt-healthcare/core`, go 1.22)
+- [x] `core/db/connect.go` — pgx connection pool
+- [x] `core/db/migrate/` — embedded SQL migration runner (mirror tpt-identity pattern)
+- [x] `core/db/migrate/001_fhir_resources.sql`
+- [x] `core/db/migrate/002_audit_events.sql`
+- [x] `core/audit/trail.go` — synchronous audit write (port from tpt-doctor `packages/audit-log/`)
+- [x] `core/encryption/` — AES-256-GCM field encryption (port from tpt-doctor `packages/encryption/`)
+- [x] `core/middleware/` — rate limit, CORS, tenant extraction, audit wrapping
+- [x] `core/auth/provider.go` — AuthProvider interface + Principal struct
+- [x] `core/auth/auth0/` — Auth0 OIDC validation (port from tpt-doctor `packages/auth/`)
+- [x] `core/auth/jwt/` — Standalone Ed25519 JWT + TOTP
+- [x] `core/auth/oidc/` — tpt-identity OIDC client
+- [x] `core/events/` — Internal domain event bus
+- [x] `core/consent/` — Consent management (HIPC Rule 10/11)
+- [x] `core/billing/` — Shared billing primitives
 
 ## core/ — NZ National Integrations
 - [ ] `core/nhi/` — NHI FHIR API client (port from tpt-doctor country-profiles NZ service)
