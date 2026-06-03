@@ -20,10 +20,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// migrationsFS is a placeholder embed for the interop migrations directory.
-// Replace the path once migration SQL files are added to that directory.
+// migrationsFS embeds the interop SQL migration files.
+// The "all:" prefix ensures the directory is included even when it contains
+// only non-Go files (e.g. during initial scaffolding).
 //
-//go:embed migrations/*.sql
+//go:embed all:migrations
 var migrationsFS embed.FS
 
 // Config holds configuration for the HTTP server.
