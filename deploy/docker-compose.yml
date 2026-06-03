@@ -1,0 +1,130 @@
+version: "3.9"
+
+# Full production-like stack for tpt-healthcare-nz.
+# Requires the following environment variables to be set (e.g. via .env or secrets manager):
+#   POSTGRES_PASSWORD   — database password
+#   ENCRYPTION_KEY      — AES-256-GCM key, 32-byte base64-encoded
+#   NHI_API_URL         — Ministry of Health NHI FHIR API base URL
+#   NHI_API_TOKEN_URL   — OAuth2 token endpoint for NHI API
+#   HPI_API_URL         — Health Practitioner Index API base URL
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 16
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tpt_healthcare
+      POSTGRES_USER: tpt
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tpt -d tpt_healthcare"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - backend
+
+  # ---------------------------------------------------------------------------
+  # Redis 7
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - backend
+
+  # ---------------------------------------------------------------------------
+  # tpt-health-interop service
+  # ---------------------------------------------------------------------------
+  interop:
+    build:
+      context: ./interop
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgres://tpt:${POSTGRES_PASSWORD}@postgres:5432/tpt_healthcare?sslmode=disable"
+      REDIS_URL: "redis://redis:6379"
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY}"
+      NHI_API_URL: "${NHI_API_URL}"
+      NHI_API_TOKEN_URL: "${NHI_API_TOKEN_URL}"
+      HPI_API_URL: "${HPI_API_URL}"
+      PORT: "8080"
+      LOG_LEVEL: "info"
+    expose:
+      - "8080"
+    networks:
+      - backend
+      - frontend
+
+  # ---------------------------------------------------------------------------
+  # Nginx reverse proxy — TLS termination, proxy to interop:8080
+  # ---------------------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    depends_on:
+      - interop
+    networks:
+      - frontend
+
+  # ---------------------------------------------------------------------------
+  # Certbot — only needed for initial TLS certificate issuance / renewal.
+  # Run manually:
+  #   docker compose run --rm certbot certonly --webroot \
+  #     --webroot-path /var/www/certbot \
+  #     -d your.domain.nz
+  # ---------------------------------------------------------------------------
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew; done"
+    networks:
+      - frontend
+
+# ---------------------------------------------------------------------------
+# Named volumes
+# ---------------------------------------------------------------------------
+volumes:
+  postgres_data:
+  redis_data:
+  certbot_certs:
+  certbot_www:
+
+# ---------------------------------------------------------------------------
+# Networks
+# ---------------------------------------------------------------------------
+networks:
+  backend:
+    driver: bridge
+  frontend:
+    driver: bridge
