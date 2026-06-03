@@ -1,0 +1,70 @@
+version: "3.9"
+
+# Local development stack for tpt-healthcare-nz.
+# Starts PostgreSQL, Redis, and a placeholder interop service.
+#
+# Usage:
+#   make dev         # start the stack (runs: docker compose -f deploy/docker-compose.dev.yml up -d)
+#   make dev-down    # stop the stack
+#
+# The interop service requires the binary to be built first: make build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: tpt_healthcare_dev
+      POSTGRES_USER: tpt
+      POSTGRES_PASSWORD: tpt_dev_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tpt -d tpt_healthcare_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # tpt-health-interop: the FHIR R5 interoperability service.
+  # Build the binary first with: make build
+  # Then uncomment the `build` line below, or run the pre-built binary directly.
+  interop:
+    # build: ./interop
+    image: golang:1.22-alpine   # placeholder — replace with a built image or use `build: ./interop`
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://tpt:tpt_dev_password@postgres:5432/tpt_healthcare_dev?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      SERVER_PORT: "8080"
+      LOG_LEVEL: debug
+      # ENCRYPTION_KEY: set in .env — 32-byte base64-encoded AES-256 key (required for PHI encryption)
+      # HPI_API_BASE_URL: https://api.uat.digital.health.nz/hpi/v1 (UAT)
+      # NHI_API_BASE_URL: https://api.uat.digital.health.nz/nhi/v1 (UAT)
+    # Placeholder entrypoint — replace once the binary is built into the image.
+    entrypoint: ["sh", "-c", "echo 'interop placeholder: build the image with make build and update docker-compose.dev.yml' && sleep infinity"]
+
+volumes:
+  postgres_data:
+    driver: local
