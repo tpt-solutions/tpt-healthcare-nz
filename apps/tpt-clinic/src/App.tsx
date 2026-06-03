@@ -4,14 +4,20 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ApiProvider } from '@/contexts/ApiContext';
 
 // Lazy-loaded pages for code splitting
-const LoginPage        = React.lazy(() => import('@/pages/LoginPage'));
-const DashboardPage    = React.lazy(() => import('@/pages/DashboardPage'));
-const PatientListPage  = React.lazy(() => import('@/pages/PatientListPage'));
-const NewPatientPage   = React.lazy(() => import('@/pages/NewPatientPage'));
+const LoginPage         = React.lazy(() => import('@/pages/LoginPage'));
+const DashboardPage     = React.lazy(() => import('@/pages/DashboardPage'));
+const PatientListPage   = React.lazy(() => import('@/pages/PatientListPage'));
+const NewPatientPage    = React.lazy(() => import('@/pages/NewPatientPage'));
 const PatientDetailPage = React.lazy(() => import('@/pages/PatientDetailPage'));
-const AppointmentsPage  = React.lazy(() => import('@/pages/AppointmentsPage'));
-const EncounterPage     = React.lazy(() => import('@/pages/EncounterPage'));
-const PrescriptionsPage = React.lazy(() => import('@/pages/PrescriptionsPage'));
+const AppointmentsPage   = React.lazy(() => import('@/pages/AppointmentsPage'));
+const EncounterPage      = React.lazy(() => import('@/pages/EncounterPage'));
+const PrescriptionsPage  = React.lazy(() => import('@/pages/PrescriptionsPage'));
+
+// Blood bank pages.
+const BloodBankDashboard = React.lazy(() => import('@/pages/BloodBankDashboard'));
+const DonorsPage         = React.lazy(() => import('@/pages/DonorsPage'));
+const InventoryPage      = React.lazy(() => import('@/pages/InventoryPage'));
+const CrossmatchPage     = React.lazy(() => import('@/pages/CrossmatchPage'));
 
 // ---------------------------------------------------------------------------
 // Protected route guard
@@ -116,6 +122,40 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <PrescriptionsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Blood bank routes */}
+        <Route
+          path="/blood-bank"
+          element={
+            <ProtectedRoute>
+              <BloodBankDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/blood-bank/donors"
+          element={
+            <ProtectedRoute>
+              <DonorsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/blood-bank/inventory"
+          element={
+            <ProtectedRoute>
+              <InventoryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/blood-bank/crossmatch"
+          element={
+            <ProtectedRoute>
+              <CrossmatchPage />
             </ProtectedRoute>
           }
         />

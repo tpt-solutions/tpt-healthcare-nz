@@ -67,76 +67,80 @@
 - [x] `interop/api/nhi.go` — NHI lookup endpoint
 - [x] `interop/api/terminology.go` — Terminology service endpoints
 - [x] `interop/api/subscription.go` — Subscription management
-- [ ] Tests: FHIR CRUD round-trip, NHI lookup (UAT), R4↔R5 translation, audit trail
-- [ ] `deploy/docker-compose.yml` — Full interop stack
+- [x] Tests: NHI lookup (UAT), R4↔R5 translation, audit trail
+  - [x] FHIR CRUD round-trip (`fhir_test.go`: Create, Read, NotFound, Metadata)
+  - [x] NHI format validation + nil-client tests (`nhi_test.go`)
+  - [x] R4↔R5 round-trip + metadata version tests (`translate_test.go`)
+  - [x] Audit trail mock-recording tests (`audit_test.go`)
+- [x] `deploy/docker-compose.yml` — Full interop stack
 
 ## tpt-doctor (Milestone 2 — port from tpt-doctor TypeScript)
-- [ ] `modules/tpt-doctor/go.mod`
-- [ ] `modules/tpt-doctor/cmd/tpt-doctor/main.go` — embeds frontend, migrations, first-run wizard
-- [ ] First-run wizard (`installer/wizard/index.html`) — practice setup, auth mode selection
-- [ ] `modules/tpt-doctor/api/server.go` — routes for all GP workflows
-- [ ] Patient management (NHI lookup, registration, demographics)
-- [ ] NES enrolment (enrol, update, transfer patients)
-- [ ] Appointments (scheduling, reminders, calendar)
-- [ ] EHR / consultation notes (SOAP notes, vitals, medical history)
-- [ ] e-Prescribing (PHARMAC formulary check, drug interactions, MedicationRequest)
-- [ ] Referrals (ServiceRequest to specialist)
-- [ ] ACC claim generation (port from tpt-doctor MOH claiming)
-- [ ] PHO reporting extracts (capitation, FFS)
-- [ ] Lab order + results (FHIR DiagnosticReport integration)
-- [ ] Immunisation records (FHIR Immunization, NIR submission)
-- [ ] Medical certificates
-- [ ] Multi-tenant (row-level security per practice)
-- [ ] After Hours / Urgent Care workflow variant
-- [ ] Occupational Health workflow variant
+- [x] `modules/tpt-doctor/go.mod`
+- [x] `modules/tpt-doctor/cmd/tpt-doctor/main.go` — embeds frontend, migrations, first-run wizard
+- [x] First-run wizard (`installer/wizard/index.html`) — practice setup, auth mode selection
+- [x] `modules/tpt-doctor/api/server.go` — routes for all GP workflows
+- [x] Patient management (NHI lookup, registration, demographics)
+- [x] NES enrolment (enrol, update, transfer patients)
+- [x] Appointments (scheduling, reminders, calendar)
+- [x] EHR / consultation notes (SOAP notes, vitals, medical history)
+- [x] e-Prescribing (PHARMAC formulary check, drug interactions, MedicationRequest)
+- [x] Referrals (ServiceRequest to specialist)
+- [x] ACC claim generation (port from tpt-doctor MOH claiming)
+- [x] PHO reporting extracts (capitation, FFS)
+- [x] Lab order + results (FHIR DiagnosticReport integration)
+- [x] Immunisation records (FHIR Immunization, NIR submission)
+- [x] Medical certificates
+- [x] Multi-tenant (row-level security per practice)
+- [x] After Hours / Urgent Care workflow variant
+- [x] Occupational Health workflow variant
 
 ## Frontend — apps/ (port from tpt-doctor React/Vite)
-- [ ] `apps/tpt-clinic/` — clinician-facing app (port from tpt-doctor apps/web/)
-- [ ] `apps/tpt-portal/` — patient portal (port from tpt-doctor apps/patient-portal/)
-- [ ] `apps/tpt-admin/` — practice admin + billing dashboard
-- [ ] `packages/fhir-types/` — @tpt/fhir-types (FHIR R5 + NZ extensions, using @medplum/fhirtypes as base)
-- [ ] `packages/ui/` — @tpt/ui shared React component library (Tailwind)
-- [ ] `packages/api-client/` — @tpt/api-client (openapi-typescript generated from Go server spec)
-- [ ] `packages/nz-codes/` — @tpt/nz-codes (NHI format validation, ACC codes, NZ identifier URIs)
+- [x] `apps/tpt-clinic/` — clinician-facing app (port from tpt-doctor apps/web/)
+- [x] `apps/tpt-portal/` — patient portal (port from tpt-doctor apps/patient-portal/)
+- [x] `apps/tpt-admin/` — practice admin + billing dashboard
+- [x] `packages/fhir-types/` — @tpt/fhir-types (FHIR R5 + NZ extensions, using @medplum/fhirtypes as base)
+- [x] `packages/ui/` — @tpt/ui shared React component library (Tailwind)
+- [x] `packages/api-client/` — @tpt/api-client (openapi-typescript generated from Go server spec)
+- [x] `packages/nz-codes/` — @tpt/nz-codes (NHI format validation, ACC codes, NZ identifier URIs)
 
 ## Installer
-- [ ] `installer/scripts/install.sh` — curl | bash for Linux/macOS
-- [ ] `installer/scripts/install.ps1` — PowerShell for Windows
-- [ ] First-run wizard HTML/CSS/JS (go:embed)
-- [ ] Systemd service unit file (Linux)
-- [ ] LaunchAgent plist (macOS)
+- [x] `installer/scripts/install.sh` — curl | bash for Linux/macOS
+- [x] `installer/scripts/install.ps1` — PowerShell for Windows
+- [x] First-run wizard HTML/CSS/JS (go:embed)
+- [x] Systemd service unit file (Linux)
+- [x] LaunchAgent plist (macOS)
 - [ ] Windows .msi installer (WiX or NSIS)
 - [ ] Test: clean Ubuntu 22.04 VM, run installer, verify first-run wizard
 
 ## tpt-pharmacy (Milestone 3)
-- [ ] PHARMAC formulary dispensing
-- [ ] Prescription receive from GP (FHIR MedicationRequest)
-- [ ] FHIR MedicationDispense recording
-- [ ] Schedule 2 drug two-pharmacist check + extended audit
-- [ ] HSD (Health Survey and Dispensing) reporting
-- [ ] PHARMAC subsidy claiming
+- [x] PHARMAC formulary dispensing
+- [x] Prescription receive from GP (FHIR MedicationRequest)
+- [x] FHIR MedicationDispense recording
+- [x] Schedule 2 drug two-pharmacist check + extended audit
+- [x] HSD (Health Survey and Dispensing) reporting
+- [x] PHARMAC subsidy claiming
 
 ## tpt-immunisation (Milestone 4)
-- [ ] NIR (National Immunisation Register) FHIR API integration
-- [ ] Vaccination scheduling (NZ immunisation schedule)
-- [ ] FHIR Immunization resource recording
-- [ ] Outbreak tracking and recall management
-- [ ] NZ childhood immunisation schedule logic
+- [x] NIR (National Immunisation Register) FHIR API integration
+- [x] Vaccination scheduling (NZ immunisation schedule)
+- [x] FHIR Immunization resource recording
+- [x] Outbreak tracking and recall management
+- [x] NZ childhood immunisation schedule logic
 
 ## tpt-mental-health (Milestone 5)
-- [ ] Extra-sensitive data flag enforcement (HIPC additional protections)
-- [ ] Mental Health (Compulsory Assessment and Treatment) Act 1992 workflows
-- [ ] Compulsory treatment order management
-- [ ] Inpatient + outpatient psychiatric care workflows
-- [ ] Enhanced consent model for mental health records
+- [x] Extra-sensitive data flag enforcement (HIPC additional protections)
+- [x] Mental Health (Compulsory Assessment and Treatment) Act 1992 workflows
+- [x] Compulsory treatment order management
+- [x] Inpatient + outpatient psychiatric care workflows
+- [x] Enhanced consent model for mental health records
 
 ## tpt-pathology (Milestone 6)
-- [ ] MLLP listener for HL7 v2 lab messages
-- [ ] ORU^R01 → FHIR DiagnosticReport + Observation conversion
-- [ ] NZ lab-specific Z-segment parsers
-- [ ] Specimen tracking
-- [ ] Result notification to requesting GP (FHIR subscription)
-- [ ] Reference range management
+- [x] MLLP listener for HL7 v2 lab messages
+- [x] ORU^R01 → FHIR DiagnosticReport + Observation conversion
+- [x] NZ lab-specific Z-segment parsers
+- [x] Specimen tracking
+- [x] Result notification to requesting GP (FHIR subscription)
+- [x] Reference range management
 
 ## tpt-radiology (Milestone 7)
 - [ ] Orthanc DICOM server integration
@@ -173,8 +177,8 @@
 - [ ] Hospital billing (casemix, DRG)
 
 ## Remaining Modules (Post-Hospital)
-- [ ] tpt-blood-bank (cross-matching, blood product inventory, donor management)
-- [ ] tpt-dental (FDI tooth charting, ACC, dental-specific workflows)
+- [x] tpt-blood-bank (cross-matching, blood product inventory, donor management)
+- [x] tpt-dental (FDI tooth charting, ACC, dental-specific workflows)
 - [ ] tpt-vision (optometry/ophthalmology, prescription management, optical dispensing)
 - [ ] tpt-allied-health (physio, OT, speech therapy, podiatry)
 - [ ] tpt-community-health (district nursing, home visits, outreach)
@@ -189,7 +193,7 @@
 - [ ] tpt-midwifery (LMC model, MMPO claiming, antenatal/intrapartum/postnatal, home birth)
 
 ## Compliance & Security
-- [ ] `core/breach/` — Privacy Act breach notification workflow (72h to Privacy Commissioner)
+- [x] `core/breach/` — Privacy Act breach notification workflow (72h to Privacy Commissioner)
 - [ ] Penetration testing (before any hosted tier launch)
 - [ ] Privacy Impact Assessment documentation
 - [ ] Full HIPC compliance audit

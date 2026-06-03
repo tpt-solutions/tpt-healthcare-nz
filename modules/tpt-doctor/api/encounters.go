@@ -47,6 +47,24 @@ type SOAPNotes struct {
 }
 
 // Encounter represents a clinical consultation.
+// WorkflowVariant determines the clinical workflow applied to an encounter.
+// Variants change billing paths, required fields, and post-encounter tasks.
+type WorkflowVariant string
+
+const (
+	// WorkflowStandard is the default GP consultation workflow.
+	WorkflowStandard WorkflowVariant = "standard"
+	// WorkflowAfterHours is for after-hours and weekend consultations.
+	// Triggers after-hours surcharge billing and alternate ACC category codes.
+	WorkflowAfterHours WorkflowVariant = "after-hours"
+	// WorkflowUrgentCare is for urgent / walk-in presentations.
+	// Bypasses appointment requirement; triggers same-day billing rules.
+	WorkflowUrgentCare WorkflowVariant = "urgent-care"
+	// WorkflowOccHealth is for occupational health assessments.
+	// Enables employer billing, return-to-work forms, and workplace injury pathways.
+	WorkflowOccHealth WorkflowVariant = "occupational-health"
+)
+
 // Aligns with the FHIR R5 Encounter resource.
 type Encounter struct {
 	ID              string          `json:"id"`
@@ -55,10 +73,14 @@ type Encounter struct {
 	PractitionerHPI string          `json:"practitionerHpi"`
 	AppointmentID   string          `json:"appointmentId,omitempty"`
 	Status          EncounterStatus `json:"status"`
+	Workflow        WorkflowVariant `json:"workflow"`
 	SOAP            SOAPNotes       `json:"soap"`
 	Vitals          Vitals          `json:"vitals"`
 	Diagnoses       []string        `json:"diagnoses"`  // ICD-10-AM codes
 	Procedures      []string        `json:"procedures"` // SNOMED CT or local codes
+	FFSEligible     bool            `json:"ffsEligible"`
+	FFSFundingCode  string          `json:"ffsFundingCode,omitempty"`
+	EmployerID      string          `json:"employerId,omitempty"` // OccHealth: employer reference
 	TenantID        string          `json:"tenantId"`
 	StartedAt       time.Time       `json:"startedAt"`
 	CompletedAt     *time.Time      `json:"completedAt,omitempty"`
@@ -68,11 +90,13 @@ type Encounter struct {
 
 // encounterCreateRequest is the body for POST /api/v1/encounters.
 type encounterCreateRequest struct {
-	PatientID       string `json:"patientId"`
-	PatientNHI      string `json:"patientNhi"`
-	PractitionerHPI string `json:"practitionerHpi"`
-	AppointmentID   string `json:"appointmentId,omitempty"`
-	Reason          string `json:"reason,omitempty"`
+	PatientID       string          `json:"patientId"`
+	PatientNHI      string          `json:"patientNhi"`
+	PractitionerHPI string          `json:"practitionerHpi"`
+	AppointmentID   string          `json:"appointmentId,omitempty"`
+	Workflow        WorkflowVariant `json:"workflow,omitempty"`
+	Reason          string          `json:"reason,omitempty"`
+	EmployerID      string          `json:"employerId,omitempty"` // OccHealth only
 }
 
 // encounterUpdateRequest is the body for PUT /api/v1/encounters/{id}.

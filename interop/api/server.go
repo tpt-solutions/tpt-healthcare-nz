@@ -17,6 +17,7 @@ import (
 	coremigrate "github.com/PhillipC05/tpt-healthcare/core/db/migrate"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 	"github.com/PhillipC05/tpt-healthcare/core/nhi"
+	"github.com/PhillipC05/tpt-healthcare/core/tenant"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -47,6 +48,7 @@ type Server struct {
 	auditTrail   *audit.Trail
 	authProvider auth.Provider
 	nhiClient    *nhi.Client
+	tenantStore  tenant.Store
 	router       *http.ServeMux
 }
 
@@ -86,6 +88,11 @@ func WithAuthProvider(p auth.Provider) ServerOption {
 // WithNHIClient attaches a nhi.Client to the server.
 func WithNHIClient(c *nhi.Client) ServerOption {
 	return func(s *Server) { s.nhiClient = c }
+}
+
+// WithTenantStore attaches a tenant.Store to the server.
+func WithTenantStore(ts tenant.Store) ServerOption {
+	return func(s *Server) { s.tenantStore = ts }
 }
 
 // Start begins listening for HTTP requests and blocks until ctx is cancelled,
@@ -134,10 +141,11 @@ func (s *Server) Start(ctx context.Context) error {
 // buildChain wraps the router with the standard middleware stack.
 // Order (outermost → innermost):
 //
-//	RecoveryMiddleware → RateLimit → CORS → TenantExtraction → AuditWrap
+//	RecoveryMiddleware → RateLimit → CORS → AuditWrap
 //
-// AuditWrap is only applied when an audit trail is available. Auth is
-// enforced per-route via withAuth helper.
+// TenantExtraction is NOT applied globally; it is applied per route group in
+// registerRoutes so that public endpoints (health, onboarding) can opt out.
+// Auth is enforced per-route via withAuth / withAdminAuth helpers.
 func (s *Server) buildChain() http.Handler {
 	// Burst is set to 3× the per-second rate, minimum 10.
 	burst := int(s.cfg.RateLimit * 3)
@@ -151,7 +159,6 @@ func (s *Server) buildChain() http.Handler {
 	if s.auditTrail != nil {
 		handler = middleware.AuditWrap(s.auditTrail)(handler)
 	}
-	handler = middleware.TenantExtraction()(handler)
 	handler = middleware.CORS(s.cfg.CORSOrigins)(handler)
 	handler = middleware.RateLimit(s.cfg.RateLimit, burst)(handler)
 	handler = middleware.RecoveryMiddleware()(handler)
@@ -168,32 +175,56 @@ func (s *Server) withAuth(h http.Handler) http.Handler {
 	return auth.RequireAuth(s.authProvider)(h)
 }
 
+// withTenant wraps a handler with TenantExtraction middleware. Apply this to
+// any route that requires a scoped tenant context (all clinical routes).
+func (s *Server) withTenant(h http.Handler) http.Handler {
+	return middleware.TenantExtraction()(h)
+}
+
+// withAdminAuth wraps a handler requiring auth + network_admin role. No tenant
+// extraction — admin routes operate at the network level, not per-clinic.
+func (s *Server) withAdminAuth(h http.Handler) http.Handler {
+	if s.authProvider == nil {
+		return h
+	}
+	return auth.RequireAuth(s.authProvider)(auth.RequireRole("network_admin")(h))
+}
+
 // registerRoutes mounts all route groups on the server's mux.
 func (s *Server) registerRoutes() {
 	// Health / readiness probes — no auth, no tenant required.
 	s.router.HandleFunc("/health", s.handleHealth)
 	s.router.HandleFunc("/ready", s.handleReady)
 
-	// FHIR R5.
+	// Clinic onboarding — public self-registration (no auth, no tenant).
+	if s.tenantStore != nil {
+		ob := newOnboardingHandler(s.tenantStore)
+		s.router.Handle("/api/v1/onboarding/", ob.publicRouter())
+
+		// Network-admin application management (auth + network_admin role, no tenant).
+		s.router.Handle("/api/v1/admin/", s.withAdminAuth(ob.adminRouter()))
+	}
+
+	// FHIR R5 — tenant-scoped, auth required.
 	fhirR5 := newFHIRHandler(fhirVersionR5)
-	s.router.Handle("/fhir/r5/", s.withAuth(http.StripPrefix("/fhir/r5", fhirR5.router())))
+	s.router.Handle("/fhir/r5/", s.withTenant(s.withAuth(http.StripPrefix("/fhir/r5", fhirR5.router()))))
 
-	// FHIR R4.
+	// FHIR R4 — tenant-scoped, auth required.
 	fhirR4 := newFHIRHandler(fhirVersionR4)
-	s.router.Handle("/fhir/r4/", s.withAuth(http.StripPrefix("/fhir/r4", fhirR4.router())))
+	s.router.Handle("/fhir/r4/", s.withTenant(s.withAuth(http.StripPrefix("/fhir/r4", fhirR4.router()))))
 
-	// NHI.
+	// NHI — tenant-scoped, auth required.
 	nhiH := newNHIHandler(s.nhiClient, s.auditTrail)
-	s.router.Handle("/api/v1/nhi/", s.withAuth(nhiH.router()))
+	s.router.Handle("/api/v1/nhi/", s.withTenant(s.withAuth(nhiH.router())))
 
-	// Terminology.
+	// Terminology — tenant-scoped, auth required.
 	termH := newTerminologyHandler()
-	s.router.Handle("/api/v1/terminology/", s.withAuth(termH.router()))
+	s.router.Handle("/api/v1/terminology/", s.withTenant(s.withAuth(termH.router())))
 
-	// Subscriptions.
+	// Subscriptions — tenant-scoped, auth required.
 	subH := newSubscriptionHandler()
-	s.router.Handle("/api/v1/subscriptions", s.withAuth(subH.router()))
-	s.router.Handle("/api/v1/subscriptions/", s.withAuth(subH.router()))
+	s.router.Handle("/api/v1/subscriptions", s.withTenant(s.withAuth(subH.router())))
+	s.router.Handle("/api/v1/subscriptions/", s.withTenant(s.withAuth(subH.router())))
 }
 
 // handleHealth responds to liveness probe requests.

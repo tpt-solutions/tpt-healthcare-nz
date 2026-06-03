@@ -138,9 +138,32 @@ func (s *Server) buildRoutes() *http.ServeMux {
 		auditTrail: s.auditTrail,
 		logger:     s.logger,
 	}
-	reports := &ReportsHandler{
+	referrals := &ReferralsHandler{
 		pool:       s.pool,
 		enc:        s.enc,
+		auditTrail: s.auditTrail,
+		logger:     s.logger,
+	}
+	labs := &LabsHandler{
+		pool:       s.pool,
+		enc:        s.enc,
+		auditTrail: s.auditTrail,
+		logger:     s.logger,
+	}
+	immunisations := &ImmunsationsHandler{
+		pool:       s.pool,
+		enc:        s.enc,
+		auditTrail: s.auditTrail,
+		logger:     s.logger,
+	}
+	certificates := &CertificatesHandler{
+		pool:       s.pool,
+		enc:        s.enc,
+		auditTrail: s.auditTrail,
+		logger:     s.logger,
+	}
+	pho := &PHOHandler{
+		pool:       s.pool,
 		auditTrail: s.auditTrail,
 		logger:     s.logger,
 	}
@@ -167,8 +190,12 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.Handle("GET /api/v1/patients/{id}", chain(http.HandlerFunc(patients.Get)))
 	mux.Handle("PUT /api/v1/patients/{id}", chain(http.HandlerFunc(patients.Update)))
 	mux.Handle("GET /api/v1/patients/nhi/{nhi}", chain(http.HandlerFunc(patients.GetByNHI)))
+
+	// NES enrolment routes (enrol, update, transfer).
 	mux.Handle("GET /api/v1/patients/{id}/enrolment", chain(http.HandlerFunc(patients.GetEnrolment)))
 	mux.Handle("POST /api/v1/patients/{id}/enrolment", chain(http.HandlerFunc(patients.CreateEnrolment)))
+	mux.Handle("PUT /api/v1/patients/{id}/enrolment", chain(http.HandlerFunc(patients.UpdateEnrolment)))
+	mux.Handle("POST /api/v1/patients/{id}/enrolment/transfer", chain(http.HandlerFunc(patients.TransferEnrolment)))
 
 	// Appointment routes.
 	mux.Handle("GET /api/v1/appointments", chain(http.HandlerFunc(appointments.List)))
@@ -177,7 +204,7 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.Handle("PUT /api/v1/appointments/{id}", chain(http.HandlerFunc(appointments.Update)))
 	mux.Handle("DELETE /api/v1/appointments/{id}", chain(http.HandlerFunc(appointments.Delete)))
 
-	// Encounter routes.
+	// Encounter routes (supports workflow=standard|after-hours|urgent-care|occupational-health).
 	mux.Handle("GET /api/v1/encounters", chain(http.HandlerFunc(encounters.List)))
 	mux.Handle("POST /api/v1/encounters", chain(http.HandlerFunc(encounters.Create)))
 	mux.Handle("GET /api/v1/encounters/{id}", chain(http.HandlerFunc(encounters.Get)))
@@ -191,9 +218,29 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.Handle("PUT /api/v1/prescriptions/{id}", chain(http.HandlerFunc(prescriptions.Update)))
 	mux.Handle("POST /api/v1/prescriptions/{id}/print", chain(http.HandlerFunc(prescriptions.Print)))
 
-	// Referral routes — placeholder handlers for future specialist referral module.
-	mux.Handle("GET /api/v1/referrals", chain(http.HandlerFunc(notImplemented)))
-	mux.Handle("POST /api/v1/referrals", chain(http.HandlerFunc(notImplemented)))
+	// Referral routes.
+	mux.Handle("GET /api/v1/referrals", chain(http.HandlerFunc(referrals.List)))
+	mux.Handle("POST /api/v1/referrals", chain(http.HandlerFunc(referrals.Create)))
+	mux.Handle("GET /api/v1/referrals/{id}", chain(http.HandlerFunc(referrals.Get)))
+	mux.Handle("PUT /api/v1/referrals/{id}", chain(http.HandlerFunc(referrals.Update)))
+	mux.Handle("POST /api/v1/referrals/{id}/send", chain(http.HandlerFunc(referrals.Send)))
+
+	// Lab order + results routes.
+	mux.Handle("GET /api/v1/labs", chain(http.HandlerFunc(labs.List)))
+	mux.Handle("POST /api/v1/labs", chain(http.HandlerFunc(labs.Create)))
+	mux.Handle("GET /api/v1/labs/{id}", chain(http.HandlerFunc(labs.Get)))
+	mux.Handle("POST /api/v1/labs/{id}/result", chain(http.HandlerFunc(labs.Result)))
+
+	// Immunisation routes.
+	mux.Handle("GET /api/v1/immunisations", chain(http.HandlerFunc(immunisations.List)))
+	mux.Handle("POST /api/v1/immunisations", chain(http.HandlerFunc(immunisations.Create)))
+	mux.Handle("GET /api/v1/immunisations/{id}", chain(http.HandlerFunc(immunisations.Get)))
+	mux.Handle("POST /api/v1/immunisations/{id}/submit-nir", chain(http.HandlerFunc(immunisations.SubmitNIR)))
+
+	// Medical certificate routes.
+	mux.Handle("GET /api/v1/certificates", chain(http.HandlerFunc(certificates.List)))
+	mux.Handle("POST /api/v1/certificates", chain(http.HandlerFunc(certificates.Create)))
+	mux.Handle("GET /api/v1/certificates/{id}", chain(http.HandlerFunc(certificates.Get)))
 
 	// ACC claim routes.
 	mux.Handle("GET /api/v1/claims", chain(http.HandlerFunc(claims.List)))
@@ -202,8 +249,12 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.Handle("POST /api/v1/claims/{id}/submit", chain(http.HandlerFunc(claims.Submit)))
 	mux.Handle("GET /api/v1/claims/{id}/status", chain(http.HandlerFunc(claims.Status)))
 
-	// Report routes.
-	mux.Handle("GET /api/v1/reports", chain(http.HandlerFunc(reports.List)))
+	// PHO reporting routes (capitation + FFS extracts).
+	mux.Handle("GET /api/v1/pho/reports", chain(http.HandlerFunc(pho.ListReports)))
+	mux.Handle("POST /api/v1/pho/reports", chain(http.HandlerFunc(pho.GenerateReport)))
+	mux.Handle("GET /api/v1/pho/reports/{id}", chain(http.HandlerFunc(pho.GetReport)))
+	mux.Handle("POST /api/v1/pho/reports/{id}/submit", chain(http.HandlerFunc(pho.SubmitReport)))
+	mux.Handle("GET /api/v1/pho/reports/{id}/records", chain(http.HandlerFunc(pho.GetCapitationRecords)))
 
 	return mux
 }
@@ -270,22 +321,6 @@ func ValidateConnectivity(ctx context.Context, cfg Config) error {
 	cfg.Logger.Info("database connectivity OK")
 	cfg.Logger.Info("connectivity validation complete")
 	return nil
-}
-
-// ReportsHandler is a placeholder for the reporting sub-system.
-type ReportsHandler struct {
-	pool       db.Pool
-	enc        *encryption.Cipher
-	auditTrail *audit.Trail
-	logger     *slog.Logger
-}
-
-// List returns a list of available practice reports.
-func (h *ReportsHandler) List(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
-		"reports": []string{},
-		"total":   0,
-	})
 }
 
 // apiError is the standard error response envelope.

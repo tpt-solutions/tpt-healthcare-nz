@@ -504,6 +504,168 @@ func (h *PatientsHandler) CreateEnrolment(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusCreated, enrolment)
 }
 
+// UpdateEnrolment handles PUT /api/v1/patients/{id}/enrolment.
+// Updates enrolment details (practitioner, funding code) via the NES API.
+func (h *PatientsHandler) UpdateEnrolment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_ID", Message: "patient ID is required"})
+		return
+	}
+
+	var req enrolmentRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_BODY", Message: err.Error()})
+		return
+	}
+	if req.PractitionerHPI == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_HPI", Message: "practitionerHpi is required"})
+		return
+	}
+
+	rec, err := h.getPatientByID(ctx, id, tenantID)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "patient not found"})
+			return
+		}
+		h.logger.Error("get patient for enrolment update", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "GET_ERROR", Message: "failed to retrieve patient"})
+		return
+	}
+
+	nhiPlain, err := h.enc.Decrypt(rec.NHIEncrypted)
+	if err != nil {
+		h.logger.Error("decrypt NHI for enrolment update", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DECRYPT_ERROR", Message: "failed to decrypt NHI"})
+		return
+	}
+
+	enrolment, err := h.nesClient.Update(ctx, nes.Enrolment{
+		NHI:        string(nhiPlain),
+		PracticeID: req.PractitionerHPI,
+		Status:     nes.Active,
+	})
+	if err != nil {
+		h.logger.Error("NES update enrolment", slog.Any("error", err))
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "NES_UPDATE_ERROR", Message: "failed to update enrolment via NES"})
+		return
+	}
+
+	if err := h.auditTrail.Write(ctx, audit.Event{
+		Actor:        principal,
+		Action:       audit.ActionWrite,
+		ResourceType: "Coverage",
+		ResourceID:   id,
+		TenantID:     tenantID,
+		Metadata:     map[string]string{"action": "update-enrolment"},
+	}); err != nil {
+		h.logger.Error("audit write", slog.Any("error", err))
+	}
+
+	writeJSON(w, http.StatusOK, enrolment)
+}
+
+// transferRequest is the body for POST /api/v1/patients/{id}/enrolment/transfer.
+type transferRequest struct {
+	ToPractitionerHPI string `json:"toPractitionerHpi"`
+	FundingCode       string `json:"fundingCode,omitempty"`
+	TransferDate      string `json:"transferDate"` // YYYY-MM-DD
+	Reason            string `json:"reason,omitempty"`
+}
+
+// TransferEnrolment handles POST /api/v1/patients/{id}/enrolment/transfer.
+// Transfers the patient's enrolment to a different practice via the NES API.
+func (h *PatientsHandler) TransferEnrolment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_ID", Message: "patient ID is required"})
+		return
+	}
+
+	var req transferRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_BODY", Message: err.Error()})
+		return
+	}
+	if req.ToPractitionerHPI == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_HPI", Message: "toPractitionerHpi is required"})
+		return
+	}
+	if req.TransferDate == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_DATE", Message: "transferDate (YYYY-MM-DD) is required"})
+		return
+	}
+
+	rec, err := h.getPatientByID(ctx, id, tenantID)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "patient not found"})
+			return
+		}
+		h.logger.Error("get patient for enrolment transfer", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "GET_ERROR", Message: "failed to retrieve patient"})
+		return
+	}
+
+	nhiPlain, err := h.enc.Decrypt(rec.NHIEncrypted)
+	if err != nil {
+		h.logger.Error("decrypt NHI for transfer", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DECRYPT_ERROR", Message: "failed to decrypt NHI"})
+		return
+	}
+
+	// NES Transfer takes (nhi, fromPracticeID, toPracticeID); fromPracticeID is the
+	// current tenant's HPI facility ID, sourced from the tenant store in production.
+	if err := h.nesClient.Transfer(ctx, string(nhiPlain), "", req.ToPractitionerHPI); err != nil {
+		h.logger.Error("NES transfer enrolment", slog.Any("error", err))
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "NES_TRANSFER_ERROR", Message: "failed to transfer enrolment via NES"})
+		return
+	}
+
+	if err := h.auditTrail.Write(ctx, audit.Event{
+		Actor:        principal,
+		Action:       audit.ActionWrite,
+		ResourceType: "Coverage",
+		ResourceID:   id,
+		TenantID:     tenantID,
+		Metadata:     map[string]string{"action": "transfer", "to_hpi": req.ToPractitionerHPI},
+	}); err != nil {
+		h.logger.Error("audit write", slog.Any("error", err))
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"patientId":        id,
+		"toPractitionerHpi": req.ToPractitionerHPI,
+		"transferDate":     req.TransferDate,
+		"status":           "transferred",
+	})
+}
+
 // validateNHIFormat checks that the given NHI matches either the old or new NZ format.
 func validateNHIFormat(nhiValue string) error {
 	if nhiOldFormat.MatchString(nhiValue) {

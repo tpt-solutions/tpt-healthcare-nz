@@ -6,4 +6,6 @@ use (
 	./modules/tpt-doctor
 	./modules/tpt-pharmacy
 	./modules/tpt-immunisation
+	./modules/tpt-mental-health
+	./modules/tpt-pathology
 )

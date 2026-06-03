@@ -10,6 +10,7 @@ import { ReportsPage } from './pages/ReportsPage';
 import { AuditPage } from './pages/AuditPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SecurityPage } from './pages/SecurityPage';
+import { ClinicsPage } from './pages/ClinicsPage';
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
             }
           >
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/clinics" element={<ClinicsPage />} />
             <Route path="/practitioners" element={<PractitionersPage />} />
             <Route path="/billing" element={<BillingPage />} />
             <Route path="/reports" element={<ReportsPage />} />
