@@ -4,6 +4,7 @@
   "private": true,
   "scripts": { "dev": "vite", "build": "tsc && vite build", "preview": "vite preview", "typecheck": "tsc --noEmit" },
   "dependencies": {
+    "@tpt/diagnostics": "workspace:*",
     "@tpt/fhir-types": "workspace:*",
     "@tpt/offline-store": "workspace:*",
     "@tpt/ui": "workspace:*",

@@ -11,7 +11,9 @@ version: "3.9"
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # Use the pg_cron-enabled image so scheduled SQL jobs run inside the database.
+    # pg_cron requires shared_preload_libraries to include pg_cron.
+    image: pgxn/pgxn-tools:postgres16-pg_cron
     restart: unless-stopped
     ports:
       - "5432:5432"
@@ -19,6 +21,12 @@ services:
       POSTGRES_DB: tpt_healthcare_dev
       POSTGRES_USER: tpt
       POSTGRES_PASSWORD: tpt_dev_password
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_cron
+      - -c
+      - cron.database_name=tpt_healthcare_dev
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

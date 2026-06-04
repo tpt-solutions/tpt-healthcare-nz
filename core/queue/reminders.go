@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
 )
 
 // upcomingAppt is a minimal appointment projection needed for reminder dispatch.
@@ -22,42 +23,30 @@ type upcomingAppt struct {
 	Reminder1hSent  bool
 }
 
-// ReminderWorker polls for upcoming appointments and sends push reminders.
+// ReminderArgs is the River job payload for the appointment reminder worker.
+// The job is scheduled as a periodic River job running every minute.
+type ReminderArgs struct{}
+
+func (ReminderArgs) Kind() string { return "queue.appointment_reminders" }
+
+// ReminderWorker is a River worker that dispatches push (and SMS, when
+// core/sms is wired) reminders for upcoming appointments.
+// River handles scheduling, retries, and at-least-once delivery.
 type ReminderWorker struct {
+	river.WorkerDefaults[ReminderArgs]
 	pool     *pgxpool.Pool
 	notifier *push.Notifier
 	logger   *slog.Logger
-	interval time.Duration
 }
 
-// NewReminderWorker creates a ReminderWorker that polls every interval.
-func NewReminderWorker(pool *pgxpool.Pool, notifier *push.Notifier, logger *slog.Logger, interval time.Duration) *ReminderWorker {
-	if interval <= 0 {
-		interval = time.Minute
-	}
-	return &ReminderWorker{pool: pool, notifier: notifier, logger: logger, interval: interval}
+// NewReminderWorker creates a ReminderWorker.
+func NewReminderWorker(pool *pgxpool.Pool, notifier *push.Notifier, logger *slog.Logger) *ReminderWorker {
+	return &ReminderWorker{pool: pool, notifier: notifier, logger: logger}
 }
 
-// Run starts the reminder polling loop. Blocks until ctx is cancelled.
-func (w *ReminderWorker) Run(ctx context.Context) {
-	w.logger.InfoContext(ctx, "reminder worker started", slog.Duration("interval", w.interval))
-	ticker := time.NewTicker(w.interval)
-	defer ticker.Stop()
-
-	// Run immediately on start, then on each tick.
-	w.tick(ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			w.logger.InfoContext(ctx, "reminder worker stopped")
-			return
-		case <-ticker.C:
-			w.tick(ctx)
-		}
-	}
-}
-
-func (w *ReminderWorker) tick(ctx context.Context) {
+// Work is invoked by the River scheduler every minute. It fetches appointments
+// in the 24h or 1h reminder windows and dispatches notifications.
+func (w *ReminderWorker) Work(ctx context.Context, _ *river.Job[ReminderArgs]) error {
 	now := time.Now().UTC()
 
 	// 24h window: appointments starting between 23h50m and 24h10m from now.
@@ -70,13 +59,13 @@ func (w *ReminderWorker) tick(ctx context.Context) {
 
 	appts, err := w.fetchDue(ctx, window24Low, window24High, window1Low, window1High)
 	if err != nil {
-		w.logger.ErrorContext(ctx, "reminder fetch failed", slog.String("error", err.Error()))
-		return
+		return fmt.Errorf("reminder fetch: %w", err)
 	}
 
 	for _, appt := range appts {
 		w.dispatch(ctx, appt, now)
 	}
+	return nil
 }
 
 func (w *ReminderWorker) fetchDue(ctx context.Context, w24Low, w24High, w1Low, w1High time.Time) ([]upcomingAppt, error) {
@@ -144,10 +133,11 @@ func (w *ReminderWorker) dispatch(ctx context.Context, appt upcomingAppt, now ti
 			slog.String("apptID", appt.ID.String()),
 			slog.String("error", err.Error()),
 		)
+		// TODO: when core/sms is wired, fall back to SMS here.
 		return
 	}
 
-	// Mark sent so we don't re-dispatch on the next tick.
+	// Mark sent so River does not re-dispatch on the next run.
 	if _, err := w.pool.Exec(ctx,
 		fmt.Sprintf("UPDATE appointments SET %s = true WHERE id = $1", markField),
 		appt.ID,

@@ -211,10 +211,10 @@
 - [x] Run icon generation → 15 PNGs produced across all three apps (`public/icons/*.png`)
 
 ## tpt-aged-care (Milestone 9 — post-PWA)
-- [ ] interRAI assessment tools
-- [ ] NASC (Needs Assessment Service Coordination)
-- [ ] Funded hours management
-- [ ] Residential and home care workflows
+- [x] interRAI assessment tools
+- [x] NASC (Needs Assessment Service Coordination)
+- [x] Funded hours management
+- [x] Residential and home care workflows
 
 ## CAM Modules (Milestone 9)
 - [ ] tpt-acupuncture (ACC claiming, needle site documentation)
@@ -258,3 +258,70 @@
 - [ ] Privacy Impact Assessment documentation
 - [ ] Full HIPC compliance audit
 - [ ] HPCA scope-of-practice enforcement tested across all practitioner types
+
+## Milestone 11 — Practice Management & Operations
+
+### Resilience & Infrastructure
+- [ ] `core/outbox/` — transactional outbox (model, repository, River worker)
+- [ ] `core/resilience/` — circuit breaker (gobreaker) + retry with exponential backoff + jitter
+- [ ] `core/health/` — provider health aggregator (River job + HTTP endpoint + cache table)
+- [ ] Add `github.com/riverqueue/river` + `riverpgxv5` + `gobreaker` to `core/go.mod`
+- [ ] Replace `core/queue/reminders.go` `time.Ticker` with River job (at-least-once, retryable)
+- [ ] `core/backup/` — WAL archiving orchestration, retention policy enforcement, nightly verify River job
+- [ ] DB migration `008_resilience.sql` — outbox_messages, river schema, provider_health_status, backup_runs, retention_policy
+- [ ] pg_cron jobs: audit partition rotation (monthly), retention enforcement (nightly), stats refresh (6h)
+- [ ] Enable pg_cron extension in `deploy/docker-compose.dev.yml` + `deploy/docker-compose.yml`
+
+### Provider Interfaces
+- [ ] `core/accounting/` — Provider interface + Xero / QBO / FreshBooks backends
+- [ ] `core/payroll/` — Provider interface + PayHero / iPayroll / FlexiTime / Datacom backends
+- [ ] `core/sms/` — Provider interface + MessageBird / BurstSMS / Vonage / Twilio backends
+  - [ ] Wire SMS into appointment reminders + queue "called" + cold-chain breach alerts
+- [ ] `core/email/` — Provider interface + SendGrid / Postmark / AWS SES / Mailgun backends
+  - [ ] Wire email into subscription engine `dispatchEmail`, breach notifications, appointment confirmations
+- [ ] `core/storage/` — Provider interface + S3 (ap-southeast-2) / Azure Blob / MinIO backends (AES-256-GCM pre-upload)
+  - [ ] Wire storage into consent evidence, radiology attachments, medical cert PDFs, WAL backup uploads
+- [ ] `core/payment/` — Provider interface + Windcave / Stripe / Paymark backends + webhook handler
+  - [ ] Wire payments into patient portal invoice payment + reception EFTPOS
+- [ ] `core/fax/` — Provider interface + Healthlink EDI / eFax backends
+  - [ ] Wire fax into tpt-doctor referral dispatch + tpt-pathology result delivery
+- [ ] `core/video/` — Provider interface + Jitsi (self-hosted) / Zoom / Teams backends
+  - [ ] Wire video into appointment booking (room created on confirmation)
+
+### RBAC & Departments
+- [ ] `core/rbac/` — Department, RoleAssignment, checker, `RequirePermission` middleware
+- [ ] Extend `auth.Principal` with `DepartmentIDs []uuid.UUID`; update all three auth providers to inject from DB
+- [ ] DB migration `007_practice_management.sql` — departments, role_assignments tables (+ all practice tables below)
+
+### Inventory & Accounts
+- [ ] `core/inventory/` — StockItem, StockMovement, PurchaseOrder, ColdChainLog; low-stock + cold-chain River job
+- [ ] `core/accounts/` — CostCentre, Budget, BudgetLine, VarianceReport
+
+### tpt-practice Module
+- [ ] `modules/tpt-practice/` — `go.mod`, Cobra CLI (`serve`, `migrate`), HTTP API server
+- [ ] Roster API (shifts, on-call; queues timesheet push to payroll via outbox on shift close)
+- [ ] Room booking API (conflict detection)
+- [ ] Leave API (approval state machine; syncs to payroll `SubmitLeaveRequest` + `GetLeaveBalance`)
+- [ ] Inventory API (stock CRUD, PO workflow, cold-chain log)
+- [ ] Budget API (cost centres, variance report)
+- [ ] Accounting sync API (outbox status, manual trigger, HealthCheck passthrough)
+- [ ] Payroll sync API (payslip proxy, leave balance proxy)
+- [ ] Department management API
+- [ ] Onboarding wizard state API (per-tenant step progress)
+- [ ] Add `./modules/tpt-practice` to `go.work`
+
+### Frontend — tpt-admin Expansion
+- [ ] `OnboardingWizard.tsx` — 7-step wizard (details → departments → staff/roles → accounting → payroll → inventory → launch); shown when `!wizard_complete`; resumable
+- [ ] `DepartmentsPage.tsx` — department CRUD, parent hierarchy
+- [ ] `RolesPage.tsx` — role assignment: user → role + optional department
+- [ ] `RosterPage.tsx` — shift calendar, drag-to-assign, on-call rotation, APC expiry banner
+- [ ] `RoomsPage.tsx` — room booking grid, conflict detection
+- [ ] `LeavePage.tsx` — leave requests, approve/decline, calendar overlay, payroll leave balance
+- [ ] `InvoicesPage.tsx` — full AR lifecycle (draft → issued → overdue → paid), payment plans, aging buckets
+- [ ] `InventoryPage.tsx` — stock levels, expiry alerts, low-stock indicators, PO list, cold-chain breach log
+- [ ] `BudgetPage.tsx` — cost-centre selector, monthly actual vs budget variance chart
+- [ ] `AccountingPage.tsx` — provider connection status, last sync, error log, manual trigger
+- [ ] `PayrollPage.tsx` — provider connection status, payslips, leave balance
+- [ ] Provider settings pages: SMS, Email, Storage, Payment, Fax, Video
+- [ ] Update `NavLayout.tsx` — "Operations" group (Roster, Rooms, Leave, Inventory, Budget) + "Integrations" group
+- [ ] Backup status widget in `DashboardPage.tsx`

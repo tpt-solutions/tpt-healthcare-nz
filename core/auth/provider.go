@@ -17,7 +17,11 @@ type Principal struct {
 	Email          string
 	Roles          []string
 	Practitioner   bool
-	PractitionerID string // HPI CPN
+	PractitionerID string    // HPI CPN
+	// DepartmentIDs lists the departments this principal has an active role
+	// assignment for. Populated at JWT issuance from the role_assignments table.
+	// An empty slice means tenant-wide access for all assigned roles.
+	DepartmentIDs []uuid.UUID
 }
 
 // Provider validates an opaque token and returns the authenticated Principal.

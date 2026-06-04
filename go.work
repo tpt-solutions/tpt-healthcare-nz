@@ -9,4 +9,6 @@ use (
 	./modules/tpt-mental-health
 	./modules/tpt-pathology
 	./modules/tpt-radiology
+	./modules/tpt-aged-care
+	./modules/tpt-practice
 )

@@ -18,6 +18,19 @@ const (
 	EncounterCompleted  = "encounter.completed"
 	PrescriptionIssued  = "prescription.issued"
 	ClaimSubmitted      = "claim.submitted"
+
+	// Inventory events
+	EventInventoryLowStock      = "inventory.low_stock"
+	EventInventoryColdChainBreach = "inventory.cold_chain_breach"
+
+	// Provider health events
+	EventProviderHealthDegraded = "provider.health.degraded"
+	EventProviderHealthRestored = "provider.health.restored"
+
+	// Backup events
+	EventBackupStarted  = "backup.started"
+	EventBackupComplete = "backup.complete"
+	EventBackupFailed   = "backup.failed"
 )
 
 // subscribeAllKey is the internal key used to register handlers that receive every event.

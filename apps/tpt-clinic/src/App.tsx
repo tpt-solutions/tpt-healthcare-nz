@@ -70,6 +70,16 @@ const RadiologyReportPage  = React.lazy(() => import('@/pages/RadiologyReportPag
 // Queue
 const QueuePage = React.lazy(() => import('@/pages/QueuePage'));
 
+// Diagnostics
+const DiagnosticsPage = React.lazy(() => import('@/pages/DiagnosticsPage'));
+
+// Aged care pages.
+const AgedCareDashboard     = React.lazy(() => import('@/pages/AgedCareDashboard'));
+const InterRaiAssessmentPage = React.lazy(() => import('@/pages/InterRaiAssessmentPage'));
+const NascReferralPage      = React.lazy(() => import('@/pages/NascReferralPage'));
+const FundedHoursPage       = React.lazy(() => import('@/pages/FundedHoursPage'));
+const CarePlanPage          = React.lazy(() => import('@/pages/CarePlanPage'));
+
 // ---------------------------------------------------------------------------
 // Protected route guard
 // ---------------------------------------------------------------------------
@@ -251,6 +261,58 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <QueuePage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Diagnostics */}
+        <Route
+          path="/diagnostics"
+          element={
+            <ProtectedRoute>
+              <DiagnosticsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Aged care routes */}
+        <Route
+          path="/aged-care"
+          element={
+            <ProtectedRoute>
+              <AgedCareDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/aged-care/interrai"
+          element={
+            <ProtectedRoute>
+              <InterRaiAssessmentPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/aged-care/nasc"
+          element={
+            <ProtectedRoute>
+              <NascReferralPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/aged-care/funded-hours"
+          element={
+            <ProtectedRoute>
+              <FundedHoursPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/aged-care/care-plans"
+          element={
+            <ProtectedRoute>
+              <CarePlanPage />
             </ProtectedRoute>
           }
         />

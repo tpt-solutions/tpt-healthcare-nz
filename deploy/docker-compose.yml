@@ -14,12 +14,19 @@ services:
   # PostgreSQL 16
   # ---------------------------------------------------------------------------
   postgres:
-    image: postgres:16-alpine
+    # pg_cron-enabled PostgreSQL 16 image — required for scheduled SQL maintenance jobs.
+    image: pgxn/pgxn-tools:postgres16-pg_cron
     restart: unless-stopped
     environment:
       POSTGRES_DB: tpt_healthcare
       POSTGRES_USER: tpt
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_cron
+      - -c
+      - cron.database_name=tpt_healthcare
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

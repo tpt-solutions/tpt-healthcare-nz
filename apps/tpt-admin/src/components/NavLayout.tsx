@@ -1,16 +1,47 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-const navItems = [
-  { to: '/dashboard', label: 'Overview', icon: HomeIcon },
-  { to: '/clinics', label: 'Clinics', icon: BuildingIcon },
-  { to: '/practitioners', label: 'Practitioners', icon: UsersIcon },
-  { to: '/billing', label: 'Billing', icon: CurrencyIcon },
-  { to: '/reports', label: 'Reports', icon: ChartIcon },
-  { to: '/audit', label: 'Audit Log', icon: ClipboardIcon },
-  { to: '/settings', label: 'Settings', icon: CogIcon },
-  { to: '/security', label: 'Security', icon: ShieldIcon },
+const navGroups = [
+  {
+    label: null,
+    items: [
+      { to: '/dashboard', label: 'Overview', icon: HomeIcon },
+      { to: '/clinics', label: 'Clinics', icon: BuildingIcon },
+      { to: '/practitioners', label: 'Practitioners', icon: UsersIcon },
+      { to: '/billing', label: 'Billing', icon: CurrencyIcon },
+      { to: '/reports', label: 'Reports', icon: ChartIcon },
+      { to: '/audit', label: 'Audit Log', icon: ClipboardIcon },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { to: '/roster', label: 'Roster', icon: CalendarIcon },
+      { to: '/rooms', label: 'Rooms', icon: BuildingIcon },
+      { to: '/leave', label: 'Leave', icon: ClipboardIcon },
+      { to: '/invoices', label: 'Invoices', icon: CurrencyIcon },
+      { to: '/inventory', label: 'Inventory', icon: BoxIcon },
+      { to: '/budget', label: 'Budget', icon: ChartIcon },
+      { to: '/departments', label: 'Departments', icon: UsersIcon },
+    ],
+  },
+  {
+    label: 'Integrations',
+    items: [
+      { to: '/integrations', label: 'All providers', icon: CogIcon },
+    ],
+  },
+  {
+    label: null,
+    items: [
+      { to: '/settings', label: 'Settings', icon: CogIcon },
+      { to: '/security', label: 'Security', icon: ShieldIcon },
+    ],
+  },
 ];
+
+// Flatten for simple usage elsewhere
+const navItems = navGroups.flatMap(g => g.items);
 
 function HomeIcon() {
   return (
@@ -77,6 +108,22 @@ function ShieldIcon() {
   );
 }
 
+function CalendarIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+    </svg>
+  );
+}
+
+function BoxIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+    </svg>
+  );
+}
+
 export function NavLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -121,22 +168,33 @@ export function NavLayout() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {navItems.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-brand-50 text-brand-700'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                }`
-              }
-            >
-              <Icon />
-              {label}
-            </NavLink>
+        <nav className="flex-1 px-3 py-4 overflow-y-auto">
+          {navGroups.map((group, gi) => (
+            <div key={gi} className={gi > 0 ? 'mt-4' : ''}>
+              {group.label && (
+                <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  {group.label}
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {group.items.map(({ to, label, icon: Icon }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'bg-brand-50 text-brand-700'
+                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                      }`
+                    }
+                  >
+                    <Icon />
+                    {label}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
 
