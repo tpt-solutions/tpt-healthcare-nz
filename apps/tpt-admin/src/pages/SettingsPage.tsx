@@ -1,5 +1,15 @@
 import { useState } from 'react';
 
+const LOCK_TIMEOUT_KEY = 'tpt:lockTimeout';
+
+const LOCK_OPTIONS: Array<{ label: string; ms: number }> = [
+  { label: '15 seconds', ms: 15_000 },
+  { label: '30 seconds (recommended for staff)', ms: 30_000 },
+  { label: '1 minute', ms: 60_000 },
+  { label: '2 minutes', ms: 120_000 },
+  { label: '5 minutes (MoH maximum)', ms: 300_000 },
+];
+
 interface PracticeSettings {
   practiceName: string;
   hpiFacilityId: string;
@@ -37,8 +47,12 @@ const defaultSettings: PracticeSettings = {
 export function SettingsPage() {
   const [settings, setSettings] = useState(defaultSettings);
   const [saved, setSaved] = useState(false);
+  const [lockTimeout, setLockTimeout] = useState(
+    Number(localStorage.getItem(LOCK_TIMEOUT_KEY) ?? 30_000)
+  );
 
   const handleSave = () => {
+    localStorage.setItem(LOCK_TIMEOUT_KEY, String(lockTimeout));
     // TODO: PUT /api/v1/admin/settings
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -138,6 +152,33 @@ export function SettingsPage() {
               onChange={e => update('cancellationWindowHours', Number(e.target.value))}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none" />
           </div>
+        </div>
+      </section>
+
+      {/* Device security */}
+      <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-5">
+        <h2 className="text-sm font-semibold text-gray-900 mb-1">Device Security</h2>
+        <p className="text-xs text-gray-500 mb-4">
+          Applies to all clinic devices. MoH Mobile Device Policy requires auto-lock within 5 minutes.
+          HISO 10064.1 recommends 30 seconds for devices accessing PHI.
+        </p>
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            Auto-lock after inactivity
+          </label>
+          <select
+            value={lockTimeout}
+            onChange={e => setLockTimeout(Number(e.target.value))}
+            className="w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+          >
+            {LOCK_OPTIONS.map(o => (
+              <option key={o.ms} value={o.ms}>{o.label}</option>
+            ))}
+          </select>
+          <p className="mt-1.5 text-xs text-gray-400">
+            Staff devices default to 30 s. Patient portal defaults to 2 min.
+            This setting is written to each device's local storage on save.
+          </p>
         </div>
       </section>
 

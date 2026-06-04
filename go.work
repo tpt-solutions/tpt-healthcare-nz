@@ -8,4 +8,5 @@ use (
 	./modules/tpt-immunisation
 	./modules/tpt-mental-health
 	./modules/tpt-pathology
+	./modules/tpt-radiology
 )

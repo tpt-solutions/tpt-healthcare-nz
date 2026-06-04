@@ -1,4 +1,4 @@
-.PHONY: dev test build lint clean install help
+.PHONY: dev test build lint clean install icons help
 
 INTEROP_BIN=./bin/tpt-health-interop
 DOCTOR_BIN=./bin/tpt-doctor
@@ -12,6 +12,7 @@ help:
 	@echo "  make lint      Run golangci-lint across all modules"
 	@echo "  make clean     Remove build artifacts"
 	@echo "  make install   Install binaries to /usr/local/bin"
+	@echo "  make icons     Generate PWA icons for all frontend apps"
 
 dev:
 	docker compose -f deploy/docker-compose.dev.yml up -d
@@ -41,3 +42,6 @@ migrate:
 
 install: build
 	cp $(INTEROP_BIN) /usr/local/bin/
+
+icons:
+	cd tools/gen-icons && npm install --silent && node gen-icons.mjs

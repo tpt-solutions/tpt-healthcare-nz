@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 interface UpcomingAppointment {
@@ -109,13 +110,21 @@ function formatDate(iso: string) {
   });
 }
 
+// Check if today matches a known appointment date (stub)
+function hasTodayAppointment(): boolean {
+  const today = new Date().toISOString().slice(0, 10);
+  return upcomingAppointments.some(a => a.date === today);
+}
+
 export function DashboardPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const todayAppt = hasTodayAppointment();
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Greeting */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">
           Kia ora, {user?.givenName}
         </h1>
@@ -123,6 +132,24 @@ export function DashboardPage() {
           Here's your health overview for today, {formatDate(new Date().toISOString().slice(0, 10))}.
         </p>
       </div>
+
+      {/* Check-in banner (shown if patient has an appointment today) */}
+      {todayAppt && (
+        <div className="mb-6 rounded-xl bg-teal-600 text-white px-5 py-4 flex items-center justify-between">
+          <div>
+            <p className="font-semibold">You have an appointment today</p>
+            <p className="text-teal-200 text-sm mt-0.5">
+              Check in digitally — no need to wait at reception
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/waiting')}
+            className="ml-4 flex-shrink-0 px-4 py-2 bg-white text-teal-700 font-semibold rounded-lg text-sm hover:bg-teal-50 transition-colors"
+          >
+            Check in
+          </button>
+        </div>
+      )}
 
       {/* Quick stats */}
       <div className="grid grid-cols-3 gap-4 mb-8">

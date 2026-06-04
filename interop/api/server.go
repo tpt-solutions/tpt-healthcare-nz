@@ -7,6 +7,7 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
@@ -15,8 +16,12 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/auth"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	coremigrate "github.com/PhillipC05/tpt-healthcare/core/db/migrate"
+	"github.com/PhillipC05/tpt-healthcare/core/events"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 	"github.com/PhillipC05/tpt-healthcare/core/nhi"
+	"github.com/PhillipC05/tpt-healthcare/core/push"
+	corequeue "github.com/PhillipC05/tpt-healthcare/core/queue"
+	"github.com/PhillipC05/tpt-healthcare/core/subscription"
 	"github.com/PhillipC05/tpt-healthcare/core/tenant"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -43,13 +48,26 @@ type Config struct {
 // Server is the interop HTTP gateway. It wires together all route handlers
 // and the shared middleware chain.
 type Server struct {
-	cfg          Config
-	pool         *pgxpool.Pool
-	auditTrail   *audit.Trail
-	authProvider auth.Provider
-	nhiClient    *nhi.Client
-	tenantStore  tenant.Store
-	router       *http.ServeMux
+	cfg            Config
+	pool           *pgxpool.Pool
+	auditTrail     *audit.Trail
+	authProvider   auth.Provider
+	nhiClient      *nhi.Client
+	tenantStore    tenant.Store
+	router         *http.ServeMux
+	// Queue & real-time
+	queueService   *corequeue.Service
+	queueRepo      corequeue.Repository
+	sseHub         *SSEHub
+	reminderWorker *corequeue.ReminderWorker
+	// Push notifications
+	pushStore      *push.Store
+	pushNotifier   *push.Notifier
+	vapidPublicKey string
+	// Event bus + subscription engine
+	eventBus       *events.Bus
+	subEngine      *subscription.Engine
+	logger         *slog.Logger
 }
 
 // New initialises a Server with the provided dependencies. Passing nil for
@@ -59,10 +77,17 @@ func New(cfg Config, opts ...ServerOption) *Server {
 	s := &Server{
 		cfg:    cfg,
 		router: http.NewServeMux(),
+		logger: slog.Default(),
 	}
 	for _, o := range opts {
 		o(s)
 	}
+	// Wire the event bus to the subscription engine if both are present.
+	if s.eventBus != nil && s.subEngine != nil {
+		subscription.WireEventBus(s.eventBus, s.subEngine, s.logger)
+	}
+	// Initialise the SSE hub.
+	s.sseHub = NewSSEHub(s.logger)
 	s.registerRoutes()
 	return s
 }
@@ -95,6 +120,40 @@ func WithTenantStore(ts tenant.Store) ServerOption {
 	return func(s *Server) { s.tenantStore = ts }
 }
 
+// WithQueueService attaches a queue.Service and Repository to the server.
+func WithQueueService(svc *corequeue.Service, repo corequeue.Repository) ServerOption {
+	return func(s *Server) { s.queueService = svc; s.queueRepo = repo }
+}
+
+// WithPushStore attaches a push.Store and Notifier to the server.
+func WithPushStore(store *push.Store, notifier *push.Notifier, vapidPublicKey string) ServerOption {
+	return func(s *Server) {
+		s.pushStore = store
+		s.pushNotifier = notifier
+		s.vapidPublicKey = vapidPublicKey
+	}
+}
+
+// WithEventBus attaches the domain event bus.
+func WithEventBus(bus *events.Bus) ServerOption {
+	return func(s *Server) { s.eventBus = bus }
+}
+
+// WithSubscriptionEngine attaches the FHIR subscription engine.
+func WithSubscriptionEngine(engine *subscription.Engine) ServerOption {
+	return func(s *Server) { s.subEngine = engine }
+}
+
+// WithReminderWorker attaches the appointment reminder background worker.
+func WithReminderWorker(w *corequeue.ReminderWorker) ServerOption {
+	return func(s *Server) { s.reminderWorker = w }
+}
+
+// WithLogger sets the structured logger.
+func WithLogger(l *slog.Logger) ServerOption {
+	return func(s *Server) { s.logger = l }
+}
+
 // Start begins listening for HTTP requests and blocks until ctx is cancelled,
 // at which point it performs a graceful shutdown with a 30-second deadline.
 func (s *Server) Start(ctx context.Context) error {
@@ -112,6 +171,18 @@ func (s *Server) Start(ctx context.Context) error {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("server: listen %s: %w", addr, err)
+	}
+
+	// Start background workers.
+	if s.reminderWorker != nil {
+		go s.reminderWorker.Run(ctx)
+	}
+	if s.subEngine != nil {
+		go func() {
+			if err := s.subEngine.Start(ctx); err != nil {
+				log.Printf("subscription engine: %v", err)
+			}
+		}()
 	}
 
 	errCh := make(chan error, 1)
@@ -225,6 +296,37 @@ func (s *Server) registerRoutes() {
 	subH := newSubscriptionHandler()
 	s.router.Handle("/api/v1/subscriptions", s.withTenant(s.withAuth(subH.router())))
 	s.router.Handle("/api/v1/subscriptions/", s.withTenant(s.withAuth(subH.router())))
+
+	// Queue — tenant-scoped, auth required.
+	if s.queueService != nil {
+		s.router.Handle("POST /api/v1/queue",
+			s.withTenant(s.withAuth(http.HandlerFunc(s.handleCreateQueue))))
+		s.router.Handle("GET /api/v1/queue/{queueID}",
+			s.withTenant(s.withAuth(http.HandlerFunc(s.handleQueueGetEntries))))
+		s.router.Handle("POST /api/v1/queue/{queueID}/check-in",
+			s.withTenant(s.withAuth(http.HandlerFunc(s.handleQueueCheckIn))))
+		s.router.Handle("POST /api/v1/queue/{queueID}/call-next",
+			s.withTenant(s.withAuth(http.HandlerFunc(s.handleQueueCallNext))))
+		s.router.Handle("PATCH /api/v1/queue/{queueID}/entries/{entryID}",
+			s.withTenant(s.withAuth(http.HandlerFunc(s.handleQueueUpdateEntry))))
+		s.router.Handle("POST /api/v1/queue/{queueID}/entries/{entryID}/location",
+			s.withTenant(s.withAuth(http.HandlerFunc(s.handleQueueUpdateLocation))))
+		// SSE streams — auth required, no rate-limit buffering
+		s.router.Handle("GET /api/v1/queue/{queueID}/stream",
+			s.withTenant(s.withAuth(http.HandlerFunc(s.handleStaffStream))))
+		s.router.Handle("GET /api/v1/queue/{queueID}/entries/{entryID}/stream",
+			s.withTenant(s.withAuth(http.HandlerFunc(s.handlePatientStream))))
+	}
+
+	// Push notification subscriptions — auth required (patient-facing).
+	if s.pushStore != nil {
+		s.router.Handle("GET /api/v1/push/vapid-key",
+			http.HandlerFunc(s.handleVAPIDKey))
+		s.router.Handle("POST /api/v1/push/subscribe",
+			s.withTenant(s.withAuth(http.HandlerFunc(s.handlePushSubscribe))))
+		s.router.Handle("DELETE /api/v1/push/subscribe",
+			s.withTenant(s.withAuth(http.HandlerFunc(s.handlePushUnsubscribe))))
+	}
 }
 
 // handleHealth responds to liveness probe requests.

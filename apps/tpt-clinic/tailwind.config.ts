@@ -4,8 +4,8 @@ const config: Config = {
   content: [
     './index.html',
     './src/**/*.{ts,tsx}',
-    // Include shared UI package components
     '../../packages/ui/src/**/*.{ts,tsx}',
+    '../../packages/offline-store/src/**/*.{ts,tsx}',
   ],
   theme: {
     extend: {
@@ -52,6 +52,18 @@ const config: Config = {
       },
       borderRadius: {
         DEFAULT: '0.375rem',
+      },
+      keyframes: {
+        shake: {
+          '0%, 100%': { transform: 'translateX(0)' },
+          '20%':       { transform: 'translateX(-8px)' },
+          '40%':       { transform: 'translateX(8px)' },
+          '60%':       { transform: 'translateX(-6px)' },
+          '80%':       { transform: 'translateX(6px)' },
+        },
+      },
+      animation: {
+        shake: 'shake 0.6s ease-in-out',
       },
     },
   },

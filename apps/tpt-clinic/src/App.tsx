@@ -1,7 +1,49 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { useRegisterSW } from 'virtual:pwa-register/react';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ApiProvider } from '@/contexts/ApiContext';
+import { PINProvider, LockScreenOverlay, usePIN } from '@tpt/offline-store';
+import { usePowerSave } from '@/hooks/usePowerSave';
+import { useOfflineSync } from '@/hooks/useOfflineSync';
+
+// Activates power-save signalling and pre-fetches today's patients into IndexedDB.
+function AppSecurity() {
+  const { cryptoKey } = usePIN();
+  const { isPowerSave } = usePowerSave();
+  useOfflineSync(cryptoKey, isPowerSave);
+  return null;
+}
+
+// Toast shown when a new service worker is waiting to activate.
+function UpdateToast() {
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW();
+  const [dismissed, setDismissed] = useState(false);
+
+  if (!needRefresh || dismissed) return null;
+
+  return (
+    <div className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl bg-secondary-900 px-4 py-3 text-sm text-white shadow-lg">
+      <span>A new version is available.</span>
+      <button
+        onClick={() => { void updateServiceWorker(true); }}
+        className="rounded-md bg-primary-500 px-3 py-1 text-xs font-medium hover:bg-primary-400 transition-colors"
+      >
+        Reload to update
+      </button>
+      <button
+        onClick={() => { setNeedRefresh(false); setDismissed(true); }}
+        className="ml-1 text-secondary-400 hover:text-white"
+        aria-label="Dismiss"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
 
 // Lazy-loaded pages for code splitting
 const LoginPage         = React.lazy(() => import('@/pages/LoginPage'));
@@ -18,6 +60,15 @@ const BloodBankDashboard = React.lazy(() => import('@/pages/BloodBankDashboard')
 const DonorsPage         = React.lazy(() => import('@/pages/DonorsPage'));
 const InventoryPage      = React.lazy(() => import('@/pages/InventoryPage'));
 const CrossmatchPage     = React.lazy(() => import('@/pages/CrossmatchPage'));
+
+// Radiology pages.
+const RadiologyDashboard   = React.lazy(() => import('@/pages/RadiologyDashboard'));
+const ImagingStudiesPage   = React.lazy(() => import('@/pages/ImagingStudiesPage'));
+const RadiologyOrdersPage  = React.lazy(() => import('@/pages/RadiologyOrdersPage'));
+const RadiologyReportPage  = React.lazy(() => import('@/pages/RadiologyReportPage'));
+
+// Queue
+const QueuePage = React.lazy(() => import('@/pages/QueuePage'));
 
 // ---------------------------------------------------------------------------
 // Protected route guard
@@ -160,6 +211,50 @@ function AppRoutes() {
           }
         />
 
+        {/* Radiology routes */}
+        <Route
+          path="/radiology"
+          element={
+            <ProtectedRoute>
+              <RadiologyDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/radiology/studies"
+          element={
+            <ProtectedRoute>
+              <ImagingStudiesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/radiology/orders"
+          element={
+            <ProtectedRoute>
+              <RadiologyOrdersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/radiology/reports"
+          element={
+            <ProtectedRoute>
+              <RadiologyReportPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Queue */}
+        <Route
+          path="/queue"
+          element={
+            <ProtectedRoute>
+              <QueuePage />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
@@ -171,11 +266,21 @@ function AppRoutes() {
 // Root app — provider composition
 // ---------------------------------------------------------------------------
 export default function App() {
+  // Read lock timeout from localStorage (configurable via tpt-admin Settings).
+  // Defaults to 30 seconds per MoH Mobile Device Policy for clinical apps.
+  const inactivityMs = Number(localStorage.getItem('tpt:lockTimeout') ?? 30_000);
+
   return (
     <BrowserRouter>
       <AuthProvider>
         <ApiProvider>
-          <AppRoutes />
+          <PINProvider inactivityMs={inactivityMs}>
+            {/* AppSecurity must be inside PINProvider to access usePIN */}
+            <AppSecurity />
+            <LockScreenOverlay />
+            <AppRoutes />
+            <UpdateToast />
+          </PINProvider>
         </ApiProvider>
       </AuthProvider>
     </BrowserRouter>

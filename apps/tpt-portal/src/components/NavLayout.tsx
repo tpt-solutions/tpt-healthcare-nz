@@ -1,14 +1,33 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useNetworkStatus, formatRelativeTime } from '../hooks/useNetworkStatus';
 
 const navItems = [
   { to: '/dashboard', label: 'My Health', icon: HomeIcon },
+  { to: '/waiting', label: 'Queue / Check-in', icon: QueueIcon },
   { to: '/appointments', label: 'Appointments', icon: CalendarIcon },
+  { to: '/appointments/book', label: 'Book Appointment', icon: PlusCircleIcon },
   { to: '/records', label: 'Health Records', icon: DocumentIcon },
   { to: '/prescriptions', label: 'Prescriptions', icon: PillIcon },
   { to: '/messages', label: 'Messages', icon: MessageIcon },
   { to: '/consent', label: 'My Consent', icon: ShieldIcon },
 ];
+
+function QueueIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Zm6-10.125a1.875 1.875 0 1 1-3.75 0 1.875 1.875 0 0 1 3.75 0Zm1.294 6.336a6.721 6.721 0 0 1-3.17.789 6.721 6.721 0 0 1-3.168-.789 3.376 3.376 0 0 1 6.338 0Z" />
+    </svg>
+  );
+}
+
+function PlusCircleIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+  );
+}
 
 function HomeIcon() {
   return (
@@ -61,6 +80,7 @@ function ShieldIcon() {
 export function NavLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { online, lastSynced, isSyncing } = useNetworkStatus();
 
   const handleLogout = () => {
     logout();
@@ -136,8 +156,32 @@ export function NavLayout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        <Outlet />
+      <main className="flex-1 overflow-auto flex flex-col">
+        {/* Offline / stale-data banner */}
+        {!online && (
+          <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700">
+            <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+            </svg>
+            <span>
+              Offline — showing cached data
+              {lastSynced && ` from ${formatRelativeTime(lastSynced)}`}.
+              {' '}Changes will sync when reconnected.
+            </span>
+          </div>
+        )}
+        {online && isSyncing && (
+          <div className="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-4 py-2 text-sm text-blue-600">
+            <svg className="h-4 w-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            <span>Syncing…</span>
+          </div>
+        )}
+        <div className="flex-1 overflow-auto">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

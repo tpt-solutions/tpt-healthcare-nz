@@ -17,7 +17,9 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@tpt/offline-store": ["../../packages/offline-store/src/index.ts"],
+      "@tpt/offline-store/*": ["../../packages/offline-store/src/*"]
     }
   },
   "include": ["src"],

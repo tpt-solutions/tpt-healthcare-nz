@@ -1,0 +1,12 @@
+{
+  "name": "gen-icons",
+  "version": "0.1.0",
+  "description": "Generate PWA icon PNGs for all tpt-healthcare apps",
+  "type": "module",
+  "scripts": {
+    "start": "node gen-icons.mjs"
+  },
+  "dependencies": {
+    "sharp": "^0.33.0"
+  }
+}

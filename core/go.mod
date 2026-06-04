@@ -3,6 +3,7 @@ module github.com/PhillipC05/tpt-healthcare/core
 go 1.22
 
 require (
+	github.com/SherClockHolmes/webpush-go v1.3.0
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/golang-migrate/migrate/v4 v4.18.1

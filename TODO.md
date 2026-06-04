@@ -143,14 +143,74 @@
 - [x] Reference range management
 
 ## tpt-radiology (Milestone 7)
-- [ ] Orthanc DICOM server integration
-- [ ] DICOMweb (WADO-RS, STOW-RS, QIDO-RS) endpoints
-- [ ] FHIR ImagingStudy resource management
-- [ ] Radiology reporting workflow
-- [ ] Image sharing (referrer access)
-- [ ] RIS (Radiology Information System) workflows
+- [x] Orthanc DICOM server integration
+- [x] DICOMweb (WADO-RS, STOW-RS, QIDO-RS) endpoints
+- [x] FHIR ImagingStudy resource management
+- [x] Radiology reporting workflow
+- [x] Image sharing (referrer access)
+- [x] RIS (Radiology Information System) workflows
 
-## tpt-aged-care (Milestone 8)
+## PWA + Patient Portal & Virtual Waiting List (Milestone 8)
+
+### PWA Foundation
+- [x] `vite-plugin-pwa` + custom service worker added to `apps/tpt-portal`
+- [x] `vite-plugin-pwa` + custom service worker added to `apps/tpt-clinic`
+- [x] `vite-plugin-pwa` + custom service worker added to `apps/tpt-admin`
+- [ ] Generate brand icons (192×192, 512×512, 180×180, 72×72, 32×32 PNG) — `tools/gen-icons/`
+- [ ] Add `workbox-precaching`, `workbox-routing`, `workbox-strategies`, `workbox-expiration` to each app (SW dependencies)
+
+### VAPID Push Notifications
+- [x] `core/push/` — VAPID Web Push sender (`github.com/SherClockHolmes/webpush-go`)
+- [x] `core/db/migrate/006_queue.sql` — `push_subscriptions` table
+- [x] `interop/api/push.go` — `GET /api/v1/push/vapid-key`, `POST /api/v1/push/subscribe`, `DELETE /api/v1/push/subscribe`
+- [x] Push permission flow + subscription hook in `apps/tpt-portal/src/hooks/usePushSetup.ts`
+
+### Appointment Reminders
+- [x] `core/queue/reminders.go` — background worker: 24h and 1h pre-appointment push reminders
+- [x] Extend `appointments` table with `reminder_24h_sent` / `reminder_1h_sent` flags
+- [x] Wire reminder worker into `interop` server startup
+
+### Virtual Waiting List — Backend
+- [x] `core/db/migrate/006_queue.sql` — `queues`, `queue_entries`, `queue_entry_locations` tables
+- [x] `core/queue/model.go` — Queue, QueueEntry, Location domain structs
+- [x] `core/queue/repository.go` — Repository interface
+- [x] `core/queue/postgres.go` — pgxpool implementation (ephemeral location delete on terminal status)
+- [x] `core/queue/service.go` — Business logic + event publishing + VAPID push on "called"
+- [x] `core/subscription/bridge.go` — Wire `events.Bus` → `subscription.Engine`
+- [x] `interop/api/sse.go` — Patient SSE stream + Staff SSE stream
+- [x] `interop/api/queue.go` — Queue CRUD + check-in (by NHI) + call-next + location update
+- [x] `core/db/migrate/006_queue.sql` — `fhir_subscriptions` table (replaces in-memory store)
+- [x] Update `core/go.mod` for `webpush-go`
+
+### Virtual Waiting List — Patient Portal (tpt-portal)
+- [x] `apps/tpt-portal/src/pages/WaitingPage.tsx` — NHI check-in, live queue position, GPS toggle, "called" state
+- [x] `apps/tpt-portal/src/pages/BookAppointmentPage.tsx` — Select clinic, date, time slot, confirm
+- [x] Extend `DashboardPage.tsx` — health summary card + today's appointment check-in banner
+- [x] Update `NavLayout.tsx` — add "Queue / Check-in" and "Book Appointment" nav items
+
+### Virtual Waiting List — Staff App (tpt-clinic)
+- [x] `apps/tpt-clinic/src/pages/QueuePage.tsx` — live queue list (SSE) + Leaflet map with patient pins
+- [x] Update `AppShell.tsx` — add "Queue" nav item
+- [x] `leaflet@^1.9` + `@types/leaflet` added to `tpt-clinic/package.json`
+
+### PWA Security & Offline Resilience
+- [x] `packages/offline-store/` — new shared package: AES-256-GCM crypto helpers, IndexedDB schema, background sync queue
+- [x] `packages/offline-store/src/pin-context.tsx` — PINContext with inactivity lock, PBKDF2 key derivation, 5-attempt wipe
+- [x] `packages/offline-store/src/LockScreen.tsx` — full-screen numeric keypad lock screen (HISO 10064.1 compliant)
+- [x] Update `apps/tpt-clinic/src/sw.ts` — local API fallback (`VITE_LOCAL_API`), Background Sync, power-save mode
+- [x] Update `apps/tpt-portal/src/sw.ts` — same
+- [x] `apps/tpt-clinic/src/hooks/usePowerSave.ts` — Battery Status API → SW power-save signal
+- [x] `apps/tpt-portal/src/hooks/usePowerSave.ts` — same
+- [x] `apps/tpt-clinic/src/hooks/useOfflineSync.ts` — prefetch today's patients to IndexedDB on login
+- [x] `apps/tpt-portal/src/hooks/useOfflineSync.ts` — cache own patient record
+- [x] Wrap `apps/tpt-clinic/src/App.tsx` with `PINProvider` (30s inactivity)
+- [x] Wrap `apps/tpt-portal/src/App.tsx` with `PINProvider` (2min inactivity)
+- [x] `apps/tpt-admin/src/pages/SettingsPage.tsx` — lock timeout config (15s–5min dropdown)
+- [x] `tools/gen-icons/gen-icons.mjs` + `tools/gen-icons/package.json` — icon generation script using `sharp`
+- [x] Add `make icons` target to `Makefile`
+- [x] Run icon generation → 15 PNGs produced across all three apps (`public/icons/*.png`)
+
+## tpt-aged-care (Milestone 9 — post-PWA)
 - [ ] interRAI assessment tools
 - [ ] NASC (Needs Assessment Service Coordination)
 - [ ] Funded hours management

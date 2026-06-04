@@ -6,12 +6,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"text/tabwriter"
 
 	"github.com/PhillipC05/tpt-healthcare/interop/api"
+	"github.com/PhillipC05/tpt-healthcare/interop/mdns"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -71,6 +73,16 @@ var serveCmd = &cobra.Command{
 
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
+
+		// Advertise on the local network via mDNS-SD so clinic devices can
+		// discover this server automatically (tpt-interop.local:PORT).
+		if viper.GetBool("mdns") {
+			go func() {
+				if err := mdns.Advertise(ctx, slog.Default(), port); err != nil {
+					slog.Error("mDNS advertisement error", "err", err)
+				}
+			}()
+		}
 
 		return srv.Start(ctx)
 	},
@@ -174,8 +186,10 @@ func init() {
 	// serve flags.
 	serveCmd.Flags().Int("port", 8080, "TCP port to listen on")
 	serveCmd.Flags().String("host", "0.0.0.0", "Host address to bind to")
+	serveCmd.Flags().Bool("mdns", false, "Advertise service on the local network via mDNS-SD (tpt-interop.local)")
 	_ = viper.BindPFlag("port", serveCmd.Flags().Lookup("port"))
 	_ = viper.BindPFlag("host", serveCmd.Flags().Lookup("host"))
+	_ = viper.BindPFlag("mdns", serveCmd.Flags().Lookup("mdns"))
 
 	// migrate flags.
 	migrateCmd.Flags().String("direction", "up", "Migration direction: up or down")
