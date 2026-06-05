@@ -9,19 +9,19 @@ export interface BadgeProps {
 }
 
 const variantClasses: Record<BadgeVariant, string> = {
-  success: "bg-green-100 text-green-800 ring-green-600/20",
-  warning: "bg-yellow-100 text-yellow-800 ring-yellow-600/20",
-  error: "bg-red-100 text-red-800 ring-red-600/20",
-  info: "bg-teal-100 text-teal-800 ring-teal-600/20",
-  neutral: "bg-gray-100 text-gray-700 ring-gray-600/20",
+  success: "bg-green-100 text-green-800 ring-green-200",
+  warning: "bg-yellow-100 text-yellow-800 ring-yellow-200",
+  error:   "bg-red-100 text-red-800 ring-red-200",
+  info:    "bg-primary-100 text-primary-800 ring-primary-200",
+  neutral: "bg-secondary-100 text-secondary-700 ring-secondary-200",
 };
 
 const dotClasses: Record<BadgeVariant, string> = {
   success: "bg-green-500",
   warning: "bg-yellow-500",
-  error: "bg-red-500",
-  info: "bg-teal-500",
-  neutral: "bg-gray-400",
+  error:   "bg-red-500",
+  info:    "bg-primary-500",
+  neutral: "bg-secondary-400",
 };
 
 export function Badge({

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ThemeProvider } from '@tpt/ui';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -62,7 +63,8 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
         <PINProvider inactivityMs={inactivityMs}>
           <AppSecurity />
           <LockScreenOverlay />
@@ -91,7 +93,8 @@ export default function App() {
           </Routes>
         <UpdateToast />
         </PINProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

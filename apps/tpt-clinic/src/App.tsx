@@ -4,6 +4,7 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ApiProvider } from '@/contexts/ApiContext';
 import { PINProvider, LockScreenOverlay, usePIN } from '@tpt/offline-store';
+import { ThemeProvider } from '@tpt/ui';
 import { usePowerSave } from '@/hooks/usePowerSave';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 
@@ -362,17 +363,19 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <ApiProvider>
-          <PINProvider inactivityMs={inactivityMs}>
-            {/* AppSecurity must be inside PINProvider to access usePIN */}
-            <AppSecurity />
-            <LockScreenOverlay />
-            <AppRoutes />
-            <UpdateToast />
-          </PINProvider>
-        </ApiProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <ApiProvider>
+            <PINProvider inactivityMs={inactivityMs}>
+              {/* AppSecurity must be inside PINProvider to access usePIN */}
+              <AppSecurity />
+              <LockScreenOverlay />
+              <AppRoutes />
+              <UpdateToast />
+            </PINProvider>
+          </ApiProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

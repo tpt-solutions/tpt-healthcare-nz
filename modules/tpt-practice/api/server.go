@@ -62,6 +62,17 @@ func (s *Server) routes() {
 		h = middleware.Recovery(h, s.cfg.Logger)
 		return h
 	}
+	// open: CORS + rate-limit only, no auth required (ThemeProvider calls GET pre-login).
+	open := func(h http.Handler) http.Handler {
+		h = middleware.CORS(h)
+		h = middleware.RateLimit(h)
+		h = middleware.Recovery(h, s.cfg.Logger)
+		return h
+	}
+
+	// Practice settings (theme + active modules)
+	s.mux.Handle("GET /api/v1/practice/settings", open(http.HandlerFunc(s.getSettings)))
+	s.mux.Handle("PUT /api/v1/practice/settings", chain(http.HandlerFunc(s.putSettings)))
 
 	// Onboarding wizard
 	s.mux.Handle("GET /api/v1/practice/onboarding", chain(http.HandlerFunc(s.getOnboardingWizard)))

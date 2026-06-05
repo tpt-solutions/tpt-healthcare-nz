@@ -70,7 +70,7 @@ export function Modal({
       onClick={handleBackdropClick}
       className={[
         "w-full rounded-xl bg-white p-0 shadow-2xl",
-        "backdrop:bg-gray-900/50 backdrop:backdrop-blur-sm",
+        "backdrop:bg-secondary-900/50 backdrop:backdrop-blur-sm",
         "open:animate-none",
         sizeClasses[size],
       ].join(" ")}
@@ -81,10 +81,10 @@ export function Modal({
         className="flex flex-col"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-secondary-200 px-6 py-4">
           <h2
             id={titleId}
-            className="text-lg font-semibold text-gray-900"
+            className="text-lg font-semibold text-secondary-900"
           >
             {title}
           </h2>
@@ -92,7 +92,7 @@ export function Modal({
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+            className="rounded-md p-1 text-secondary-400 hover:bg-secondary-100 hover:text-secondary-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
           >
             <svg
               className="h-5 w-5"

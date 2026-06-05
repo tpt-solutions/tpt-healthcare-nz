@@ -1,3 +1,8 @@
+// Theme system
+export { ThemeProvider, useTheme, validateAccentHex } from "./ThemeProvider";
+export { THEMES, DEFAULT_THEME } from "./themes/index";
+export type { ThemeKey, ThemeMeta } from "./themes/index";
+
 // Components
 export { Button } from "./components/Button";
 export type { ButtonProps, ButtonVariant, ButtonSize } from "./components/Button";

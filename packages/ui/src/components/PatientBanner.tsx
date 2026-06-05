@@ -20,7 +20,7 @@ function BannerField({
   if (!value) return null;
   return (
     <div className="flex flex-col">
-      <span className="text-xs font-medium uppercase tracking-wide text-teal-200">
+      <span className="text-xs font-medium uppercase tracking-wide text-primary-200">
         {label}
       </span>
       <span className="text-sm font-medium text-white">{value}</span>
@@ -43,7 +43,7 @@ export function PatientBanner({
       aria-label="Patient identification banner"
       className={[
         "flex flex-wrap items-center gap-x-8 gap-y-3",
-        "bg-teal-700 px-5 py-3 shadow-md",
+        "bg-primary-700 px-5 py-3 shadow-md",
         className,
       ]
         .filter(Boolean)
@@ -55,7 +55,7 @@ export function PatientBanner({
           {name}
         </span>
         <span
-          className="text-sm font-semibold text-teal-100 tracking-wider"
+          className="text-sm font-semibold text-primary-100 tracking-wider"
           aria-label={`National Health Index: ${nhi}`}
         >
           NHI: {nhi}
@@ -64,7 +64,7 @@ export function PatientBanner({
 
       {/* Divider */}
       <div
-        className="hidden h-10 w-px bg-teal-500 sm:block"
+        className="hidden h-10 w-px bg-primary-500 sm:block"
         aria-hidden="true"
       />
 
@@ -74,7 +74,7 @@ export function PatientBanner({
       {gpName && <BannerField label="GP / Usual Doctor" value={gpName} />}
 
       {/* Sensitive record indicator */}
-      <div className="ml-auto flex items-center gap-1.5 rounded bg-teal-800 px-2 py-1 text-xs text-teal-200">
+      <div className="ml-auto flex items-center gap-1.5 rounded bg-primary-800 px-2 py-1 text-xs text-primary-200">
         <svg
           className="h-3.5 w-3.5"
           viewBox="0 0 20 20"

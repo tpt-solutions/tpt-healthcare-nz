@@ -27,7 +27,9 @@
     "paths": {
       "@/*": ["./src/*"],
       "@tpt/offline-store": ["../../packages/offline-store/src/index.ts"],
-      "@tpt/offline-store/*": ["../../packages/offline-store/src/*"]
+      "@tpt/offline-store/*": ["../../packages/offline-store/src/*"],
+      "@tpt/ui": ["../../packages/ui/src/index.ts"],
+      "@tpt/ui/*": ["../../packages/ui/src/*"]
     }
   },
   "include": ["src"],
