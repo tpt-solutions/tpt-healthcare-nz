@@ -11,4 +11,14 @@ use (
 	./modules/tpt-radiology
 	./modules/tpt-aged-care
 	./modules/tpt-practice
+	./modules/tpt-acupuncture
+	./modules/tpt-chiropractic
+	./modules/tpt-osteopathy
+	./modules/tpt-massage
+	./modules/tpt-counselling
+	./modules/tpt-naturopathy
+	./modules/tpt-tcm
+	./modules/tpt-nutrition
+	./modules/tpt-vision
+	./modules/tpt-allied-health
 )

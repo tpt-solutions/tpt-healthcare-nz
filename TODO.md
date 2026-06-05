@@ -217,14 +217,14 @@
 - [x] Residential and home care workflows
 
 ## CAM Modules (Milestone 9)
-- [ ] tpt-acupuncture (ACC claiming, needle site documentation)
-- [ ] tpt-chiropractic (spinal charting, ACC, X-ray referrals)
-- [ ] tpt-osteopathy
-- [ ] tpt-massage (ACC registered, SOAP notes, contraindication screening)
-- [ ] tpt-counselling (EAP billing, session notes, private practice)
-- [ ] tpt-naturopathy (supplement/remedy tracking, private pay)
-- [ ] tpt-tcm (herb dispensing, tongue/pulse diagnosis)
-- [ ] tpt-nutrition (food diary, meal planning, body composition)
+- [x] tpt-acupuncture (ACC claiming, needle site documentation)
+- [x] tpt-chiropractic (spinal charting, ACC, X-ray referrals)
+- [x] tpt-osteopathy
+- [x] tpt-massage (ACC registered, SOAP notes, contraindication screening)
+- [x] tpt-counselling (EAP billing, session notes, private practice)
+- [x] tpt-naturopathy (supplement/remedy tracking, private pay)
+- [x] tpt-tcm (herb dispensing, tongue/pulse diagnosis)
+- [x] tpt-nutrition (food diary, meal planning, body composition)
 
 ## tpt-hospital (Milestone 10)
 - [ ] Inpatient management (admission, discharge, transfer — FHIR Encounter)
@@ -239,7 +239,7 @@
 ## Remaining Modules (Post-Hospital)
 - [x] tpt-blood-bank (cross-matching, blood product inventory, donor management)
 - [x] tpt-dental (FDI tooth charting, ACC, dental-specific workflows)
-- [ ] tpt-vision (optometry/ophthalmology, prescription management, optical dispensing)
+- [x] tpt-vision (optometry/ophthalmology, prescription management, optical dispensing)
 - [ ] tpt-allied-health (physio, OT, speech therapy, podiatry)
 - [ ] tpt-community-health (district nursing, home visits, outreach)
 - [ ] tpt-addiction (methadone programme, counselling workflows)
@@ -325,3 +325,45 @@
 - [ ] Provider settings pages: SMS, Email, Storage, Payment, Fax, Video
 - [ ] Update `NavLayout.tsx` — "Operations" group (Roster, Rooms, Leave, Inventory, Budget) + "Integrations" group
 - [ ] Backup status widget in `DashboardPage.tsx`
+
+---
+
+## Milestone 12 — NZ Integrations — Tier 2 & Infrastructure Hardening
+
+### ACC Extensions
+- [ ] `core/acc/schedule.go` — per-discipline treatment codes and session caps (acupuncture, chiropractic, massage, physio schedules differ under the ACC treatment provider schedule)
+- [ ] `core/acc/purchase_order.go` — PO lifecycle: request approval, session consumption tracking, reconciliation report
+- [ ] Wire PO management into tpt-acupuncture, tpt-chiropractic, tpt-massage claim submit handlers
+- [ ] ACC provider registration flow in tpt-admin (verify practice ACC Provider status, store provider number)
+
+### WorkSafe NZ
+- [ ] `core/worksafe/` — workplace injury claim client (mirrors core/acc/ API shape against api.worksafe.govt.nz)
+- [ ] Wire into tpt-doctor ACC claims handler as an alternative claim destination for work-related injuries
+
+### Mandatory Regulatory Reporting
+- [ ] `core/primhd/` — PRIMHD outcomes reporting client (required for all DHB-funded mental health/addiction services)
+  - [ ] Wire into tpt-counselling session close handler
+  - [ ] Wire into tpt-addiction discharge handler
+- [ ] `core/medsafe/` — adverse drug event (ADE) reporting client (mandatory under Medicines Act 1981)
+  - [ ] Wire into tpt-pharmacy dispensing handler and tpt-doctor prescription handler
+- [ ] `core/episurv/` — EpiSurv / ESR notifiable disease reporting client
+  - [ ] Wire into tpt-doctor diagnosis handler for notifiable conditions (measles, TB, COVID, salmonella, etc.)
+
+### Community Pharmacy Dispensing Gateway
+- [ ] `core/pharmacy-gateway/` — FHIR MedicationRequest dispatch to community pharmacy PMS
+  - [ ] Fred Dispense connector
+  - [ ] Toniq connector
+  - [ ] HL7 v2 RDE^O11 fallback for legacy systems
+- [ ] e-Prescription flow: tpt-doctor → pharmacy-gateway → community pharmacy (replaces fax/print for in-network pharmacies)
+
+### Care Coordination
+- [ ] `core/erms/` — ERMS electronic referral routing (DHB-specific, supplements Healthlink EDI for region-specific workflows)
+- [ ] `core/msd/` — Community Services Card eligibility check (MSD API) for subsidy verification at reception
+- [ ] NZBN lookup for practice entity verification in tpt-admin onboarding wizard
+
+### Infrastructure Hardening
+- [ ] Wire `core/resilience/` (circuit breaker + exponential backoff with jitter) into all five health system clients: NHI, HPI, NES, ACC, PHARMAC
+- [ ] Wire `core/outbox/` River producers into all external API call sites so failed calls are queued and retried
+- [ ] `core/health/` — populate health aggregation endpoint with all provider health checks (NHI, HPI, NES, ACC, PHARMAC, PRIMHD, WorkSafe)
+- [ ] ACC and PHARMAC: add Redis caching layer (mirrors existing HPI cache pattern — TTL 24h for schedule, 1h for PO status)
+- [ ] FHIR Subscription engine: complete WebSocket hub (`core/subscription/ws.go`) and email dispatch channel implementations

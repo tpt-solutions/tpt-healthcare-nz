@@ -80,6 +80,20 @@ const NascReferralPage      = React.lazy(() => import('@/pages/NascReferralPage'
 const FundedHoursPage       = React.lazy(() => import('@/pages/FundedHoursPage'));
 const CarePlanPage          = React.lazy(() => import('@/pages/CarePlanPage'));
 
+// CAM pages.
+const AcupuncturePage    = React.lazy(() => import('@/pages/AcupuncturePage'));
+const ChiropracticPage   = React.lazy(() => import('@/pages/ChiropracticPage'));
+const OsteopathyPage     = React.lazy(() => import('@/pages/OsteopathyPage'));
+const MassagePage        = React.lazy(() => import('@/pages/MassagePage'));
+const CounsellingPage    = React.lazy(() => import('@/pages/CounsellingPage'));
+const NaturopathyPage    = React.lazy(() => import('@/pages/NaturopathyPage'));
+const TcmPage            = React.lazy(() => import('@/pages/TcmPage'));
+const NutritionPage      = React.lazy(() => import('@/pages/NutritionPage'));
+const VisionPage         = React.lazy(() => import('@/pages/VisionPage'));
+
+// Allied Health pages.
+const AlliedHealthPage   = React.lazy(() => import('@/pages/AlliedHealthPage'));
+
 // ---------------------------------------------------------------------------
 // Protected route guard
 // ---------------------------------------------------------------------------
@@ -316,6 +330,20 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
+
+        {/* CAM routes — Complementary & Alternative Medicine
+            Each page handles its own tab-based sub-navigation internally.
+            The /* wildcard allows hash-based deep-linking to specific tabs. */}
+        <Route path="/acupuncture/*"  element={<ProtectedRoute><AcupuncturePage /></ProtectedRoute>} />
+        <Route path="/chiropractic/*" element={<ProtectedRoute><ChiropracticPage /></ProtectedRoute>} />
+        <Route path="/osteopathy/*"   element={<ProtectedRoute><OsteopathyPage /></ProtectedRoute>} />
+        <Route path="/massage/*"      element={<ProtectedRoute><MassagePage /></ProtectedRoute>} />
+        <Route path="/counselling/*"  element={<ProtectedRoute><CounsellingPage /></ProtectedRoute>} />
+        <Route path="/naturopathy/*"  element={<ProtectedRoute><NaturopathyPage /></ProtectedRoute>} />
+        <Route path="/tcm/*"          element={<ProtectedRoute><TcmPage /></ProtectedRoute>} />
+        <Route path="/nutrition/*"    element={<ProtectedRoute><NutritionPage /></ProtectedRoute>} />
+        <Route path="/vision"         element={<ProtectedRoute><VisionPage /></ProtectedRoute>} />
+        <Route path="/allied-health"  element={<ProtectedRoute><AlliedHealthPage /></ProtectedRoute>} />
 
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

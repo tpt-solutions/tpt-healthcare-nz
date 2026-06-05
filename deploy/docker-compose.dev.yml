@@ -73,6 +73,126 @@ services:
     # Placeholder entrypoint — replace once the binary is built into the image.
     entrypoint: ["sh", "-c", "echo 'interop placeholder: build the image with make build and update docker-compose.dev.yml' && sleep infinity"]
 
+  tpt-acupuncture:
+    image: golang:1.22-alpine
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://tpt:tpt_dev_password@postgres:5432/tpt_healthcare_dev?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      SERVER_PORT: "8081"
+      LOG_LEVEL: debug
+    entrypoint: ["sh", "-c", "echo 'tpt-acupuncture placeholder' && sleep infinity"]
+
+  tpt-chiropractic:
+    image: golang:1.22-alpine
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://tpt:tpt_dev_password@postgres:5432/tpt_healthcare_dev?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      SERVER_PORT: "8082"
+      LOG_LEVEL: debug
+    entrypoint: ["sh", "-c", "echo 'tpt-chiropractic placeholder' && sleep infinity"]
+
+  tpt-osteopathy:
+    image: golang:1.22-alpine
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://tpt:tpt_dev_password@postgres:5432/tpt_healthcare_dev?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      SERVER_PORT: "8083"
+      LOG_LEVEL: debug
+    entrypoint: ["sh", "-c", "echo 'tpt-osteopathy placeholder' && sleep infinity"]
+
+  tpt-massage:
+    image: golang:1.22-alpine
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://tpt:tpt_dev_password@postgres:5432/tpt_healthcare_dev?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      SERVER_PORT: "8084"
+      LOG_LEVEL: debug
+    entrypoint: ["sh", "-c", "echo 'tpt-massage placeholder' && sleep infinity"]
+
+  tpt-counselling:
+    image: golang:1.22-alpine
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://tpt:tpt_dev_password@postgres:5432/tpt_healthcare_dev?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      SERVER_PORT: "8085"
+      LOG_LEVEL: debug
+    entrypoint: ["sh", "-c", "echo 'tpt-counselling placeholder' && sleep infinity"]
+
+  tpt-naturopathy:
+    image: golang:1.22-alpine
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://tpt:tpt_dev_password@postgres:5432/tpt_healthcare_dev?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      SERVER_PORT: "8086"
+      LOG_LEVEL: debug
+    entrypoint: ["sh", "-c", "echo 'tpt-naturopathy placeholder' && sleep infinity"]
+
+  tpt-tcm:
+    image: golang:1.22-alpine
+    restart: unless-stopped
+    ports:
+      - "8087:8087"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://tpt:tpt_dev_password@postgres:5432/tpt_healthcare_dev?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      SERVER_PORT: "8087"
+      LOG_LEVEL: debug
+    entrypoint: ["sh", "-c", "echo 'tpt-tcm placeholder' && sleep infinity"]
+
+  tpt-nutrition:
+    image: golang:1.22-alpine
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://tpt:tpt_dev_password@postgres:5432/tpt_healthcare_dev?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      SERVER_PORT: "8088"
+      LOG_LEVEL: debug
+    entrypoint: ["sh", "-c", "echo 'tpt-nutrition placeholder' && sleep infinity"]
+
 volumes:
   postgres_data:
     driver: local
