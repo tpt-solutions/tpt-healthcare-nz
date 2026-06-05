@@ -1,8 +1,8 @@
-// apps/tpt-clinic/src/pages/AlliedHealthPage.tsx
-import React, { useState, useEffect } from 'react';
-import { Box, Grid, Paper, Typography, Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button, TextField, InputAdornment, IconButton, Chip, Dialog, DialogTitle, DialogContent, DialogActions, FormControl, InputLabel, Select, MenuItem, Alert, AlertTitle, Snackbar, CircularProgress, Accordion, AccordionSummary, AccordionDetails, ExpansionPanel, ExpansionPanelSummary, ExpansionPanelDetails, Tooltip, Badge, Avatar, List, ListItem, ListItemText, ListItemSecondaryAction, Divider } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Search as SearchIcon, FilterList as FilterIcon, Download as DownloadIcon, Print as PrintIcon, Refresh as RefreshIcon, Person as PersonIcon, MedicalServices as MedicalServicesIcon, Psychology as PsychologyIcon, DirectionsWalk as DirectionsWalkIcon, RecordVoiceOver as RecordVoiceOverIcon, Healing as HealingIcon, LocalHospital as LocalHospitalIcon, Assessment as AssessmentIcon, Description as DescriptionIcon, AttachMoney as AttachMoneyIcon, CalendarToday as CalendarTodayIcon, Warning as WarningIcon, CheckCircle as CheckCircleIcon, Pending as PendingIcon, Error as ErrorIcon, Info as InfoIcon } from '@mui/icons-material';
-import { useTheme } from '@mui/material/styles';
+import { useState, useEffect } from 'react';
+import AppShell from '@/components/AppShell';
+
+type Tab = 'plans' | 'claims' | 'sessions' | 'dashboard';
+type ToastSeverity = 'success' | 'error' | 'info' | 'warning';
 
 interface TreatmentPlan {
   id: string;
@@ -47,41 +47,41 @@ interface SessionNote {
   status: 'planned' | 'active' | 'completed' | 'cancelled';
 }
 
-const professionColors = {
-  physiotherapy: '#2196F3',
-  occupational_therapy: '#4CAF50',
-  speech_language_therapy: '#FF9800',
-  podiatry: '#9C27B0',
+const professionClasses: Record<string, string> = {
+  physiotherapy: 'bg-blue-50 text-blue-700 border border-blue-200',
+  occupational_therapy: 'bg-green-50 text-green-700 border border-green-200',
+  speech_language_therapy: 'bg-orange-50 text-orange-700 border border-orange-200',
+  podiatry: 'bg-purple-50 text-purple-700 border border-purple-200',
 };
 
-const professionIcons: Record<string, React.ReactNode> = {
-  physiotherapy: <DirectionsWalkIcon />,
-  occupational_therapy: <PsychologyIcon />,
-  speech_language_therapy: <RecordVoiceOverIcon />,
-  podiatry: <HealingIcon />,
+const professionProgressColor: Record<string, string> = {
+  physiotherapy: 'bg-blue-500',
+  occupational_therapy: 'bg-green-500',
+  speech_language_therapy: 'bg-orange-500',
+  podiatry: 'bg-purple-500',
 };
 
-const professionLabels = {
+const professionLabels: Record<string, string> = {
   physiotherapy: 'Physiotherapy',
   occupational_therapy: 'Occupational Therapy',
   speech_language_therapy: 'Speech-Language Therapy',
   podiatry: 'Podiatry',
 };
 
-const statusColors: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
-  draft: 'default',
-  active: 'primary',
-  under_review: 'warning',
-  completed: 'success',
-  discontinued: 'error',
-  on_hold: 'info',
-  submitted: 'info',
-  accepted: 'success',
-  declined: 'error',
-  closed: 'default',
-  expired: 'error',
-  planned: 'default',
-  cancelled: 'error',
+const statusClasses: Record<string, string> = {
+  draft: 'bg-secondary-100 text-secondary-600',
+  active: 'bg-blue-100 text-blue-800',
+  under_review: 'bg-amber-100 text-amber-800',
+  completed: 'bg-green-100 text-green-800',
+  discontinued: 'bg-red-100 text-red-800',
+  on_hold: 'bg-sky-100 text-sky-800',
+  submitted: 'bg-blue-100 text-blue-800',
+  accepted: 'bg-green-100 text-green-800',
+  declined: 'bg-red-100 text-red-800',
+  closed: 'bg-secondary-100 text-secondary-600',
+  expired: 'bg-red-100 text-red-800',
+  planned: 'bg-secondary-100 text-secondary-600',
+  cancelled: 'bg-red-100 text-red-800',
 };
 
 const mockTreatmentPlans: TreatmentPlan[] = [
@@ -253,704 +253,504 @@ const mockSessionNotes: SessionNote[] = [
   },
 ];
 
-export const AlliedHealthPage: React.FC = () => {
-  const theme = useTheme();
-  const [activeTab, setActiveTab] = useState(0);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [professionFilter, setProfessionFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error' | 'info' | 'warning'>('info');
-  const [loading, setLoading] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<TreatmentPlan | null>(null);
-  const [planDialogOpen, setPlanDialogOpen] = useState(false);
-
-  const filteredPlans = mockTreatmentPlans.filter(plan => {
-    const matchesSearch = plan.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      plan.patientNHI.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      plan.diagnosis.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesProfession = professionFilter === 'all' || plan.profession === professionFilter;
-    const matchesStatus = statusFilter === 'all' || plan.status === statusFilter;
-    return matchesSearch && matchesProfession && matchesStatus;
-  });
-
-  const filteredClaims = mockACCClaims.filter(claim => {
-    const matchesSearch = claim.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      claim.patientNHI.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      claim.accNumber.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesProfession = professionFilter === 'all' || claim.claimType === professionFilter;
-    const matchesStatus = statusFilter === 'all' || claim.status === statusFilter;
-    return matchesSearch && matchesProfession && matchesStatus;
-  });
-
-  const filteredSessions = mockSessionNotes.filter(session => {
-    const matchesSearch = session.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      session.patientNHI.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      session.clinician.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesProfession = professionFilter === 'all' || session.profession === professionFilter;
-    const matchesStatus = statusFilter === 'all' || session.status === statusFilter;
-    return matchesSearch && matchesProfession && matchesStatus;
-  });
-
-  const handleShowSnackbar = (message: string, severity: 'success' | 'error' | 'info' | 'warning' = 'info') => {
-    setSnackbarMessage(message);
-    setSnackbarSeverity(severity);
-    setSnackbarOpen(true);
-  };
-
-  const handleViewPlan = (plan: TreatmentPlan) => {
-    setSelectedPlan(plan);
-    setPlanDialogOpen(true);
-  };
-
-  const handleNewPlan = () => {
-    handleShowSnackbar('Navigate to profession-specific page to create new treatment plan', 'info');
-  };
-
-  const handleNewClaim = () => {
-    handleShowSnackbar('Navigate to ACC Claims to create new claim', 'info');
-  };
-
-  const handleNewSession = () => {
-    handleShowSnackbar('Navigate to profession-specific page to create new session note', 'info');
-  };
-
-  const getProfessionColor = (profession: string) => professionColors[profession as keyof typeof professionColors] || '#757575';
-  const getProfessionIcon = (profession: string) => professionIcons[profession as keyof typeof professionIcons] || <MedicalServicesIcon />;
-  const getProfessionLabel = (profession: string) => professionLabels[profession as keyof typeof professionLabels] || profession;
-
-  const tabs = [
-    { label: 'Treatment Plans', icon: <DescriptionIcon />, count: mockTreatmentPlans.length },
-    { label: 'ACC Claims', icon: <AttachMoneyIcon />, count: mockACCClaims.length },
-    { label: 'Session Notes', icon: <AssessmentIcon />, count: mockSessionNotes.length },
-    { label: 'Dashboard', icon: <LocalHospitalIcon />, count: 0 },
-  ];
-
+function ProfessionBadge({ profession }: { profession: string }) {
   return (
-    <Box sx={{ flexGrow: 1, p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Allied Health Services
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Physiotherapy, Occupational Therapy, Speech-Language Therapy & Podiatry
-        </Typography>
-      </Box>
-
-      {/* Stats Cards */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Paper elevation={2} sx={{ p: 2, textAlign: 'center', borderLeft: `4px solid ${professionColors.physiotherapy}` }}>
-            <Typography variant="h5" color={professionColors.physiotherapy}>
-              {mockTreatmentPlans.filter(p => p.profession === 'physiotherapy').length}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Physiotherapy Plans
-            </Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Paper elevation={2} sx={{ p: 2, textAlign: 'center', borderLeft: `4px solid ${professionColors.occupational_therapy}` }}>
-            <Typography variant="h5" color={professionColors.occupational_therapy}>
-              {mockTreatmentPlans.filter(p => p.profession === 'occupational_therapy').length}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              OT Plans
-            </Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Paper elevation={2} sx={{ p: 2, textAlign: 'center', borderLeft: `4px solid ${professionColors.speech_language_therapy}` }}>
-            <Typography variant="h5" color={professionColors.speech_language_therapy}>
-              {mockTreatmentPlans.filter(p => p.profession === 'speech_language_therapy').length}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Speech Therapy Plans
-            </Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Paper elevation={2} sx={{ p: 2, textAlign: 'center', borderLeft: `4px solid ${professionColors.podiatry}` }}>
-            <Typography variant="h5" color={professionColors.podiatry}>
-              {mockTreatmentPlans.filter(p => p.profession === 'podiatry').length}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Podiatry Plans
-            </Typography>
-          </Paper>
-        </Grid>
-      </Grid>
-
-      {/* Filters */}
-      <Paper elevation={1} sx={{ p: 2, mb: 3 }}>
-        <Grid container spacing={2} alignItems="flex-end">
-          <Grid item xs={12} sm={4}>
-            <TextField
-              fullWidth
-              placeholder="Search patients, NHI, diagnosis..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon color="action" />
-                  </InputAdornment>
-                ),
-              }}
-              size="small"
-            />
-          </Grid>
-          <Grid item xs={12} sm={3}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Profession</InputLabel>
-              <Select
-                value={professionFilter}
-                label="Profession"
-                onChange={(e) => setProfessionFilter(e.target.value)}
-              >
-                <MenuItem value="all">All Professions</MenuItem>
-                <MenuItem value="physiotherapy">Physiotherapy</MenuItem>
-                <MenuItem value="occupational_therapy">Occupational Therapy</MenuItem>
-                <MenuItem value="speech_language_therapy">Speech-Language Therapy</MenuItem>
-                <MenuItem value="podiatry">Podiatry</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={3}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Status</InputLabel>
-              <Select
-                value={statusFilter}
-                label="Status"
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <MenuItem value="all">All Statuses</MenuItem>
-                <MenuItem value="draft">Draft</MenuItem>
-                <MenuItem value="active">Active</MenuItem>
-                <MenuItem value="under_review">Under Review</MenuItem>
-                <MenuItem value="completed">Completed</MenuItem>
-                <MenuItem value="discontinued">Discontinued</MenuItem>
-                <MenuItem value="on_hold">On Hold</MenuItem>
-                <MenuItem value="submitted">Submitted</MenuItem>
-                <MenuItem value="accepted">Accepted</MenuItem>
-                <MenuItem value="declined">Declined</MenuItem>
-                <MenuItem value="closed">Closed</MenuItem>
-                <MenuItem value="expired">Expired</MenuItem>
-                <MenuItem value="planned">Planned</MenuItem>
-                <MenuItem value="cancelled">Cancelled</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={2}>
-            <Button
-              variant="outlined"
-              fullWidth
-              startIcon={<RefreshIcon />}
-              onClick={() => handleShowSnackbar('Data refreshed', 'success')}
-              size="small"
-            >
-              Refresh
-            </Button>
-          </Grid>
-        </Grid>
-      </Paper>
-
-      {/* Tabs */}
-      <Paper elevation={2} sx={{ mb: 2 }}>
-        <Tabs
-          value={activeTab}
-          onChange={(_, value) => setActiveTab(value)}
-          variant="scrollable"
-          scrollButtons="auto"
-          indicatorColor="primary"
-          textColor="primary"
-          sx={{ borderBottom: 1, borderColor: 'divider' }}
-        >
-          {tabs.map((tab, index) => (
-            <Tab
-              key={index}
-              icon={tab.icon}
-              label={`${tab.label} (${tab.count})`}
-              sx={{ minWidth: 160, textTransform: 'none', fontWeight: 500 }}
-            />
-          ))}
-        </Tabs>
-      </Paper>
-
-      {/* Tab Panels */}
-      {activeTab === 0 && (
-        // Treatment Plans Tab
-        <Paper elevation={2}>
-          <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
-            <Typography variant="h6">Treatment Plans</Typography>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleNewPlan}
-              sx={{ ml: 1 }}
-            >
-              New Plan
-            </Button>
-          </Box>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Patient</TableCell>
-                  <TableCell>Profession</TableCell>
-                  <TableCell>Clinician</TableCell>
-                  <TableCell>Diagnosis</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>ACC Claim</TableCell>
-                  <TableCell>Sessions</TableCell>
-                  <TableCell>Review Date</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredPlans.map((plan) => (
-                  <TableRow key={plan.id} hover onClick={() => handleViewPlan(plan)} style={{ cursor: 'pointer' }}>
-                    <TableCell>
-                      <Box>
-                        <Typography variant="body2" fontWeight={500}>{plan.patientName}</Typography>
-                        <Typography variant="caption" color="text.secondary">NHI: {plan.patientNHI}</Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        icon={getProfessionIcon(plan.profession)}
-                        label={getProfessionLabel(plan.profession)}
-                        size="small"
-                        color="primary"
-                        variant="outlined"
-                        sx={{ backgroundColor: `${getProfessionColor(plan.profession)}10`, borderColor: getProfessionColor(plan.profession) }}
-                      />
-                    </TableCell>
-                    <TableCell>{plan.clinician}</TableCell>
-                    <TableCell>
-                      <Typography variant="body2" maxWidth={200} noWrap textOverflow="ellipsis" overflow="hidden">
-                        {plan.diagnosis}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={plan.status.replace('_', ' ').toUpperCase()}
-                        size="small"
-                        color={statusColors[plan.status]}
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>{plan.accNumber || '-'}</TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {plan.sessionsUsed} / {plan.sessionsApproved}
-                      </Typography>
-                      <Box sx={{ mt: 0.5 }}>
-                        <Box
-                          sx={{
-                            height: 4,
-                            borderRadius: 2,
-                            bgcolor: 'grey.200',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              height: '100%',
-                              width: `${(plan.sessionsUsed / plan.sessionsApproved) * 100}%`,
-                              bgcolor: plan.sessionsUsed >= plan.sessionsApproved ? 'error.main' : getProfessionColor(plan.profession),
-                              transition: 'width 0.3s ease',
-                            }}
-                          />
-                        </Box>
-                      </Box>
-                    </TableCell>
-                    <TableCell>{plan.reviewDate}</TableCell>
-                    <TableCell align="right">
-                      <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleViewPlan(plan); }} aria-label="View">
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filteredPlans.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                      <Typography color="text.secondary">No treatment plans found</Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
-      )}
-
-      {activeTab === 1 && (
-        // ACC Claims Tab
-        <Paper elevation={2}>
-          <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
-            <Typography variant="h6">ACC Claims</Typography>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleNewClaim}
-              sx={{ ml: 1 }}
-            >
-              New Claim
-            </Button>
-          </Box>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Patient</TableCell>
-                  <TableCell>Claim Type</TableCell>
-                  <TableCell>ACC Number</TableCell>
-                  <TableCell>Diagnosis</TableCell>
-                  <TableCell>Body Region</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Sessions</TableCell>
-                  <TableCell>Expiry Date</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredClaims.map((claim) => (
-                  <TableRow key={claim.id} hover>
-                    <TableCell>
-                      <Box>
-                        <Typography variant="body2" fontWeight={500}>{claim.patientName}</Typography>
-                        <Typography variant="caption" color="text.secondary">NHI: {claim.patientNHI}</Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        icon={getProfessionIcon(claim.claimType)}
-                        label={getProfessionLabel(claim.claimType)}
-                        size="small"
-                        color="primary"
-                        variant="outlined"
-                        sx={{ backgroundColor: `${getProfessionColor(claim.claimType)}10`, borderColor: getProfessionColor(claim.claimType) }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" fontFamily="monospace" fontWeight={500}>
-                        {claim.accNumber}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" maxWidth={200} noWrap textOverflow="ellipsis" overflow="hidden">
-                        {claim.diagnosis}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{claim.bodyRegion.replace('_', ' ')}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={claim.status.replace('_', ' ').toUpperCase()}
-                        size="small"
-                        color={statusColors[claim.status]}
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {claim.usedSessions} / {claim.approvedSessions}
-                      </Typography>
-                      <Box sx={{ mt: 0.5 }}>
-                        <Box
-                          sx={{
-                            height: 4,
-                            borderRadius: 2,
-                            bgcolor: 'grey.200',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              height: '100%',
-                              width: `${(claim.usedSessions / claim.approvedSessions) * 100}%`,
-                              bgcolor: claim.usedSessions >= claim.approvedSessions ? 'error.main' : getProfessionColor(claim.claimType),
-                              transition: 'width 0.3s ease',
-                            }}
-                          />
-                        </Box>
-                      </Box>
-                    </TableCell>
-                    <TableCell>{claim.expiryDate}</TableCell>
-                    <TableCell align="right">
-                      <IconButton size="small" aria-label="View claim">
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filteredClaims.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                      <Typography color="text.secondary">No ACC claims found</Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
-      )}
-
-      {activeTab === 2 && (
-        // Session Notes Tab
-        <Paper elevation={2}>
-          <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
-            <Typography variant="h6">Session Notes</Typography>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleNewSession}
-              sx={{ ml: 1 }}
-            >
-              New Session
-            </Button>
-          </Box>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Patient</TableCell>
-                  <TableCell>Profession</TableCell>
-                  <TableCell>Clinician</TableCell>
-                  <TableCell>Session Date</TableCell>
-                  <TableCell>Session #</TableCell>
-                  <TableCell>Duration</TableCell>
-                  <TableCell>Charge Code</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredSessions.map((session) => (
-                  <TableRow key={session.id} hover>
-                    <TableCell>
-                      <Box>
-                        <Typography variant="body2" fontWeight={500}>{session.patientName}</Typography>
-                        <Typography variant="caption" color="text.secondary">NHI: {session.patientNHI}</Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        icon={getProfessionIcon(session.profession)}
-                        label={getProfessionLabel(session.profession)}
-                        size="small"
-                        color="primary"
-                        variant="outlined"
-                        sx={{ backgroundColor: `${getProfessionColor(session.profession)}10`, borderColor: getProfessionColor(session.profession) }}
-                      />
-                    </TableCell>
-                    <TableCell>{session.clinician}</TableCell>
-                    <TableCell>{session.sessionDate}</TableCell>
-                    <TableCell>{session.sessionNumber}</TableCell>
-                    <TableCell>{session.durationMinutes} min</TableCell>
-                    <TableCell>
-                      <Typography variant="body2" fontFamily="monospace">{session.chargeCode}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={session.status.toUpperCase()}
-                        size="small"
-                        color={statusColors[session.status]}
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton size="small" aria-label="View session">
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filteredSessions.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                      <Typography color="text.secondary">No session notes found</Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
-      )}
-
-      {activeTab === 3 && (
-        // Dashboard Tab
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Paper elevation={2} sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>Profession Distribution</Typography>
-              <Grid container spacing={2}>
-                {Object.entries(professionLabels).map(([key, label]) => (
-                  <Grid item xs={6} key={key}>
-                    <Box sx={{ p: 2, textAlign: 'center', bgcolor: `${professionColors[key as keyof typeof professionColors]}10`, borderRadius: 2, border: `1px solid ${professionColors[key as keyof typeof professionColors]}40` }}>
-                      {getProfessionIcon(key)}
-                      <Typography variant="h6" color={getProfessionColor(key)}>
-                        {mockTreatmentPlans.filter(p => p.profession === key as any).length}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">{label}</Typography>
-                    </Box>
-                  </Grid>
-                ))}
-              </Grid>
-            </Paper>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Paper elevation={2} sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>Claim Status Overview</Typography>
-              <Grid container spacing={2}>
-                {['accepted', 'under_review', 'submitted', 'draft'].map(status => (
-                  <Grid item xs={6} key={status}>
-                    <Box sx={{ p: 2, textAlign: 'center', bgcolor: `${theme.palette[statusColors[status] as keyof typeof theme.palette]?.main || theme.palette.grey[500]}10`, borderRadius: 2 }}>
-                      <Typography variant="h6" color={theme.palette[statusColors[status] as keyof typeof theme.palette]?.main || theme.palette.grey[500]}>
-                        {mockACCClaims.filter(c => c.status === status).length}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">{status.replace('_', ' ').toUpperCase()}</Typography>
-                    </Box>
-                  </Grid>
-                ))}
-              </Grid>
-            </Paper>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Paper elevation={2} sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>Upcoming Reviews</Typography>
-              <List>
-                {mockTreatmentPlans
-                  .filter(p => p.status === 'active' || p.status === 'under_review')
-                  .sort((a, b) => new Date(a.reviewDate).getTime() - new Date(b.reviewDate).getTime())
-                  .slice(0, 5)
-                  .map(plan => (
-                    <ListItem key={plan.id} divider>
-                      <ListItemText
-                        primary={plan.patientName}
-                        secondary={`${getProfessionLabel(plan.profession)} • Review: ${plan.reviewDate} • ${plan.clinician}`}
-                      />
-                      <ListItemSecondaryAction>
-                        <Chip label={plan.status} size="small" color={statusColors[plan.status]} variant="outlined" />
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                  ))}
-              </List>
-            </Paper>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Paper elevation={2} sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>Expiring Claims</Typography>
-              <List>
-                {mockACCClaims
-                  .filter(c => c.status === 'accepted')
-                  .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime())
-                  .slice(0, 5)
-                  .map(claim => (
-                    <ListItem key={claim.id} divider>
-                      <ListItemText
-                        primary={claim.patientName}
-                        secondary={`${getProfessionLabel(claim.claimType)} • Expires: ${claim.expiryDate} • ${claim.usedSessions}/${claim.approvedSessions} sessions used`}
-                      />
-                      <ListItemSecondaryAction>
-                        <Chip label={claim.status} size="small" color={statusColors[claim.status]} variant="outlined" />
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                  ))}
-              </List>
-            </Paper>
-          </Grid>
-        </Grid>
-      )}
-
-      {/* Plan Detail Dialog */}
-      <Dialog open={planDialogOpen} onClose={() => setPlanDialogOpen(false)} maxWidth="md" fullWidth>
-        {selectedPlan && (
-          <>
-            <DialogTitle>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Chip
-                  icon={getProfessionIcon(selectedPlan.profession)}
-                  label={getProfessionLabel(selectedPlan.profession)}
-                  size="small"
-                  color="primary"
-                  variant="outlined"
-                  sx={{ backgroundColor: `${getProfessionColor(selectedPlan.profession)}10`, borderColor: getProfessionColor(selectedPlan.profession) }}
-                />
-                <Typography variant="h6">{selectedPlan.patientName}</Typography>
-              </Box>
-            </DialogTitle>
-            <DialogContent>
-              <Grid container spacing={2} sx={{ p: 1 }}>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" color="text.secondary">NHI</Typography>
-                  <Typography variant="body1" fontWeight={500}>{selectedPlan.patientNHI}</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" color="text.secondary">Clinician</Typography>
-                  <Typography variant="body1">{selectedPlan.clinician}</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" color="text.secondary">Diagnosis</Typography>
-                  <Typography variant="body1">{selectedPlan.diagnosis}</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" color="text.secondary">ACC Claim</Typography>
-                  <Typography variant="body1" fontFamily="monospace">{selectedPlan.accNumber || 'N/A'}</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" color="text.secondary">Status</Typography>
-                  <Chip label={selectedPlan.status.replace('_', ' ').toUpperCase()} color={statusColors[selectedPlan.status]} variant="outlined" />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" color="text.secondary">Sessions</Typography>
-                  <Typography variant="body1">{selectedPlan.sessionsUsed} / {selectedPlan.sessionsApproved}</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" color="text.secondary">Start Date</Typography>
-                  <Typography variant="body1">{selectedPlan.startDate}</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" color="text.secondary">Review Date</Typography>
-                  <Typography variant="body1">{selectedPlan.reviewDate}</Typography>
-                </Grid>
-                <Grid item xs={12}>
-                  <Divider sx={{ my: 2 }} />
-                  <Typography variant="subtitle1" gutterBottom>Goals & Interventions</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    View detailed goals, interventions, and outcome measures in the profession-specific module.
-                  </Typography>
-                </Grid>
-              </Grid>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setPlanDialogOpen(false)}>Close</Button>
-              <Button variant="contained" startIcon={<EditIcon />}>Edit Plan</Button>
-            </DialogActions>
-          </>
-        )}
-      </Dialog>
-
-      {/* Snackbar */}
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={6000}
-        onClose={() => setSnackbarOpen(false)}
-      >
-        <Alert
-          severity={snackbarSeverity}
-          onClose={() => setSnackbarOpen(false)}
-          sx={{ width: '100%' }}
-        >
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
-    </Box>
+    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${professionClasses[profession] ?? 'bg-secondary-100 text-secondary-600'}`}>
+      {professionLabels[profession] ?? profession}
+    </span>
   );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClasses[status] ?? 'bg-secondary-100 text-secondary-600'}`}>
+      {status.replace(/_/g, ' ')}
+    </span>
+  );
+}
+
+function ProgressBar({ used, approved, profession }: { used: number; approved: number; profession: string }) {
+  const pct = approved > 0 ? Math.min((used / approved) * 100, 100) : 0;
+  const barColor = used >= approved ? 'bg-red-500' : (professionProgressColor[profession] ?? 'bg-primary-500');
+  return (
+    <div>
+      <span className="text-sm">{used} / {approved}</span>
+      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-secondary-200">
+        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function TabBar({ active, onSelect }: { active: Tab; onSelect: (t: Tab) => void }) {
+  const tabs: { id: Tab; label: string; count: number }[] = [
+    { id: 'plans', label: 'Treatment Plans', count: mockTreatmentPlans.length },
+    { id: 'claims', label: 'ACC Claims', count: mockACCClaims.length },
+    { id: 'sessions', label: 'Session Notes', count: mockSessionNotes.length },
+    { id: 'dashboard', label: 'Dashboard', count: 0 },
+  ];
+  return (
+    <div className="mb-6 flex gap-1 overflow-x-auto rounded-lg bg-secondary-100 p-1">
+      {tabs.map(t => (
+        <button
+          key={t.id}
+          onClick={() => onSelect(t.id)}
+          className={`flex-shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            active === t.id
+              ? 'bg-white text-primary-700 shadow-sm'
+              : 'text-secondary-600 hover:text-secondary-900'
+          }`}
+        >
+          {t.label}{t.count > 0 ? ` (${t.count})` : ''}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const toastBg: Record<ToastSeverity, string> = {
+  success: 'bg-green-600',
+  error: 'bg-red-600',
+  info: 'bg-blue-600',
+  warning: 'bg-amber-500',
 };
 
-export default AlliedHealthPage;
+function Toast({ message, severity, onClose }: { message: string; severity: ToastSeverity; onClose: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 5000);
+    return () => clearTimeout(t);
+  }, [message, onClose]);
+  return (
+    <div className={`fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg px-4 py-3 text-sm text-white shadow-lg ${toastBg[severity]}`}>
+      <span>{message}</span>
+      <button onClick={onClose} className="ml-2 font-bold opacity-75 hover:opacity-100">×</button>
+    </div>
+  );
+}
+
+export default function AlliedHealthPage() {
+  const [activeTab, setActiveTab] = useState<Tab>('plans');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [professionFilter, setProfessionFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [toast, setToast] = useState<{ message: string; severity: ToastSeverity } | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<TreatmentPlan | null>(null);
+
+  const showToast = (message: string, severity: ToastSeverity = 'info') => setToast({ message, severity });
+
+  const filteredPlans = mockTreatmentPlans.filter(p => {
+    const q = searchTerm.toLowerCase();
+    return (
+      (p.patientName.toLowerCase().includes(q) || p.patientNHI.toLowerCase().includes(q) || p.diagnosis.toLowerCase().includes(q)) &&
+      (professionFilter === 'all' || p.profession === professionFilter) &&
+      (statusFilter === 'all' || p.status === statusFilter)
+    );
+  });
+
+  const filteredClaims = mockACCClaims.filter(c => {
+    const q = searchTerm.toLowerCase();
+    return (
+      (c.patientName.toLowerCase().includes(q) || c.patientNHI.toLowerCase().includes(q) || c.accNumber.toLowerCase().includes(q)) &&
+      (professionFilter === 'all' || c.claimType === professionFilter) &&
+      (statusFilter === 'all' || c.status === statusFilter)
+    );
+  });
+
+  const filteredSessions = mockSessionNotes.filter(s => {
+    const q = searchTerm.toLowerCase();
+    return (
+      (s.patientName.toLowerCase().includes(q) || s.patientNHI.toLowerCase().includes(q) || s.clinician.toLowerCase().includes(q)) &&
+      (professionFilter === 'all' || s.profession === professionFilter) &&
+      (statusFilter === 'all' || s.status === statusFilter)
+    );
+  });
+
+  return (
+    <AppShell title="Allied Health">
+      {/* Summary stat cards */}
+      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {(['physiotherapy', 'occupational_therapy', 'speech_language_therapy', 'podiatry'] as const).map(prof => (
+          <div key={prof} className={`rounded-xl border p-4 ${professionClasses[prof] ?? ''}`}>
+            <p className="text-2xl font-bold">{mockTreatmentPlans.filter(p => p.profession === prof).length}</p>
+            <p className="mt-1 text-xs font-medium">{professionLabels[prof]}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="mb-4 flex flex-wrap gap-3 rounded-xl bg-white p-3 shadow-sm ring-1 ring-secondary-200">
+        <div className="relative flex-1 min-w-[200px]">
+          <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-secondary-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+          </svg>
+          <input
+            type="search"
+            placeholder="Search patients, NHI, diagnosis…"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full rounded-md border border-secondary-300 py-1.5 pl-9 pr-3 text-sm focus:border-primary-400 focus:outline-none focus:ring-1 focus:ring-primary-400"
+          />
+        </div>
+        <select
+          value={professionFilter}
+          onChange={e => setProfessionFilter(e.target.value)}
+          className="rounded-md border border-secondary-300 px-3 py-1.5 text-sm focus:border-primary-400 focus:outline-none focus:ring-1 focus:ring-primary-400"
+        >
+          <option value="all">All Professions</option>
+          <option value="physiotherapy">Physiotherapy</option>
+          <option value="occupational_therapy">Occupational Therapy</option>
+          <option value="speech_language_therapy">Speech-Language Therapy</option>
+          <option value="podiatry">Podiatry</option>
+        </select>
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          className="rounded-md border border-secondary-300 px-3 py-1.5 text-sm focus:border-primary-400 focus:outline-none focus:ring-1 focus:ring-primary-400"
+        >
+          <option value="all">All Statuses</option>
+          <option value="draft">Draft</option>
+          <option value="active">Active</option>
+          <option value="under_review">Under Review</option>
+          <option value="completed">Completed</option>
+          <option value="discontinued">Discontinued</option>
+          <option value="on_hold">On Hold</option>
+          <option value="submitted">Submitted</option>
+          <option value="accepted">Accepted</option>
+          <option value="declined">Declined</option>
+          <option value="closed">Closed</option>
+          <option value="expired">Expired</option>
+          <option value="planned">Planned</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <button
+          onClick={() => showToast('Data refreshed', 'success')}
+          className="rounded-md border border-secondary-300 px-3 py-1.5 text-sm font-medium text-secondary-700 hover:bg-secondary-50"
+        >
+          Refresh
+        </button>
+      </div>
+
+      <TabBar active={activeTab} onSelect={setActiveTab} />
+
+      {/* Treatment Plans */}
+      {activeTab === 'plans' && (
+        <div className="rounded-xl bg-white shadow-sm ring-1 ring-secondary-200">
+          <div className="flex items-center justify-between border-b border-secondary-200 px-6 py-4">
+            <h2 className="text-base font-semibold text-secondary-900">Treatment Plans</h2>
+            <button
+              onClick={() => showToast('Navigate to profession-specific page to create new treatment plan', 'info')}
+              className="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700"
+            >
+              + New Plan
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-secondary-50 text-xs font-medium uppercase text-secondary-500">
+                <tr>
+                  <th className="px-6 py-3 text-left">Patient</th>
+                  <th className="px-6 py-3 text-left">Profession</th>
+                  <th className="px-6 py-3 text-left">Clinician</th>
+                  <th className="px-6 py-3 text-left">Diagnosis</th>
+                  <th className="px-6 py-3 text-left">Status</th>
+                  <th className="px-6 py-3 text-left">ACC Claim</th>
+                  <th className="px-6 py-3 text-left">Sessions</th>
+                  <th className="px-6 py-3 text-left">Review</th>
+                  <th className="px-6 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-secondary-100">
+                {filteredPlans.map(plan => (
+                  <tr
+                    key={plan.id}
+                    className="cursor-pointer hover:bg-secondary-50"
+                    onClick={() => setSelectedPlan(plan)}
+                  >
+                    <td className="px-6 py-3">
+                      <p className="font-medium text-secondary-900">{plan.patientName}</p>
+                      <p className="font-mono text-xs text-secondary-500">NHI: {plan.patientNHI}</p>
+                    </td>
+                    <td className="px-6 py-3"><ProfessionBadge profession={plan.profession} /></td>
+                    <td className="px-6 py-3 text-secondary-700">{plan.clinician}</td>
+                    <td className="max-w-[200px] truncate px-6 py-3 text-secondary-700">{plan.diagnosis}</td>
+                    <td className="px-6 py-3"><StatusBadge status={plan.status} /></td>
+                    <td className="px-6 py-3 font-mono text-xs text-secondary-600">{plan.accNumber ?? '—'}</td>
+                    <td className="px-6 py-3">
+                      <ProgressBar used={plan.sessionsUsed} approved={plan.sessionsApproved} profession={plan.profession} />
+                    </td>
+                    <td className="px-6 py-3 text-secondary-500">{plan.reviewDate}</td>
+                    <td className="px-6 py-3 text-right">
+                      <button
+                        onClick={e => { e.stopPropagation(); setSelectedPlan(plan); }}
+                        className="rounded p-1 text-secondary-400 hover:text-primary-600"
+                        aria-label="View"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredPlans.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="px-6 py-8 text-center text-sm text-secondary-400">No treatment plans found</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ACC Claims */}
+      {activeTab === 'claims' && (
+        <div className="rounded-xl bg-white shadow-sm ring-1 ring-secondary-200">
+          <div className="flex items-center justify-between border-b border-secondary-200 px-6 py-4">
+            <h2 className="text-base font-semibold text-secondary-900">ACC Claims</h2>
+            <button
+              onClick={() => showToast('Navigate to ACC Claims to create new claim', 'info')}
+              className="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700"
+            >
+              + New Claim
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-secondary-50 text-xs font-medium uppercase text-secondary-500">
+                <tr>
+                  <th className="px-6 py-3 text-left">Patient</th>
+                  <th className="px-6 py-3 text-left">Claim Type</th>
+                  <th className="px-6 py-3 text-left">ACC Number</th>
+                  <th className="px-6 py-3 text-left">Diagnosis</th>
+                  <th className="px-6 py-3 text-left">Body Region</th>
+                  <th className="px-6 py-3 text-left">Status</th>
+                  <th className="px-6 py-3 text-left">Sessions</th>
+                  <th className="px-6 py-3 text-left">Expiry</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-secondary-100">
+                {filteredClaims.map(claim => (
+                  <tr key={claim.id} className="hover:bg-secondary-50">
+                    <td className="px-6 py-3">
+                      <p className="font-medium text-secondary-900">{claim.patientName}</p>
+                      <p className="font-mono text-xs text-secondary-500">NHI: {claim.patientNHI}</p>
+                    </td>
+                    <td className="px-6 py-3"><ProfessionBadge profession={claim.claimType} /></td>
+                    <td className="px-6 py-3 font-mono text-xs font-medium text-secondary-700">{claim.accNumber}</td>
+                    <td className="max-w-[200px] truncate px-6 py-3 text-secondary-700">{claim.diagnosis}</td>
+                    <td className="px-6 py-3 text-secondary-600">{claim.bodyRegion.replace(/_/g, ' ')}</td>
+                    <td className="px-6 py-3"><StatusBadge status={claim.status} /></td>
+                    <td className="px-6 py-3">
+                      <ProgressBar used={claim.usedSessions} approved={claim.approvedSessions} profession={claim.claimType} />
+                    </td>
+                    <td className="px-6 py-3 text-secondary-500">{claim.expiryDate}</td>
+                  </tr>
+                ))}
+                {filteredClaims.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-8 text-center text-sm text-secondary-400">No ACC claims found</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Session Notes */}
+      {activeTab === 'sessions' && (
+        <div className="rounded-xl bg-white shadow-sm ring-1 ring-secondary-200">
+          <div className="flex items-center justify-between border-b border-secondary-200 px-6 py-4">
+            <h2 className="text-base font-semibold text-secondary-900">Session Notes</h2>
+            <button
+              onClick={() => showToast('Navigate to profession-specific page to create new session note', 'info')}
+              className="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700"
+            >
+              + New Session
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-secondary-50 text-xs font-medium uppercase text-secondary-500">
+                <tr>
+                  <th className="px-6 py-3 text-left">Patient</th>
+                  <th className="px-6 py-3 text-left">Profession</th>
+                  <th className="px-6 py-3 text-left">Clinician</th>
+                  <th className="px-6 py-3 text-left">Date</th>
+                  <th className="px-6 py-3 text-left">Session #</th>
+                  <th className="px-6 py-3 text-left">Duration</th>
+                  <th className="px-6 py-3 text-left">Charge Code</th>
+                  <th className="px-6 py-3 text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-secondary-100">
+                {filteredSessions.map(session => (
+                  <tr key={session.id} className="hover:bg-secondary-50">
+                    <td className="px-6 py-3">
+                      <p className="font-medium text-secondary-900">{session.patientName}</p>
+                      <p className="font-mono text-xs text-secondary-500">NHI: {session.patientNHI}</p>
+                    </td>
+                    <td className="px-6 py-3"><ProfessionBadge profession={session.profession} /></td>
+                    <td className="px-6 py-3 text-secondary-700">{session.clinician}</td>
+                    <td className="px-6 py-3 text-secondary-500">{session.sessionDate}</td>
+                    <td className="px-6 py-3 text-secondary-700">{session.sessionNumber}</td>
+                    <td className="px-6 py-3 text-secondary-700">{session.durationMinutes} min</td>
+                    <td className="px-6 py-3 font-mono text-xs text-secondary-600">{session.chargeCode}</td>
+                    <td className="px-6 py-3"><StatusBadge status={session.status} /></td>
+                  </tr>
+                ))}
+                {filteredSessions.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-8 text-center text-sm text-secondary-400">No session notes found</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Dashboard */}
+      {activeTab === 'dashboard' && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Profession distribution */}
+          <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-secondary-200">
+            <h2 className="mb-4 text-base font-semibold text-secondary-900">Profession Distribution</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {(Object.keys(professionLabels) as (keyof typeof professionLabels)[]).map(key => (
+                <div key={key} className={`rounded-lg p-3 text-center ${professionClasses[key] ?? ''}`}>
+                  <p className="text-2xl font-bold">{mockTreatmentPlans.filter(p => p.profession === key).length}</p>
+                  <p className="mt-1 text-xs font-medium">{professionLabels[key]}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Claim status */}
+          <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-secondary-200">
+            <h2 className="mb-4 text-base font-semibold text-secondary-900">Claim Status Overview</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {(['accepted', 'under_review', 'submitted', 'draft'] as const).map(status => (
+                <div key={status} className={`rounded-lg p-3 text-center ${statusClasses[status] ?? 'bg-secondary-100 text-secondary-600'}`}>
+                  <p className="text-2xl font-bold">{mockACCClaims.filter(c => c.status === status).length}</p>
+                  <p className="mt-1 text-xs font-medium">{status.replace(/_/g, ' ')}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Upcoming reviews */}
+          <div className="rounded-xl bg-white shadow-sm ring-1 ring-secondary-200">
+            <h2 className="border-b border-secondary-200 px-6 py-4 text-base font-semibold text-secondary-900">Upcoming Reviews</h2>
+            <ul className="divide-y divide-secondary-100">
+              {mockTreatmentPlans
+                .filter(p => p.status === 'active' || p.status === 'under_review')
+                .sort((a, b) => a.reviewDate.localeCompare(b.reviewDate))
+                .slice(0, 5)
+                .map(plan => (
+                  <li key={plan.id} className="flex items-center justify-between px-6 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-secondary-900">{plan.patientName}</p>
+                      <p className="text-xs text-secondary-500">{professionLabels[plan.profession] ?? plan.profession} · Review: {plan.reviewDate} · {plan.clinician}</p>
+                    </div>
+                    <StatusBadge status={plan.status} />
+                  </li>
+                ))}
+            </ul>
+          </div>
+
+          {/* Expiring claims */}
+          <div className="rounded-xl bg-white shadow-sm ring-1 ring-secondary-200">
+            <h2 className="border-b border-secondary-200 px-6 py-4 text-base font-semibold text-secondary-900">Expiring Claims</h2>
+            <ul className="divide-y divide-secondary-100">
+              {mockACCClaims
+                .filter(c => c.status === 'accepted')
+                .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate))
+                .slice(0, 5)
+                .map(claim => (
+                  <li key={claim.id} className="flex items-center justify-between px-6 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-secondary-900">{claim.patientName}</p>
+                      <p className="text-xs text-secondary-500">{professionLabels[claim.claimType] ?? claim.claimType} · Expires: {claim.expiryDate} · {claim.usedSessions}/{claim.approvedSessions} sessions used</p>
+                    </div>
+                    <StatusBadge status={claim.status} />
+                  </li>
+                ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Plan detail modal */}
+      {selectedPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setSelectedPlan(null)} />
+          <div className="relative w-full max-w-2xl rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-secondary-200 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <ProfessionBadge profession={selectedPlan.profession} />
+                <h2 className="text-lg font-semibold text-secondary-900">{selectedPlan.patientName}</h2>
+              </div>
+              <button onClick={() => setSelectedPlan(null)} className="rounded p-1 text-secondary-400 hover:text-secondary-700">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-4 p-6">
+              <div>
+                <p className="text-xs font-medium text-secondary-500">NHI</p>
+                <p className="mt-0.5 font-mono text-sm font-semibold text-secondary-900">{selectedPlan.patientNHI}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-secondary-500">Clinician</p>
+                <p className="mt-0.5 text-sm text-secondary-900">{selectedPlan.clinician}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-xs font-medium text-secondary-500">Diagnosis</p>
+                <p className="mt-0.5 text-sm text-secondary-900">{selectedPlan.diagnosis}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-secondary-500">ACC Claim</p>
+                <p className="mt-0.5 font-mono text-sm text-secondary-900">{selectedPlan.accNumber ?? 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-secondary-500">Status</p>
+                <div className="mt-0.5"><StatusBadge status={selectedPlan.status} /></div>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-secondary-500">Sessions</p>
+                <ProgressBar used={selectedPlan.sessionsUsed} approved={selectedPlan.sessionsApproved} profession={selectedPlan.profession} />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-secondary-500">Start Date</p>
+                <p className="mt-0.5 text-sm text-secondary-900">{selectedPlan.startDate}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-secondary-500">Review Date</p>
+                <p className="mt-0.5 text-sm text-secondary-900">{selectedPlan.reviewDate}</p>
+              </div>
+              <div className="col-span-2 border-t border-secondary-100 pt-4">
+                <p className="text-xs font-medium text-secondary-500">Goals &amp; Interventions</p>
+                <p className="mt-1 text-sm text-secondary-500">View detailed goals, interventions, and outcome measures in the profession-specific module.</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-secondary-200 px-6 py-4">
+              <button onClick={() => setSelectedPlan(null)} className="rounded-md border border-secondary-300 px-4 py-2 text-sm font-medium text-secondary-700 hover:bg-secondary-50">
+                Close
+              </button>
+              <button className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                Edit Plan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && <Toast message={toast.message} severity={toast.severity} onClose={() => setToast(null)} />}
+    </AppShell>
+  );
+}

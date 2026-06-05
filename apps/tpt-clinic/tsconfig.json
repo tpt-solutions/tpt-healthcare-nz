@@ -24,14 +24,12 @@
     "noUncheckedIndexedAccess": true,
 
     /* Path aliases */
-    "ignoreDeprecations": "6.0",
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
       "@tpt/offline-store": ["../../packages/offline-store/src/index.ts"],
       "@tpt/offline-store/*": ["../../packages/offline-store/src/*"]
     }
   },
-  "include": ["src", "vite.config.ts"],
+  "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
