@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useTheme, THEMES, validateAccentHex } from '@tpt/ui';
+import type { ThemeKey } from '@tpt/ui';
 
 const LOCK_TIMEOUT_KEY = 'tpt:lockTimeout';
 
@@ -51,9 +53,48 @@ export function SettingsPage() {
     Number(localStorage.getItem(LOCK_TIMEOUT_KEY) ?? 30_000)
   );
 
+  const { theme, customAccent, applyTheme, validateAccent } = useTheme();
+  const [pendingTheme, setPendingTheme] = useState<ThemeKey>(theme);
+  const [accentInput, setAccentInput] = useState(customAccent ?? '');
+  const [accentError, setAccentError] = useState<string | null>(null);
+  const [appearanceSaved, setAppearanceSaved] = useState(false);
+  const [appearanceSaving, setAppearanceSaving] = useState(false);
+
+  const handleAccentChange = (hex: string) => {
+    setAccentInput(hex);
+    if (hex === '') {
+      setAccentError(null);
+      return;
+    }
+    setAccentError(validateAccent(hex));
+  };
+
+  const handleAppearanceSave = async () => {
+    const accent = accentInput.trim() || null;
+    if (accent) {
+      const err = validateAccentHex(accent);
+      if (err) { setAccentError(err); return; }
+    }
+    setAppearanceSaving(true);
+    try {
+      const res = await fetch('/api/v1/practice/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: pendingTheme, customAccent: accent, activeModules: [] }),
+      });
+      if (res.ok) {
+        applyTheme(pendingTheme, accent);
+        setAppearanceSaved(true);
+        setTimeout(() => setAppearanceSaved(false), 3000);
+      }
+    } finally {
+      setAppearanceSaving(false);
+    }
+  };
+
   const handleSave = () => {
     localStorage.setItem(LOCK_TIMEOUT_KEY, String(lockTimeout));
-    // TODO: PUT /api/v1/admin/settings
+    // TODO: PUT /api/v1/admin/settings for practice identity fields
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
@@ -178,6 +219,101 @@ export function SettingsPage() {
           <p className="mt-1.5 text-xs text-gray-400">
             Staff devices default to 30 s. Patient portal defaults to 2 min.
             This setting is written to each device's local storage on save.
+          </p>
+        </div>
+      </section>
+
+      {/* Appearance */}
+      <section className="bg-white rounded-xl border border-secondary-200 shadow-sm p-5 mb-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-sm font-semibold text-secondary-900">Appearance</h2>
+            <p className="text-xs text-secondary-500 mt-0.5">
+              Choose a theme for your practice. All staff and the patient portal will see this theme.
+              Clinical alert colours (red, amber, green) are always locked for safety.
+            </p>
+          </div>
+          <button
+            onClick={handleAppearanceSave}
+            disabled={appearanceSaving}
+            className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary-700 disabled:opacity-60 transition-colors"
+          >
+            {appearanceSaving ? 'Saving…' : appearanceSaved ? 'Saved' : 'Save Appearance'}
+          </button>
+        </div>
+
+        {/* Theme gallery */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-5">
+          {THEMES.map(t => (
+            <button
+              key={t.key}
+              onClick={() => {
+                setPendingTheme(t.key);
+                applyTheme(t.key, accentInput.trim() || null);
+              }}
+              className={[
+                'rounded-xl border-2 p-3 text-left transition-all',
+                pendingTheme === t.key
+                  ? 'border-primary-600 shadow-md'
+                  : 'border-secondary-200 hover:border-secondary-400',
+              ].join(' ')}
+            >
+              {/* Colour swatches */}
+              <div className="mb-2 flex gap-1">
+                {t.swatches.map((hex, i) => (
+                  <span
+                    key={i}
+                    className="h-4 flex-1 rounded"
+                    style={{ backgroundColor: hex }}
+                  />
+                ))}
+              </div>
+              <p className="text-xs font-semibold text-secondary-900">{t.label}</p>
+              <p className="mt-0.5 text-xs text-secondary-500 leading-tight">{t.description}</p>
+            </button>
+          ))}
+        </div>
+
+        {/* Custom accent */}
+        <div>
+          <label className="block text-xs font-medium text-secondary-700 mb-1">
+            Custom accent colour
+            <span className="ml-1 font-normal text-secondary-500">(optional — overrides the theme's primary colour)</span>
+          </label>
+          <div className="flex items-center gap-3">
+            <input
+              type="color"
+              value={accentInput || '#0d9488'}
+              onChange={e => handleAccentChange(e.target.value)}
+              className="h-9 w-14 cursor-pointer rounded border border-secondary-300 p-0.5"
+            />
+            <input
+              type="text"
+              placeholder="#0d9488"
+              value={accentInput}
+              onChange={e => handleAccentChange(e.target.value)}
+              maxLength={7}
+              className="w-28 rounded-lg border border-secondary-300 px-3 py-1.5 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            />
+            {accentInput && !accentError && (
+              <button
+                onClick={() => { setAccentInput(''); setAccentError(null); applyTheme(pendingTheme, null); }}
+                className="text-xs text-secondary-500 hover:text-secondary-700 underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          {accentError && (
+            <p className="mt-1.5 text-xs text-red-600">{accentError}</p>
+          )}
+          {!accentError && accentInput && (
+            <p className="mt-1.5 text-xs text-secondary-500">
+              Live preview active. Click "Save Appearance" to persist.
+            </p>
+          )}
+          <p className="mt-2 text-xs text-secondary-400">
+            Clinical alert colours (urgent red, warning amber, safe green, info blue) are locked and cannot be changed.
           </p>
         </div>
       </section>
