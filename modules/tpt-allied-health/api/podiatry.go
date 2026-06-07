@@ -4,20 +4,24 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"time"
 
+	"github.com/PhillipC05/tpt-healthcare/core/consent"
+	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-allied-health/internal/podiatry"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
 
 // PodiatryHandler handles podiatry API endpoints.
-type PodiatryHandler struct{}
+type PodiatryHandler struct {
+	hpiClient    *hpi.Client
+	consentStore *consent.Store
+}
 
 // NewPodiatryHandler creates a new podiatry handler.
-func NewPodiatryHandler() *PodiatryHandler {
-	return &PodiatryHandler{}
+func NewPodiatryHandler(hpiClient *hpi.Client, consentStore *consent.Store) *PodiatryHandler {
+	return &PodiatryHandler{hpiClient: hpiClient, consentStore: consentStore}
 }
 
 // RegisterRoutes registers podiatry routes.
@@ -48,6 +52,10 @@ func (h *PodiatryHandler) RegisterRoutes(r *mux.Router) {
 
 // CreateAssessment creates a new podiatry assessment.
 func (h *PodiatryHandler) CreateAssessment(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	var assessment podiatry.Assessment
 	if err := json.NewDecoder(r.Body).Decode(&assessment); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -74,6 +82,7 @@ func (h *PodiatryHandler) GetAssessment(w http.ResponseWriter, r *http.Request) 
 	vars := mux.Vars(r)
 	id := vars["id"]
 
+	// TODO: fetch from database; stub returns placeholder data.
 	assessment := podiatry.Assessment{
 		ID:           id,
 		PatientNHI:   "ABC1234",
@@ -81,6 +90,10 @@ func (h *PodiatryHandler) GetAssessment(w http.ResponseWriter, r *http.Request) 
 		Type:         podiatry.AssessmentDiabeticFoot,
 		RiskCategory: podiatry.RiskCategoryHigh,
 		Status:       podiatry.AssessmentCompleted,
+	}
+
+	if !checkConsent(w, r, h.consentStore, assessment.PatientNHI) {
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -95,20 +108,10 @@ func (h *PodiatryHandler) ListAssessments(w http.ResponseWriter, r *http.Request
 	assessmentType := query.Get("type")
 	riskCategory := query.Get("risk_category")
 	status := query.Get("status")
-	limitStr := query.Get("limit")
-	offsetStr := query.Get("offset")
+	limit, offset := parsePagination(r)
 
-	limit := 50
-	offset := 0
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
-		}
-	}
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil {
-			offset = o
-		}
+	if !checkConsent(w, r, h.consentStore, patientNHI) {
+		return
 	}
 
 	assessments := []podiatry.Assessment{}
@@ -120,17 +123,21 @@ func (h *PodiatryHandler) ListAssessments(w http.ResponseWriter, r *http.Request
 		"offset": offset,
 		"total":  len(assessments),
 		"filters": map[string]string{
-			"patient_nhi":      patientNHI,
-			"clinician_id":     clinicianID,
-			"type":             assessmentType,
-			"risk_category":    riskCategory,
-			"status":           status,
+			"patient_nhi":   patientNHI,
+			"clinician_id":  clinicianID,
+			"type":          assessmentType,
+			"risk_category": riskCategory,
+			"status":        status,
 		},
 	})
 }
 
 // UpdateAssessment updates an assessment.
 func (h *PodiatryHandler) UpdateAssessment(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -154,14 +161,19 @@ func (h *PodiatryHandler) UpdateAssessment(w http.ResponseWriter, r *http.Reques
 
 // DeleteAssessment deletes an assessment.
 func (h *PodiatryHandler) DeleteAssessment(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+	_ = mux.Vars(r)["id"]
 	w.WriteHeader(http.StatusNoContent)
-	_ = id
 }
 
 // CreateTreatmentPlan creates a new treatment plan.
 func (h *PodiatryHandler) CreateTreatmentPlan(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	var plan podiatry.TreatmentPlan
 	if err := json.NewDecoder(r.Body).Decode(&plan); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -188,11 +200,16 @@ func (h *PodiatryHandler) GetTreatmentPlan(w http.ResponseWriter, r *http.Reques
 	vars := mux.Vars(r)
 	id := vars["id"]
 
+	// TODO: fetch from database; stub returns placeholder data.
 	plan := podiatry.TreatmentPlan{
 		ID:          id,
 		PatientNHI:  "ABC1234",
 		ClinicianID: "clin-001",
 		Status:      podiatry.PlanStatusActive,
+	}
+
+	if !checkConsent(w, r, h.consentStore, plan.PatientNHI) {
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -205,20 +222,10 @@ func (h *PodiatryHandler) ListTreatmentPlans(w http.ResponseWriter, r *http.Requ
 	patientNHI := query.Get("patient_nhi")
 	clinicianID := query.Get("clinician_id")
 	status := query.Get("status")
-	limitStr := query.Get("limit")
-	offsetStr := query.Get("offset")
+	limit, offset := parsePagination(r)
 
-	limit := 50
-	offset := 0
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
-		}
-	}
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil {
-			offset = o
-		}
+	if !checkConsent(w, r, h.consentStore, patientNHI) {
+		return
 	}
 
 	plans := []podiatry.TreatmentPlan{}
@@ -239,6 +246,10 @@ func (h *PodiatryHandler) ListTreatmentPlans(w http.ResponseWriter, r *http.Requ
 
 // UpdateTreatmentPlan updates a treatment plan.
 func (h *PodiatryHandler) UpdateTreatmentPlan(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -262,6 +273,10 @@ func (h *PodiatryHandler) UpdateTreatmentPlan(w http.ResponseWriter, r *http.Req
 
 // CreateSessionNote creates a new session note.
 func (h *PodiatryHandler) CreateSessionNote(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	var note podiatry.SessionNote
 	if err := json.NewDecoder(r.Body).Decode(&note); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -288,6 +303,7 @@ func (h *PodiatryHandler) GetSessionNote(w http.ResponseWriter, r *http.Request)
 	vars := mux.Vars(r)
 	id := vars["id"]
 
+	// TODO: fetch from database; stub returns placeholder data.
 	note := podiatry.SessionNote{
 		ID:              id,
 		PatientNHI:      "ABC1234",
@@ -302,6 +318,10 @@ func (h *PodiatryHandler) GetSessionNote(w http.ResponseWriter, r *http.Request)
 		DurationMinutes: 30,
 	}
 
+	if !checkConsent(w, r, h.consentStore, note.PatientNHI) {
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(note)
 }
@@ -311,20 +331,10 @@ func (h *PodiatryHandler) ListSessionNotes(w http.ResponseWriter, r *http.Reques
 	query := r.URL.Query()
 	patientNHI := query.Get("patient_nhi")
 	treatmentPlanID := query.Get("treatment_plan_id")
-	limitStr := query.Get("limit")
-	offsetStr := query.Get("offset")
+	limit, offset := parsePagination(r)
 
-	limit := 50
-	offset := 0
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
-		}
-	}
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil {
-			offset = o
-		}
+	if !checkConsent(w, r, h.consentStore, patientNHI) {
+		return
 	}
 
 	notes := []podiatry.SessionNote{}
@@ -336,14 +346,18 @@ func (h *PodiatryHandler) ListSessionNotes(w http.ResponseWriter, r *http.Reques
 		"offset": offset,
 		"total":  len(notes),
 		"filters": map[string]string{
-			"patient_nhi":         patientNHI,
-			"treatment_plan_id":   treatmentPlanID,
+			"patient_nhi":       patientNHI,
+			"treatment_plan_id": treatmentPlanID,
 		},
 	})
 }
 
 // UpdateSessionNote updates a session note.
 func (h *PodiatryHandler) UpdateSessionNote(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -367,6 +381,10 @@ func (h *PodiatryHandler) UpdateSessionNote(w http.ResponseWriter, r *http.Reque
 
 // CreateWoundAssessment creates a new wound assessment.
 func (h *PodiatryHandler) CreateWoundAssessment(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	var assessment podiatry.WoundAssessment
 	if err := json.NewDecoder(r.Body).Decode(&assessment); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -393,15 +411,20 @@ func (h *PodiatryHandler) GetWoundAssessment(w http.ResponseWriter, r *http.Requ
 	vars := mux.Vars(r)
 	id := vars["id"]
 
+	// TODO: fetch from database; stub returns placeholder data.
 	assessment := podiatry.WoundAssessment{
-		ID:             id,
-		PatientNHI:     "ABC1234",
-		ClinicianID:    "clin-001",
-		Date:           time.Now().UnixMilli(),
-		Location:       "plantar forefoot",
-		Side:           "right",
-		WoundType:      podiatry.WoundTypeDiabeticFoot,
-		Status:         podiatry.AssessmentCompleted,
+		ID:          id,
+		PatientNHI:  "ABC1234",
+		ClinicianID: "clin-001",
+		Date:        time.Now().UnixMilli(),
+		Location:    "plantar forefoot",
+		Side:        "right",
+		WoundType:   podiatry.WoundTypeDiabeticFoot,
+		Status:      podiatry.AssessmentCompleted,
+	}
+
+	if !checkConsent(w, r, h.consentStore, assessment.PatientNHI) {
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -414,20 +437,10 @@ func (h *PodiatryHandler) ListWoundAssessments(w http.ResponseWriter, r *http.Re
 	patientNHI := query.Get("patient_nhi")
 	clinicianID := query.Get("clinician_id")
 	woundType := query.Get("wound_type")
-	limitStr := query.Get("limit")
-	offsetStr := query.Get("offset")
+	limit, offset := parsePagination(r)
 
-	limit := 50
-	offset := 0
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
-		}
-	}
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil {
-			offset = o
-		}
+	if !checkConsent(w, r, h.consentStore, patientNHI) {
+		return
 	}
 
 	assessments := []podiatry.WoundAssessment{}
@@ -448,6 +461,10 @@ func (h *PodiatryHandler) ListWoundAssessments(w http.ResponseWriter, r *http.Re
 
 // UpdateWoundAssessment updates a wound assessment.
 func (h *PodiatryHandler) UpdateWoundAssessment(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	vars := mux.Vars(r)
 	id := vars["id"]
 

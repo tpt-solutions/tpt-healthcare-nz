@@ -11,6 +11,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
+	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 )
 
@@ -113,6 +114,7 @@ type encounterUpdateRequest struct {
 type EncountersHandler struct {
 	pool       db.Pool
 	enc        *encryption.Cipher
+	hpiClient  *hpi.Client
 	auditTrail *audit.Trail
 	logger     *slog.Logger
 }
@@ -192,6 +194,22 @@ func (h *EncountersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.PractitionerHPI == "" {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_PRACTITIONER", Message: "practitionerHpi is required"})
+		return
+	}
+
+	// HPCA requirement: validate the practitioner holds a current APC.
+	apcStatus, err := h.hpiClient.ValidateAPC(ctx, req.PractitionerHPI)
+	if err != nil {
+		h.logger.Error("HPI APC validation for encounter", slog.Any("error", err))
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "HPI_ERROR", Message: "could not validate practitioner APC"})
+		return
+	}
+	if !apcStatus.Valid {
+		writeJSON(w, http.StatusUnprocessableEntity, apiError{
+			Code:    "INVALID_APC",
+			Message: "practitioner does not have a current Annual Practising Certificate",
+			Details: apcStatus,
+		})
 		return
 	}
 

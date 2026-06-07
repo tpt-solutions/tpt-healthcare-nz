@@ -9,10 +9,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/auth"
 	"github.com/PhillipC05/tpt-healthcare/core/auth/auth0"
 	"github.com/PhillipC05/tpt-healthcare/core/auth/jwt"
+	"github.com/PhillipC05/tpt-healthcare/core/consent"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
+	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-allied-health/api"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -20,7 +23,6 @@ import (
 )
 
 func main() {
-	// Parse command line flags
 	var (
 		configFile = flag.String("config", "", "Path to config file")
 		migrate    = flag.Bool("migrate", false, "Run database migrations")
@@ -28,7 +30,6 @@ func main() {
 	)
 	flag.Parse()
 
-	// Setup logging
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
 
@@ -37,17 +38,14 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Load configuration
 	cfg := loadConfig(*configFile)
 
-	// Initialize database
 	dbPool, err := db.Connect(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to connect to database")
 	}
 	defer dbPool.Close()
 
-	// Run migrations if requested
 	if *migrate {
 		if err := db.Migrate(dbPool, "modules/tpt-allied-health/db/migrate"); err != nil {
 			log.Fatal().Err(err).Msg("Failed to run migrations")
@@ -56,23 +54,36 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Initialize auth provider
 	authProvider, err := initAuthProvider(cfg)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize auth provider")
 	}
 
-	// Create and start server
-	serverCfg := api.Config{
-		Addr:         cfg.ServerAddr,
-		ReadTimeout:  cfg.ReadTimeout,
-		WriteTimeout: cfg.WriteTimeout,
-		IdleTimeout:  cfg.IdleTimeout,
+	auditTrail := audit.New(dbPool)
+	consentStore := consent.NewStore(dbPool)
+
+	// HPI client is optional — nil disables APC validation (development only).
+	// Set HPI_BASE_URL to enable.
+	var hpiClient *hpi.Client
+	if cfg.HPIBaseURL != "" {
+		hpiClient = hpi.New(cfg.HPIBaseURL, func(ctx context.Context) (string, error) {
+			// TODO: implement SMART on FHIR client-credentials token fetch.
+			return "", nil
+		}, nil)
+	} else {
+		log.Warn().Msg("HPI_BASE_URL not set — APC validation is disabled; do not use in production")
 	}
 
-	server := api.NewServer(authProvider, serverCfg)
+	serverCfg := api.Config{
+		Addr:           cfg.ServerAddr,
+		ReadTimeout:    cfg.ReadTimeout,
+		WriteTimeout:   cfg.WriteTimeout,
+		IdleTimeout:    cfg.IdleTimeout,
+		AllowedOrigins: cfg.AllowedOrigins,
+	}
 
-	// Handle graceful shutdown
+	server := api.NewServer(dbPool, authProvider, auditTrail, hpiClient, consentStore, serverCfg)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -84,7 +95,6 @@ func main() {
 		cancel()
 	}()
 
-	// Start server
 	if err := server.Start(); err != nil {
 		log.Fatal().Err(err).Msg("Server failed")
 	}
@@ -95,19 +105,21 @@ func main() {
 
 // Config holds application configuration.
 type Config struct {
-	DatabaseURL  string
-	ServerAddr   string
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	IdleTimeout  time.Duration
+	DatabaseURL    string
+	ServerAddr     string
+	ReadTimeout    time.Duration
+	WriteTimeout   time.Duration
+	IdleTimeout    time.Duration
+	AllowedOrigins []string
 
-	// Auth configuration
-	AuthMode     string // "auth0", "jwt", "oidc"
-	Auth0Domain  string
+	AuthMode      string
+	Auth0Domain   string
 	Auth0Audience string
-	JWTSecret    string
-	JWTIssuer    string
-	OIDCIssuer   string
+	JWTSecret     string
+	JWTIssuer     string
+	OIDCIssuer    string
+
+	HPIBaseURL string
 }
 
 // loadConfig loads configuration from file and environment.
@@ -122,7 +134,6 @@ func loadConfig(configFile string) Config {
 		viper.SetConfigFile(configFile)
 	}
 
-	// Environment variable bindings
 	viper.AutomaticEnv()
 	viper.BindEnv("database_url", "DATABASE_URL")
 	viper.BindEnv("server_addr", "SERVER_ADDR")
@@ -132,8 +143,9 @@ func loadConfig(configFile string) Config {
 	viper.BindEnv("jwt_secret", "JWT_SECRET")
 	viper.BindEnv("jwt_issuer", "JWT_ISSUER")
 	viper.BindEnv("oidc_issuer", "OIDC_ISSUER")
+	viper.BindEnv("hpi_base_url", "HPI_BASE_URL")
+	viper.BindEnv("allowed_origins", "ALLOWED_ORIGINS")
 
-	// Defaults
 	viper.SetDefault("server_addr", ":8080")
 	viper.SetDefault("read_timeout", "15s")
 	viper.SetDefault("write_timeout", "15s")
@@ -150,18 +162,25 @@ func loadConfig(configFile string) Config {
 	writeTimeout, _ := time.ParseDuration(viper.GetString("write_timeout"))
 	idleTimeout, _ := time.ParseDuration(viper.GetString("idle_timeout"))
 
+	allowedOrigins := viper.GetStringSlice("allowed_origins")
+	if len(allowedOrigins) == 0 {
+		allowedOrigins = []string{"*"}
+	}
+
 	return Config{
-		DatabaseURL:  viper.GetString("database_url"),
-		ServerAddr:   viper.GetString("server_addr"),
-		ReadTimeout:  readTimeout,
-		WriteTimeout: writeTimeout,
-		IdleTimeout:  idleTimeout,
-		AuthMode:     viper.GetString("auth_mode"),
-		Auth0Domain:  viper.GetString("auth0_domain"),
-		Auth0Audience: viper.GetString("auth0_audience"),
-		JWTSecret:    viper.GetString("jwt_secret"),
-		JWTIssuer:    viper.GetString("jwt_issuer"),
-		OIDCIssuer:   viper.GetString("oidc_issuer"),
+		DatabaseURL:    viper.GetString("database_url"),
+		ServerAddr:     viper.GetString("server_addr"),
+		ReadTimeout:    readTimeout,
+		WriteTimeout:   writeTimeout,
+		IdleTimeout:    idleTimeout,
+		AllowedOrigins: allowedOrigins,
+		AuthMode:       viper.GetString("auth_mode"),
+		Auth0Domain:    viper.GetString("auth0_domain"),
+		Auth0Audience:  viper.GetString("auth0_audience"),
+		JWTSecret:      viper.GetString("jwt_secret"),
+		JWTIssuer:      viper.GetString("jwt_issuer"),
+		OIDCIssuer:     viper.GetString("oidc_issuer"),
+		HPIBaseURL:     viper.GetString("hpi_base_url"),
 	}
 }
 
@@ -184,7 +203,6 @@ func initAuthProvider(cfg Config) (auth.Provider, error) {
 		if cfg.OIDCIssuer == "" {
 			return nil, auth.ErrInvalidConfig
 		}
-		// OIDC provider would be implemented here
 		return nil, auth.ErrNotImplemented
 
 	default:

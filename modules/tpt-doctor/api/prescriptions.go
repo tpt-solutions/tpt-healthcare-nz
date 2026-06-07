@@ -42,25 +42,30 @@ type Dosage struct {
 
 // Prescription is the domain model for an e-prescription (FHIR MedicationRequest).
 type Prescription struct {
-	ID                  string             `json:"id"`
-	PatientID           string             `json:"patientId"`
-	PatientNHI          string             `json:"patientNhi"`
-	PractitionerHPI     string             `json:"practitionerHpi"`
-	EncounterID         string             `json:"encounterId,omitempty"`
-	NZULMCode           string             `json:"nzulmCode"`   // NZMT product code
-	MedicationName      string             `json:"medicationName"`
-	Status              PrescriptionStatus `json:"status"`
-	Dosage              Dosage             `json:"dosage"`
-	PHARMACSubsidised   bool               `json:"pharmácSubsidised"`
-	SubsidyCode         string             `json:"subsidyCode,omitempty"`
-	InteractionWarnings []string           `json:"interactionWarnings,omitempty"`
-	Repeats             int                `json:"repeats"`
-	RepeatsRemaining    int                `json:"repeatsRemaining"`
-	TenantID            string             `json:"tenantId"`
-	IssuedAt            time.Time          `json:"issuedAt"`
-	ExpiresAt           *time.Time         `json:"expiresAt,omitempty"`
-	CreatedAt           time.Time          `json:"createdAt"`
-	UpdatedAt           time.Time          `json:"updatedAt"`
+	ID                     string             `json:"id"`
+	PatientID              string             `json:"patientId"`
+	PatientNHI             string             `json:"patientNhi"`
+	PractitionerHPI        string             `json:"practitionerHpi"`
+	EncounterID            string             `json:"encounterId,omitempty"`
+	NZULMCode              string             `json:"nzulmCode"`   // NZMT product code
+	MedicationName         string             `json:"medicationName"`
+	Status                 PrescriptionStatus `json:"status"`
+	Dosage                 Dosage             `json:"dosage"`
+	PHARMACSubsidised      bool               `json:"pharmácSubsidised"`
+	SubsidyCode            string             `json:"subsidyCode,omitempty"`
+	InteractionWarnings    []string           `json:"interactionWarnings,omitempty"`
+	// InteractionCheckSkipped is true when the drug interaction check could not
+	// be performed (e.g. active-medication lookup failed). The prescriber must
+	// manually verify interactions before dispensing.
+	InteractionCheckSkipped bool              `json:"interactionCheckSkipped,omitempty"`
+	SubsidyCheckSkipped     bool              `json:"subsidyCheckSkipped,omitempty"`
+	Repeats                 int               `json:"repeats"`
+	RepeatsRemaining        int               `json:"repeatsRemaining"`
+	TenantID                string            `json:"tenantId"`
+	IssuedAt                time.Time         `json:"issuedAt"`
+	ExpiresAt               *time.Time        `json:"expiresAt,omitempty"`
+	CreatedAt               time.Time         `json:"createdAt"`
+	UpdatedAt               time.Time         `json:"updatedAt"`
 }
 
 // prescriptionCreateRequest is the body for POST /api/v1/prescriptions.
@@ -226,18 +231,22 @@ func (h *PrescriptionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Check PHARMAC subsidy eligibility.
+	subsidyCheckSkipped := false
 	subsidy, err := h.pharmac.CheckSubsidy(ctx, req.NZULMCode, req.PatientNHI)
 	if err != nil {
 		h.logger.Error("PHARMAC subsidy check", slog.Any("error", err))
 		// Non-fatal: proceed without subsidy rather than blocking the prescription.
 		subsidy = &pharmac.SubsidyResult{Subsidised: false}
+		subsidyCheckSkipped = true
 	}
 
 	// 4. Drug interaction check against patient's active medications.
+	interactionCheckSkipped := false
 	activeMedCodes, err := h.getActiveNZULMCodes(ctx, req.PatientID, tenantID)
 	if err != nil {
 		h.logger.Error("get active medications for interaction check", slog.Any("error", err))
-		activeMedCodes = nil // proceed without interaction check rather than blocking
+		activeMedCodes = nil
+		interactionCheckSkipped = true
 	}
 
 	var interactionWarnings []string
@@ -245,6 +254,7 @@ func (h *PrescriptionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		interactions, err := h.pharmac.CheckInteractions(ctx, req.NZULMCode, activeMedCodes)
 		if err != nil {
 			h.logger.Error("PHARMAC interaction check", slog.Any("error", err))
+			interactionCheckSkipped = true
 		} else {
 			interactionWarnings = interactions
 		}
@@ -256,6 +266,10 @@ func (h *PrescriptionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to save prescription"})
 		return
 	}
+
+	// Surface skip flags so the UI can warn the clinician to verify manually.
+	rx.InteractionCheckSkipped = interactionCheckSkipped
+	rx.SubsidyCheckSkipped = subsidyCheckSkipped
 
 	if err := h.auditTrail.Write(ctx, audit.Event{
 		Actor:        principal,

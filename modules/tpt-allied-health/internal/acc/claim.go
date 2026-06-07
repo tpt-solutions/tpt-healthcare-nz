@@ -5,6 +5,8 @@ package acc
 import (
 	"fmt"
 	"time"
+
+	"github.com/PhillipC05/tpt-healthcare/core/nhi"
 )
 
 // ClaimType categorises the type of ACC claim.
@@ -190,6 +192,9 @@ func (c *Claim) Validate() error {
 	if c.PatientNHI == "" {
 		return fmt.Errorf("acc: patient NHI is required")
 	}
+	if !nhi.ValidateNHI(c.PatientNHI) {
+		return fmt.Errorf("acc: invalid patient NHI: %s", c.PatientNHI)
+	}
 	if c.ClinicianID == "" {
 		return fmt.Errorf("acc: clinician ID is required")
 	}
@@ -218,8 +223,19 @@ func (c *Claim) Validate() error {
 }
 
 // CanAddSession checks if another session can be added to this claim.
+// Returns false if the claim is not accepted, has no remaining approved sessions,
+// or has passed its expiry date.
 func (c *Claim) CanAddSession() bool {
-	return c.Status == ClaimStatusAccepted && c.UsedSessions < c.ApprovedSessions
+	if c.Status != ClaimStatusAccepted {
+		return false
+	}
+	if c.UsedSessions >= c.ApprovedSessions {
+		return false
+	}
+	if c.ExpiryDate > 0 && time.Now().UnixMilli() > c.ExpiryDate {
+		return false
+	}
+	return true
 }
 
 // AddSession increments the used sessions count.
@@ -248,6 +264,9 @@ func (s *TreatmentSession) Validate() error {
 	if s.PatientNHI == "" {
 		return fmt.Errorf("acc: patient NHI is required")
 	}
+	if !nhi.ValidateNHI(s.PatientNHI) {
+		return fmt.Errorf("acc: invalid patient NHI: %s", s.PatientNHI)
+	}
 	if s.ClinicianID == "" {
 		return fmt.Errorf("acc: clinician ID is required")
 	}
@@ -256,6 +275,9 @@ func (s *TreatmentSession) Validate() error {
 	}
 	if s.ChargeCode == "" {
 		return fmt.Errorf("acc: charge code is required")
+	}
+	if GetChargeCodeByCode(s.ChargeCode) == nil {
+		return fmt.Errorf("acc: unknown charge code: %s", s.ChargeCode)
 	}
 	if s.DurationMinutes <= 0 {
 		return fmt.Errorf("acc: duration must be positive")
@@ -284,6 +306,9 @@ func (r *ReviewReport) Validate() error {
 	}
 	if r.PatientNHI == "" {
 		return fmt.Errorf("acc: patient NHI is required")
+	}
+	if !nhi.ValidateNHI(r.PatientNHI) {
+		return fmt.Errorf("acc: invalid patient NHI: %s", r.PatientNHI)
 	}
 	if r.ClinicianID == "" {
 		return fmt.Errorf("acc: clinician ID is required")

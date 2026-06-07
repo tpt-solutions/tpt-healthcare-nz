@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/PhillipC05/tpt-healthcare/core/acc"
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/auth"
 	"github.com/PhillipC05/tpt-healthcare/core/auth/auth0"
@@ -23,30 +25,38 @@ import (
 
 // Config holds all configuration for the tpt-doctor server.
 type Config struct {
-	Host          string
-	Port          int
-	DatabaseURL   string
-	RedisURL      string
-	EncryptionKey string
-	Auth0Domain   string
-	Auth0Audience string
-	TenantHeader  string
-	Logger        *slog.Logger
+	Host                string
+	Port                int
+	DatabaseURL         string
+	RedisURL            string
+	EncryptionKey       string
+	Auth0Domain         string
+	Auth0Audience       string
+	TenantHeader        string
+	// ACCBaseURL is the root URL for the ACC FHIR endpoint. Leave empty to
+	// disable ACC integration (claim submissions will return 503).
+	ACCBaseURL          string
+	// TenantHPIFacilityID is the HPI facility OrgID for this practice,
+	// required for NES enrolment transfers. Leave empty to disable transfers.
+	TenantHPIFacilityID string
+	Logger              *slog.Logger
 }
 
 // Server is the tpt-doctor HTTP server.
 type Server struct {
-	cfg        Config
-	mux        *http.ServeMux
-	pool       db.Pool
-	enc        *encryption.Cipher
-	auth       auth.Provider
-	nhiClient  *nhi.Client
-	nesClient  *nes.Client
-	hpiClient  *hpi.Client
-	pharmac    *pharmac.Client
-	auditTrail *audit.Trail
-	logger     *slog.Logger
+	cfg                 Config
+	mux                 *http.ServeMux
+	pool                db.Pool
+	enc                 *encryption.Cipher
+	auth                auth.Provider
+	nhiClient           *nhi.Client
+	nesClient           *nes.Client
+	hpiClient           *hpi.Client
+	pharmac             *pharmac.Client
+	accClient           *acc.Client
+	auditTrail          *audit.Trail
+	tenantHPIFacilityID string
+	logger              *slog.Logger
 }
 
 // NewServer constructs and configures a Server, wiring all dependencies.
@@ -79,17 +89,24 @@ func NewServer(cfg Config) (*Server, error) {
 	pharmClient := pharmac.NewClient(cfg.Logger)
 	trail := audit.NewTrail(pool)
 
+	var accClient *acc.Client
+	if cfg.ACCBaseURL != "" {
+		accClient = acc.NewClient(cfg.ACCBaseURL, cfg.Logger)
+	}
+
 	s := &Server{
-		cfg:        cfg,
-		pool:       pool,
-		enc:        enc,
-		auth:       authProvider,
-		nhiClient:  nhiClient,
-		nesClient:  nesClient,
-		hpiClient:  hpiClient,
-		pharmac:    pharmClient,
-		auditTrail: trail,
-		logger:     cfg.Logger,
+		cfg:                 cfg,
+		pool:                pool,
+		enc:                 enc,
+		auth:                authProvider,
+		nhiClient:           nhiClient,
+		nesClient:           nesClient,
+		hpiClient:           hpiClient,
+		pharmac:             pharmClient,
+		accClient:           accClient,
+		auditTrail:          trail,
+		tenantHPIFacilityID: cfg.TenantHPIFacilityID,
+		logger:              cfg.Logger,
 	}
 
 	s.mux = s.buildRoutes()
@@ -104,12 +121,13 @@ func (s *Server) Handler() http.Handler {
 // buildRoutes registers all routes and applies the middleware chain.
 func (s *Server) buildRoutes() *http.ServeMux {
 	patients := &PatientsHandler{
-		pool:       s.pool,
-		enc:        s.enc,
-		nhiClient:  s.nhiClient,
-		nesClient:  s.nesClient,
-		auditTrail: s.auditTrail,
-		logger:     s.logger,
+		pool:                s.pool,
+		enc:                 s.enc,
+		nhiClient:           s.nhiClient,
+		nesClient:           s.nesClient,
+		auditTrail:          s.auditTrail,
+		tenantHPIFacilityID: s.tenantHPIFacilityID,
+		logger:              s.logger,
 	}
 	appointments := &AppointmentsHandler{
 		pool:       s.pool,
@@ -121,6 +139,7 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	encounters := &EncountersHandler{
 		pool:       s.pool,
 		enc:        s.enc,
+		hpiClient:  s.hpiClient,
 		auditTrail: s.auditTrail,
 		logger:     s.logger,
 	}
@@ -135,35 +154,41 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	claims := &ClaimsHandler{
 		pool:       s.pool,
 		enc:        s.enc,
+		accClient:  s.accClient,
 		auditTrail: s.auditTrail,
 		logger:     s.logger,
 	}
 	referrals := &ReferralsHandler{
 		pool:       s.pool,
 		enc:        s.enc,
+		hpiClient:  s.hpiClient,
 		auditTrail: s.auditTrail,
 		logger:     s.logger,
 	}
 	labs := &LabsHandler{
 		pool:       s.pool,
 		enc:        s.enc,
+		hpiClient:  s.hpiClient,
 		auditTrail: s.auditTrail,
 		logger:     s.logger,
 	}
-	immunisations := &ImmunsationsHandler{
+	immunisations := &ImmunisationsHandler{
 		pool:       s.pool,
 		enc:        s.enc,
+		hpiClient:  s.hpiClient,
 		auditTrail: s.auditTrail,
 		logger:     s.logger,
 	}
 	certificates := &CertificatesHandler{
 		pool:       s.pool,
 		enc:        s.enc,
+		hpiClient:  s.hpiClient,
 		auditTrail: s.auditTrail,
 		logger:     s.logger,
 	}
 	pho := &PHOHandler{
 		pool:       s.pool,
+		enc:        s.enc,
 		auditTrail: s.auditTrail,
 		logger:     s.logger,
 	}
@@ -331,19 +356,18 @@ type apiError struct {
 }
 
 // writeJSON serialises v as JSON and writes it to w with the given status code.
+// Encoding errors after WriteHeader cannot be communicated to the client and are silently dropped.
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(v); err != nil {
-		// Encoding errors after WriteHeader cannot change the status; log only.
-		slog.Error("writeJSON encode error", slog.Any("error", err))
-	}
+	_ = json.NewEncoder(w).Encode(v)
 }
 
 // decodeJSON reads and decodes a JSON request body into v.
+// Reading is capped at 1 MB to prevent memory exhaustion from large payloads.
 func decodeJSON(r *http.Request, v any) error {
 	defer r.Body.Close()
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(v); err != nil {
 		return fmt.Errorf("decode request body: %w", err)
 	}
 	return nil

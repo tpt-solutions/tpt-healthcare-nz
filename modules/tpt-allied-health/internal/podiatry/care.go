@@ -5,6 +5,8 @@ package podiatry
 import (
 	"fmt"
 	"time"
+
+	"github.com/PhillipC05/tpt-healthcare/core/nhi"
 )
 
 // AssessmentType categorises the type of podiatry assessment.
@@ -364,6 +366,9 @@ func (a *Assessment) Validate() error {
 	if a.PatientNHI == "" {
 		return fmt.Errorf("podiatry: patient NHI is required")
 	}
+	if !nhi.ValidateNHI(a.PatientNHI) {
+		return fmt.Errorf("podiatry: invalid patient NHI: %s", a.PatientNHI)
+	}
 	if a.ClinicianID == "" {
 		return fmt.Errorf("podiatry: clinician ID is required")
 	}
@@ -412,6 +417,9 @@ func (p *TreatmentPlan) Validate() error {
 	if p.PatientNHI == "" {
 		return fmt.Errorf("podiatry: patient NHI is required")
 	}
+	if !nhi.ValidateNHI(p.PatientNHI) {
+		return fmt.Errorf("podiatry: invalid patient NHI: %s", p.PatientNHI)
+	}
 	if p.ClinicianID == "" {
 		return fmt.Errorf("podiatry: clinician ID is required")
 	}
@@ -457,6 +465,9 @@ func (s *SessionNote) Validate() error {
 	if s.PatientNHI == "" {
 		return fmt.Errorf("podiatry: patient NHI is required")
 	}
+	if !nhi.ValidateNHI(s.PatientNHI) {
+		return fmt.Errorf("podiatry: invalid patient NHI: %s", s.PatientNHI)
+	}
 	if s.ClinicianID == "" {
 		return fmt.Errorf("podiatry: clinician ID is required")
 	}
@@ -480,6 +491,9 @@ func NewWoundAssessment() *WoundAssessment {
 func (w *WoundAssessment) Validate() error {
 	if w.PatientNHI == "" {
 		return fmt.Errorf("podiatry: patient NHI is required")
+	}
+	if !nhi.ValidateNHI(w.PatientNHI) {
+		return fmt.Errorf("podiatry: invalid patient NHI: %s", w.PatientNHI)
 	}
 	if w.ClinicianID == "" {
 		return fmt.Errorf("podiatry: clinician ID is required")

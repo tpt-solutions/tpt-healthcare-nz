@@ -11,6 +11,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
+	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 )
 
@@ -68,6 +69,7 @@ type labResultRequest struct {
 type LabsHandler struct {
 	pool       db.Pool
 	enc        *encryption.Cipher
+	hpiClient  *hpi.Client
 	auditTrail *audit.Trail
 	logger     *slog.Logger
 }
@@ -141,6 +143,22 @@ func (h *LabsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// HPCA requirement: validate the ordering practitioner holds a current APC.
+	apcStatus, err := h.hpiClient.ValidateAPC(ctx, req.OrderingHPI)
+	if err != nil {
+		h.logger.Error("HPI APC validation for lab order", slog.Any("error", err))
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "HPI_ERROR", Message: "could not validate practitioner APC"})
+		return
+	}
+	if !apcStatus.Valid {
+		writeJSON(w, http.StatusUnprocessableEntity, apiError{
+			Code:    "INVALID_APC",
+			Message: "ordering practitioner does not have a current Annual Practising Certificate",
+			Details: apcStatus,
+		})
+		return
+	}
+
 	order, err := h.insertOrder(ctx, req, tenantID)
 	if err != nil {
 		h.logger.Error("insert lab order", slog.Any("error", err))
@@ -194,13 +212,14 @@ func (h *LabsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Decrypt the FHIR report blob if it exists.
-	if len(order.FHIRReport) > 0 && h.enc != nil {
+	if len(order.FHIRReport) > 0 {
 		plain, err := h.enc.Decrypt([]byte(order.FHIRReport))
 		if err != nil {
 			h.logger.Error("decrypt FHIR report", slog.Any("error", err))
-		} else {
-			order.FHIRReport = string(plain)
+			writeJSON(w, http.StatusInternalServerError, apiError{Code: "DECRYPT_ERROR", Message: "failed to decrypt lab result"})
+			return
 		}
+		order.FHIRReport = string(plain)
 	}
 
 	if err := h.auditTrail.Write(ctx, audit.Event{
@@ -249,17 +268,11 @@ func (h *LabsHandler) Result(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Encrypt the DiagnosticReport JSON before persisting.
-	var encReport []byte
-	if h.enc != nil {
-		var err error
-		encReport, err = h.enc.Encrypt([]byte(req.FHIRReport))
-		if err != nil {
-			h.logger.Error("encrypt FHIR report", slog.Any("error", err))
-			writeJSON(w, http.StatusInternalServerError, apiError{Code: "ENCRYPT_ERROR", Message: "failed to encrypt lab result"})
-			return
-		}
-	} else {
-		encReport = []byte(req.FHIRReport)
+	encReport, err := h.enc.Encrypt([]byte(req.FHIRReport))
+	if err != nil {
+		h.logger.Error("encrypt FHIR report", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "ENCRYPT_ERROR", Message: "failed to encrypt lab result"})
+		return
 	}
 
 	now := time.Now().UTC()

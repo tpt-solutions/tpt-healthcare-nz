@@ -21,4 +21,11 @@ use (
 	./modules/tpt-nutrition
 	./modules/tpt-vision
 	./modules/tpt-allied-health
+	./modules/tpt-hospital
+	./modules/tpt-oncology
+	./modules/tpt-renal
+	./modules/tpt-maternity
+	./modules/tpt-cardiology
+	./modules/tpt-rehabilitation
+	./modules/tpt-paediatrics
 )

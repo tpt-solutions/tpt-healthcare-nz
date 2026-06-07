@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"regexp"
 	"time"
 
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
@@ -18,20 +17,15 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/nhi"
 )
 
-// nhiOldFormat matches the legacy 7-character NHI format: AAA9999.
-var nhiOldFormat = regexp.MustCompile(`^[A-Z]{3}[0-9]{4}$`)
-
-// nhiNewFormat matches the Luhn-based NHI format: AAA99AA.
-var nhiNewFormat = regexp.MustCompile(`^[A-Z]{3}[0-9]{2}[A-Z]{2}$`)
-
 // PatientsHandler handles all /api/v1/patients routes.
 type PatientsHandler struct {
-	pool       db.Pool
-	enc        *encryption.Cipher
-	nhiClient  *nhi.Client
-	nesClient  *nes.Client
-	auditTrail *audit.Trail
-	logger     *slog.Logger
+	pool                db.Pool
+	enc                 *encryption.Cipher
+	nhiClient           *nhi.Client
+	nesClient           *nes.Client
+	auditTrail          *audit.Trail
+	tenantHPIFacilityID string // HPI facility OrgID for this practice (needed for NES transfers)
+	logger              *slog.Logger
 }
 
 // patientRecord is the internal representation stored in the database.
@@ -67,11 +61,16 @@ type patientUpdateRequest struct {
 	Patient *r5.Patient `json:"patient"`
 }
 
-// enrolmentRequest is the request body for POST /api/v1/patients/{id}/enrolment.
+// enrolmentRequest is the request body for POST and PUT /api/v1/patients/{id}/enrolment.
 type enrolmentRequest struct {
+	// PractitionerHPI is the individual practitioner's HPI Common Person Number (CPN).
 	PractitionerHPI string `json:"practitionerHpi"`
-	FundingCode     string `json:"fundingCode"`
-	StartDate       string `json:"startDate"` // YYYY-MM-DD
+	// PracticeHPI is the HPI facility OrgID of the enrolling practice.
+	// Required for UpdateEnrolment; ignored by CreateEnrolment which derives the
+	// practice from the authenticated tenant.
+	PracticeHPI string `json:"practiceHpi"`
+	FundingCode string `json:"fundingCode"`
+	StartDate   string `json:"startDate"` // YYYY-MM-DD
 }
 
 // List handles GET /api/v1/patients.
@@ -367,6 +366,28 @@ func (h *PatientsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// checkDisclosureConsent returns true when an active disclosure consent exists
+// for patientNHI within tenantID, per HIPC Rule 11.
+func (h *PatientsHandler) checkDisclosureConsent(ctx context.Context, tenantID, patientNHI string) (bool, error) {
+	var granted bool
+	err := h.pool.QueryRow(ctx,
+		`SELECT EXISTS (
+		     SELECT 1 FROM consents
+		     WHERE tenant_id   = @tenant_id
+		       AND patient_nhi = @patient_nhi
+		       AND consent_type = 'disclosure'
+		       AND granted = TRUE
+		       AND revoked_at IS NULL
+		       AND (expires_at IS NULL OR expires_at > NOW())
+		 )`,
+		db.NamedArgs{"tenant_id": tenantID, "patient_nhi": patientNHI},
+	).Scan(&granted)
+	if err != nil {
+		return false, fmt.Errorf("check disclosure consent: %w", err)
+	}
+	return granted, nil
+}
+
 // GetEnrolment handles GET /api/v1/patients/{id}/enrolment.
 // Returns the patient's NES enrolment status for this practice.
 func (h *PatientsHandler) GetEnrolment(w http.ResponseWriter, r *http.Request) {
@@ -403,6 +424,18 @@ func (h *PatientsHandler) GetEnrolment(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Error("decrypt NHI", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DECRYPT_ERROR", Message: "failed to decrypt NHI"})
+		return
+	}
+
+	// HIPC Rule 11: verify disclosure consent before returning enrolment data.
+	hasConsent, err := h.checkDisclosureConsent(ctx, tenantID, string(nhiPlain))
+	if err != nil {
+		h.logger.Error("check disclosure consent", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "CONSENT_ERROR", Message: "failed to verify disclosure consent"})
+		return
+	}
+	if !hasConsent {
+		writeJSON(w, http.StatusForbidden, apiError{Code: "CONSENT_REQUIRED", Message: "patient has not consented to disclosure of enrolment information"})
 		return
 	}
 
@@ -476,6 +509,18 @@ func (h *PatientsHandler) CreateEnrolment(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		h.logger.Error("decrypt NHI for enrolment", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DECRYPT_ERROR", Message: "failed to decrypt NHI"})
+		return
+	}
+
+	// HIPC Rule 11: verify disclosure consent before submitting enrolment data.
+	hasConsent, err := h.checkDisclosureConsent(ctx, tenantID, string(nhiPlain))
+	if err != nil {
+		h.logger.Error("check disclosure consent for enrolment create", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "CONSENT_ERROR", Message: "failed to verify disclosure consent"})
+		return
+	}
+	if !hasConsent {
+		writeJSON(w, http.StatusForbidden, apiError{Code: "CONSENT_REQUIRED", Message: "patient has not consented to disclosure of enrolment information"})
 		return
 	}
 
@@ -553,9 +598,27 @@ func (h *PatientsHandler) UpdateEnrolment(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// HIPC Rule 11: verify disclosure consent before transmitting enrolment data.
+	hasConsent, err := h.checkDisclosureConsent(ctx, tenantID, string(nhiPlain))
+	if err != nil {
+		h.logger.Error("check disclosure consent for enrolment update", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "CONSENT_ERROR", Message: "failed to verify disclosure consent"})
+		return
+	}
+	if !hasConsent {
+		writeJSON(w, http.StatusForbidden, apiError{Code: "CONSENT_REQUIRED", Message: "patient has not consented to disclosure of enrolment information"})
+		return
+	}
+
+	if req.PracticeHPI == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_PRACTICE_HPI", Message: "practiceHpi (HPI facility OrgID) is required for enrolment update"})
+		return
+	}
+
+	// PracticeID is the HPI facility OrgID (e.g. "G00001-A"), not the individual's CPN.
 	enrolment, err := h.nesClient.Update(ctx, nes.Enrolment{
 		NHI:        string(nhiPlain),
-		PracticeID: req.PractitionerHPI,
+		PracticeID: req.PracticeHPI,
 		Status:     nes.Active,
 	})
 	if err != nil {
@@ -639,9 +702,29 @@ func (h *PatientsHandler) TransferEnrolment(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// NES Transfer takes (nhi, fromPracticeID, toPracticeID); fromPracticeID is the
-	// current tenant's HPI facility ID, sourced from the tenant store in production.
-	if err := h.nesClient.Transfer(ctx, string(nhiPlain), "", req.ToPractitionerHPI); err != nil {
+	// HIPC Rule 11: verify disclosure consent before transferring enrolment data.
+	hasConsent, err := h.checkDisclosureConsent(ctx, tenantID, string(nhiPlain))
+	if err != nil {
+		h.logger.Error("check disclosure consent for enrolment transfer", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "CONSENT_ERROR", Message: "failed to verify disclosure consent"})
+		return
+	}
+	if !hasConsent {
+		writeJSON(w, http.StatusForbidden, apiError{Code: "CONSENT_REQUIRED", Message: "patient has not consented to disclosure of enrolment information"})
+		return
+	}
+
+	// The fromPracticeID is this tenant's HPI facility OrgID, configured at server startup.
+	// An empty facility ID means this server is not configured for NES transfers.
+	if h.tenantHPIFacilityID == "" {
+		writeJSON(w, http.StatusServiceUnavailable, apiError{
+			Code:    "TRANSFER_UNAVAILABLE",
+			Message: "NES transfer is not available: tenant HPI facility ID is not configured",
+		})
+		return
+	}
+
+	if err := h.nesClient.Transfer(ctx, string(nhiPlain), h.tenantHPIFacilityID, req.ToPractitionerHPI); err != nil {
 		h.logger.Error("NES transfer enrolment", slog.Any("error", err))
 		writeJSON(w, http.StatusBadGateway, apiError{Code: "NES_TRANSFER_ERROR", Message: "failed to transfer enrolment via NES"})
 		return
@@ -666,15 +749,13 @@ func (h *PatientsHandler) TransferEnrolment(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// validateNHIFormat checks that the given NHI matches either the old or new NZ format.
+// validateNHIFormat validates the NHI using the checksum-aware validator in core/nhi/.
+// This covers both structural format and the Luhn check digit for old-format NHIs.
 func validateNHIFormat(nhiValue string) error {
-	if nhiOldFormat.MatchString(nhiValue) {
-		return nil
+	if !nhi.ValidateNHI(nhiValue) {
+		return fmt.Errorf("invalid NHI %q: must be a valid NHI number (AAA9999 or AAA99AA format with correct check digit)", nhiValue)
 	}
-	if nhiNewFormat.MatchString(nhiValue) {
-		return nil
-	}
-	return fmt.Errorf("invalid NHI format %q: must match AAA9999 (old) or AAA99AA (new Luhn-based)", nhiValue)
+	return nil
 }
 
 // errNotFound is a sentinel for missing records.
@@ -809,7 +890,7 @@ func (h *PatientsHandler) updatePatientFHIR(ctx context.Context, id string, pati
 }
 
 // recordToResponse decrypts a patientRecord and returns an API-safe patientResponse.
-func (h *PatientsHandler) recordToResponse(ctx context.Context, rec patientRecord) (patientResponse, error) {
+func (h *PatientsHandler) recordToResponse(_ context.Context, rec patientRecord) (patientResponse, error) {
 	nhiPlain, err := h.enc.Decrypt(rec.NHIEncrypted)
 	if err != nil {
 		return patientResponse{}, fmt.Errorf("decrypt NHI: %w", err)

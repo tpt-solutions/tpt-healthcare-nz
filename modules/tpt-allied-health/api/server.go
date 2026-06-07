@@ -9,54 +9,71 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/auth"
+	"github.com/PhillipC05/tpt-healthcare/core/consent"
+	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 	"github.com/gorilla/mux"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
 )
 
 // Server holds the HTTP server and dependencies.
 type Server struct {
-	router  *mux.Router
-	server  *http.Server
-	auth    auth.Provider
-	config  Config
+	router       *mux.Router
+	server       *http.Server
+	auth         auth.Provider
+	config       Config
+	pool         *pgxpool.Pool
+	auditTrail   *audit.Trail
+	hpiClient    *hpi.Client
+	consentStore *consent.Store
 }
 
 // Config holds server configuration.
 type Config struct {
-	Addr         string
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	IdleTimeout  time.Duration
+	Addr           string
+	ReadTimeout    time.Duration
+	WriteTimeout   time.Duration
+	IdleTimeout    time.Duration
+	AllowedOrigins []string
 }
 
 // DefaultConfig returns default server configuration.
 func DefaultConfig() Config {
 	return Config{
-		Addr:         ":8080",
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:           ":8080",
+		ReadTimeout:    15 * time.Second,
+		WriteTimeout:   15 * time.Second,
+		IdleTimeout:    60 * time.Second,
+		AllowedOrigins: []string{"*"},
 	}
 }
 
 // NewServer creates a new HTTP server.
-func NewServer(authProvider auth.Provider, cfg Config) *Server {
+func NewServer(pool *pgxpool.Pool, authProvider auth.Provider, auditTrail *audit.Trail, hpiClient *hpi.Client, consentStore *consent.Store, cfg Config) *Server {
 	if cfg.Addr == "" {
 		cfg = DefaultConfig()
+	}
+	if len(cfg.AllowedOrigins) == 0 {
+		cfg.AllowedOrigins = []string{"*"}
 	}
 
 	router := mux.NewRouter()
 
 	s := &Server{
-		router: router,
-		auth:   authProvider,
-		config: cfg,
+		router:       router,
+		auth:         authProvider,
+		config:       cfg,
+		pool:         pool,
+		auditTrail:   auditTrail,
+		hpiClient:    hpiClient,
+		consentStore: consentStore,
 	}
 
-	s.setupRoutes()
 	s.setupMiddleware()
+	s.setupRoutes()
 
 	s.server = &http.Server{
 		Addr:         cfg.Addr,
@@ -69,58 +86,40 @@ func NewServer(authProvider auth.Provider, cfg Config) *Server {
 	return s
 }
 
-// setupMiddleware configures global middleware.
+// setupMiddleware configures global middleware (applied to all routes including health checks).
 func (s *Server) setupMiddleware() {
-	// Request ID middleware
-	s.router.Use(middleware.RequestID)
-
-	// Logging middleware
-	s.router.Use(middleware.Logging)
-
-	// Recovery middleware
-	s.router.Use(middleware.Recovery)
-
-	// CORS middleware
-	s.router.Use(middleware.CORS)
-
-	// Tenant extraction middleware
-	s.router.Use(middleware.TenantExtractor)
-
-	// Auth middleware (applied to all routes except health)
-	s.router.Use(middleware.Auth(s.auth))
-
-	// Audit middleware
-	s.router.Use(middleware.Audit)
+	s.router.Use(middleware.RecoveryMiddleware())
+	s.router.Use(middleware.CORS(s.config.AllowedOrigins))
+	s.router.Use(middleware.RateLimit(100, 200))
 }
 
 // setupRoutes registers all API routes.
 func (s *Server) setupRoutes() {
-	// Health check endpoint (no auth required)
+	// Public routes — no auth, no tenant extraction, no audit.
 	s.router.HandleFunc("/health", s.healthCheck).Methods("GET")
 	s.router.HandleFunc("/ready", s.readinessCheck).Methods("GET")
 
-	// API v1 routes
-	api := s.router.PathPrefix("/api/v1").Subrouter()
+	// Protected API routes. A subrouter with no path prefix is used purely
+	// to scope middleware — auth, tenant extraction, and audit apply only here.
+	protected := s.router.NewRoute().Subrouter()
+	protected.Use(middleware.TenantExtraction())
+	protected.Use(auth.RequireAuth(s.auth))
+	protected.Use(middleware.AuditWrap(s.auditTrail))
 
-	// Physiotherapy routes
-	physioHandler := NewPhysioHandler()
-	physioHandler.RegisterRoutes(api)
+	physioHandler := NewPhysioHandler(s.hpiClient, s.consentStore)
+	physioHandler.RegisterRoutes(protected)
 
-	// Occupational Therapy routes
-	otHandler := NewOTHandler()
-	otHandler.RegisterRoutes(api)
+	otHandler := NewOTHandler(s.hpiClient, s.consentStore)
+	otHandler.RegisterRoutes(protected)
 
-	// Speech-Language Therapy routes
-	speechHandler := NewSpeechHandler()
-	speechHandler.RegisterRoutes(api)
+	speechHandler := NewSpeechHandler(s.hpiClient, s.consentStore)
+	speechHandler.RegisterRoutes(protected)
 
-	// Podiatry routes
-	podiatryHandler := NewPodiatryHandler()
-	podiatryHandler.RegisterRoutes(api)
+	podiatryHandler := NewPodiatryHandler(s.hpiClient, s.consentStore)
+	podiatryHandler.RegisterRoutes(protected)
 
-	// ACC routes (shared across all professions)
-	accHandler := NewACCHandler()
-	accHandler.RegisterRoutes(api)
+	accHandler := NewACCHandler(s.hpiClient, s.consentStore, s.pool)
+	accHandler.RegisterRoutes(protected)
 }
 
 // healthCheck handles GET /health.
@@ -132,32 +131,34 @@ func (s *Server) healthCheck(w http.ResponseWriter, r *http.Request) {
 
 // readinessCheck handles GET /ready.
 func (s *Server) readinessCheck(w http.ResponseWriter, r *http.Request) {
-	// In real implementation, check database connectivity, etc.
 	w.Header().Set("Content-Type", "application/json")
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+	if err := s.pool.Ping(ctx); err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"status":"not ready","service":"tpt-allied-health","error":"database unavailable"}`))
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ready","service":"tpt-allied-health"}`))
 }
 
-// Start starts the HTTP server.
+// Start starts the HTTP server with graceful shutdown.
 func (s *Server) Start() error {
 	log.Info().Str("addr", s.config.Addr).Msg("Starting tpt-allied-health server")
 
-	// Channel to listen for interrupt signal
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-	// Run server in a goroutine
 	go func() {
 		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal().Err(err).Msg("Server failed to start")
 		}
 	}()
 
-	// Wait for interrupt signal
 	<-stop
 	log.Info().Msg("Shutting down server...")
 
-	// Graceful shutdown with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

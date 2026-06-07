@@ -256,8 +256,8 @@ func (h *ClaimsHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 // Submit handles POST /api/v1/claims/{id}/submit.
-// Submits the claim to ACC via core/acc.Lodge. On success, the claim status
-// transitions to "submitted" and the ACC claim number is stored.
+// Submits the claim to ACC via core/acc.Lodge. An atomic DB status transition
+// is performed before calling the external API to prevent concurrent double-submission.
 func (h *ClaimsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID, ok := middleware.TenantFromContext(ctx)
@@ -277,60 +277,62 @@ func (h *ClaimsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claim, err := h.getClaimByID(ctx, id, tenantID)
-	if err != nil {
-		if errors.Is(err, errNotFound) {
-			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "claim not found"})
-			return
-		}
-		h.logger.Error("get claim for submit", slog.Any("error", err))
-		writeJSON(w, http.StatusInternalServerError, apiError{Code: "GET_ERROR", Message: "failed to retrieve claim"})
+	if h.accClient == nil {
+		writeJSON(w, http.StatusServiceUnavailable, apiError{Code: "ACC_UNAVAILABLE", Message: "ACC integration is not configured on this server"})
 		return
 	}
 
-	if claim.Status == ClaimStatusSubmitted || claim.Status == ClaimStatusAccepted || claim.Status == ClaimStatusPaid {
-		writeJSON(w, http.StatusConflict, apiError{
-			Code:    "ALREADY_SUBMITTED",
-			Message: fmt.Sprintf("claim is already in %s status", claim.Status),
-		})
-		return
-	}
-	if claim.Status == ClaimStatusCancelled {
-		writeJSON(w, http.StatusConflict, apiError{Code: "CANCELLED", Message: "cannot submit a cancelled claim"})
+	// Atomically transition the claim from draft → submitted before touching ACC.
+	// This prevents concurrent retries from lodging the same claim twice.
+	// If the claim is not in draft status the UPDATE returns no rows → errNotFound.
+	reserved, err := h.reserveClaimForSubmit(ctx, id, tenantID)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			// Claim either does not exist, is already submitted, or is cancelled.
+			writeJSON(w, http.StatusConflict, apiError{
+				Code:    "NOT_SUBMITTABLE",
+				Message: "claim is not in draft status or does not exist",
+			})
+			return
+		}
+		h.logger.Error("reserve claim for submit", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "RESERVE_ERROR", Message: "failed to reserve claim for submission"})
 		return
 	}
 
 	// Build the ACC lodge request.
 	lodgeReq := acc.LodgeRequest{
-		FormType:          string(claim.FormType),
-		PatientNHI:        claim.PatientNHI,
-		PractitionerHPI:   claim.PractitionerHPI,
-		DiagnosisCodes:    claim.DiagnosisCodes,
-		InjuryDate:        claim.InjuryDate,
-		InjuryDescription: claim.InjuryDescription,
+		FormType:          string(reserved.FormType),
+		PatientNHI:        reserved.PatientNHI,
+		PractitionerHPI:   reserved.PractitionerHPI,
+		DiagnosisCodes:    reserved.DiagnosisCodes,
+		InjuryDate:        reserved.InjuryDate,
+		InjuryDescription: reserved.InjuryDescription,
 	}
 
 	lodgeResp, err := h.accClient.Lodge(ctx, lodgeReq)
 	if err != nil {
 		h.logger.Error("ACC lodge claim", slog.Any("error", err), slog.String("claim_id", id))
-		writeJSON(w, http.StatusBadGateway, apiError{Code: "ACC_LODGE_ERROR", Message: "ACC submission failed: " + err.Error()})
+		// Roll back the reservation so the claim can be retried.
+		if rbErr := h.resetClaimToDraft(ctx, id, tenantID); rbErr != nil {
+			h.logger.Error("rollback claim to draft after lodge failure", slog.Any("error", rbErr))
+		}
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "ACC_LODGE_ERROR", Message: "ACC submission failed"})
 		return
 	}
 
 	now := time.Now().UTC()
-	claim.Status = ClaimStatusSubmitted
-	claim.ACCClaimNumber = lodgeResp.ClaimNumber
-	claim.FormNumber = lodgeResp.FormNumber
-	claim.SubmittedAt = &now
+	reserved.ACCClaimNumber = lodgeResp.ClaimNumber
+	reserved.SubmittedAt = &now
 
-	submitted, err := h.updateClaimAfterSubmit(ctx, claim)
+	submitted, err := h.updateClaimAfterSubmit(ctx, reserved)
 	if err != nil {
 		h.logger.Error("update claim after submit", slog.Any("error", err))
-		// Return partial success — claim was lodged with ACC but local DB update failed.
+		// Claim was lodged with ACC but the local DB update failed.
+		// Do NOT roll back the ACC submission — the claim number is the source of truth.
 		writeJSON(w, http.StatusAccepted, map[string]any{
 			"message":        "claim submitted to ACC but local record update failed — contact support",
 			"accClaimNumber": lodgeResp.ClaimNumber,
-			"formNumber":     lodgeResp.FormNumber,
 		})
 		return
 	}
@@ -342,7 +344,7 @@ func (h *ClaimsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		ResourceID:   id,
 		TenantID:     tenantID,
 		Metadata: map[string]string{
-			"action":          "submit",
+			"action":           "submit",
 			"acc_claim_number": lodgeResp.ClaimNumber,
 		},
 	}); err != nil {
@@ -390,6 +392,17 @@ func (h *ClaimsHandler) Status(w http.ResponseWriter, r *http.Request) {
 			ClaimID:       claim.ID,
 			Status:        claim.Status,
 			LastCheckedAt: time.Now().UTC(),
+		})
+		return
+	}
+
+	if h.accClient == nil {
+		// Return the locally-cached status when ACC is not configured.
+		writeJSON(w, http.StatusOK, claimStatusResponse{
+			ClaimID:        claim.ID,
+			Status:         claim.Status,
+			ACCClaimNumber: claim.ACCClaimNumber,
+			LastCheckedAt:  time.Now().UTC(),
 		})
 		return
 	}
@@ -592,13 +605,54 @@ func (h *ClaimsHandler) insertClaim(ctx context.Context, req claimCreateRequest,
 	return c, nil
 }
 
+// reserveClaimForSubmit atomically transitions a claim from draft → submitted.
+// Returns the reserved claim, or errNotFound if the claim is not in draft status.
+// This prevents concurrent requests from lodging the same claim twice (TOCTOU prevention).
+func (h *ClaimsHandler) reserveClaimForSubmit(ctx context.Context, id, tenantID string) (Claim, error) {
+	row := h.pool.QueryRow(ctx,
+		`UPDATE acc_claims
+		 SET status     = @status,
+		     updated_at = now()
+		 WHERE id = @id AND tenant_id = @tenant_id AND status = 'draft'
+		 RETURNING id, encounter_id, patient_id, patient_nhi, practitioner_hpi,
+		           form_type, form_number, diagnosis_codes,
+		           injury_date, injury_description, status,
+		           acc_claim_number, rejection_reason, paid_amount,
+		           tenant_id, created_at, updated_at, submitted_at`,
+		db.NamedArgs{
+			"status":    ClaimStatusSubmitted,
+			"id":        id,
+			"tenant_id": tenantID,
+		},
+	)
+	c, err := scanClaim(row)
+	if err != nil {
+		if db.IsNoRows(err) {
+			return Claim{}, errNotFound
+		}
+		return Claim{}, fmt.Errorf("reserve claim for submit: %w", err)
+	}
+	return c, nil
+}
+
+// resetClaimToDraft rolls back a reserved claim to draft status after a failed lodge.
+func (h *ClaimsHandler) resetClaimToDraft(ctx context.Context, id, tenantID string) error {
+	_, err := h.pool.Exec(ctx,
+		`UPDATE acc_claims SET status = 'draft', updated_at = now()
+		 WHERE id = @id AND tenant_id = @tenant_id AND status = 'submitted' AND acc_claim_number = ''`,
+		db.NamedArgs{"id": id, "tenant_id": tenantID},
+	)
+	if err != nil {
+		return fmt.Errorf("reset claim to draft: %w", err)
+	}
+	return nil
+}
+
 // updateClaimAfterSubmit persists ACC's response fields after a successful lodge.
 func (h *ClaimsHandler) updateClaimAfterSubmit(ctx context.Context, c Claim) (Claim, error) {
 	row := h.pool.QueryRow(ctx,
 		`UPDATE acc_claims
-		 SET status           = @status,
-		     acc_claim_number = @acc_claim_number,
-		     form_number      = @form_number,
+		 SET acc_claim_number = @acc_claim_number,
 		     submitted_at     = @submitted_at,
 		     updated_at       = now()
 		 WHERE id = @id AND tenant_id = @tenant_id
@@ -608,9 +662,7 @@ func (h *ClaimsHandler) updateClaimAfterSubmit(ctx context.Context, c Claim) (Cl
 		           acc_claim_number, rejection_reason, paid_amount,
 		           tenant_id, created_at, updated_at, submitted_at`,
 		db.NamedArgs{
-			"status":           c.Status,
 			"acc_claim_number": c.ACCClaimNumber,
-			"form_number":      c.FormNumber,
 			"submitted_at":     c.SubmittedAt,
 			"id":               c.ID,
 			"tenant_id":        c.TenantID,

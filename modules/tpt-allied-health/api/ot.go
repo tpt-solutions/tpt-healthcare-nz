@@ -4,20 +4,24 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"time"
 
+	"github.com/PhillipC05/tpt-healthcare/core/consent"
+	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-allied-health/internal/ot"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
 
 // OTHandler handles occupational therapy API endpoints.
-type OTHandler struct{}
+type OTHandler struct {
+	hpiClient    *hpi.Client
+	consentStore *consent.Store
+}
 
 // NewOTHandler creates a new OT handler.
-func NewOTHandler() *OTHandler {
-	return &OTHandler{}
+func NewOTHandler(hpiClient *hpi.Client, consentStore *consent.Store) *OTHandler {
+	return &OTHandler{hpiClient: hpiClient, consentStore: consentStore}
 }
 
 // RegisterRoutes registers OT routes.
@@ -43,6 +47,10 @@ func (h *OTHandler) RegisterRoutes(r *mux.Router) {
 
 // CreateAssessment creates a new OT assessment.
 func (h *OTHandler) CreateAssessment(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	var assessment ot.Assessment
 	if err := json.NewDecoder(r.Body).Decode(&assessment); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -69,12 +77,17 @@ func (h *OTHandler) GetAssessment(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
+	// TODO: fetch from database; stub returns placeholder data.
 	assessment := ot.Assessment{
 		ID:          id,
 		PatientNHI:  "ABC1234",
 		ClinicianID: "clin-001",
 		Type:        ot.AssessmentADL,
 		Status:      ot.AssessmentCompleted,
+	}
+
+	if !checkConsent(w, r, h.consentStore, assessment.PatientNHI) {
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -88,20 +101,10 @@ func (h *OTHandler) ListAssessments(w http.ResponseWriter, r *http.Request) {
 	clinicianID := query.Get("clinician_id")
 	assessmentType := query.Get("type")
 	status := query.Get("status")
-	limitStr := query.Get("limit")
-	offsetStr := query.Get("offset")
+	limit, offset := parsePagination(r)
 
-	limit := 50
-	offset := 0
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
-		}
-	}
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil {
-			offset = o
-		}
+	if !checkConsent(w, r, h.consentStore, patientNHI) {
+		return
 	}
 
 	assessments := []ot.Assessment{}
@@ -113,16 +116,20 @@ func (h *OTHandler) ListAssessments(w http.ResponseWriter, r *http.Request) {
 		"offset": offset,
 		"total":  len(assessments),
 		"filters": map[string]string{
-			"patient_nhi":     patientNHI,
-			"clinician_id":    clinicianID,
-			"type":            assessmentType,
-			"status":          status,
+			"patient_nhi":  patientNHI,
+			"clinician_id": clinicianID,
+			"type":         assessmentType,
+			"status":       status,
 		},
 	})
 }
 
 // UpdateAssessment updates an assessment.
 func (h *OTHandler) UpdateAssessment(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -146,14 +153,19 @@ func (h *OTHandler) UpdateAssessment(w http.ResponseWriter, r *http.Request) {
 
 // DeleteAssessment deletes an assessment.
 func (h *OTHandler) DeleteAssessment(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+	_ = mux.Vars(r)["id"]
 	w.WriteHeader(http.StatusNoContent)
-	_ = id
 }
 
 // CreateInterventionPlan creates a new intervention plan.
 func (h *OTHandler) CreateInterventionPlan(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	var plan ot.InterventionPlan
 	if err := json.NewDecoder(r.Body).Decode(&plan); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -180,11 +192,16 @@ func (h *OTHandler) GetInterventionPlan(w http.ResponseWriter, r *http.Request) 
 	vars := mux.Vars(r)
 	id := vars["id"]
 
+	// TODO: fetch from database; stub returns placeholder data.
 	plan := ot.InterventionPlan{
-		ID:           id,
-		PatientNHI:   "ABC1234",
-		ClinicianID:  "clin-001",
-		Status:       ot.PlanStatusActive,
+		ID:          id,
+		PatientNHI:  "ABC1234",
+		ClinicianID: "clin-001",
+		Status:      ot.PlanStatusActive,
+	}
+
+	if !checkConsent(w, r, h.consentStore, plan.PatientNHI) {
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -197,20 +214,10 @@ func (h *OTHandler) ListInterventionPlans(w http.ResponseWriter, r *http.Request
 	patientNHI := query.Get("patient_nhi")
 	clinicianID := query.Get("clinician_id")
 	status := query.Get("status")
-	limitStr := query.Get("limit")
-	offsetStr := query.Get("offset")
+	limit, offset := parsePagination(r)
 
-	limit := 50
-	offset := 0
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
-		}
-	}
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil {
-			offset = o
-		}
+	if !checkConsent(w, r, h.consentStore, patientNHI) {
+		return
 	}
 
 	plans := []ot.InterventionPlan{}
@@ -231,6 +238,10 @@ func (h *OTHandler) ListInterventionPlans(w http.ResponseWriter, r *http.Request
 
 // UpdateInterventionPlan updates an intervention plan.
 func (h *OTHandler) UpdateInterventionPlan(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -254,6 +265,10 @@ func (h *OTHandler) UpdateInterventionPlan(w http.ResponseWriter, r *http.Reques
 
 // CreateSessionNote creates a new session note.
 func (h *OTHandler) CreateSessionNote(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	var note ot.SessionNote
 	if err := json.NewDecoder(r.Body).Decode(&note); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -280,6 +295,7 @@ func (h *OTHandler) GetSessionNote(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
+	// TODO: fetch from database; stub returns placeholder data.
 	note := ot.SessionNote{
 		ID:              id,
 		PatientNHI:      "ABC1234",
@@ -294,6 +310,10 @@ func (h *OTHandler) GetSessionNote(w http.ResponseWriter, r *http.Request) {
 		DurationMinutes: 45,
 	}
 
+	if !checkConsent(w, r, h.consentStore, note.PatientNHI) {
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(note)
 }
@@ -303,20 +323,10 @@ func (h *OTHandler) ListSessionNotes(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	patientNHI := query.Get("patient_nhi")
 	interventionPlanID := query.Get("intervention_plan_id")
-	limitStr := query.Get("limit")
-	offsetStr := query.Get("offset")
+	limit, offset := parsePagination(r)
 
-	limit := 50
-	offset := 0
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
-		}
-	}
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil {
-			offset = o
-		}
+	if !checkConsent(w, r, h.consentStore, patientNHI) {
+		return
 	}
 
 	notes := []ot.SessionNote{}
@@ -328,14 +338,18 @@ func (h *OTHandler) ListSessionNotes(w http.ResponseWriter, r *http.Request) {
 		"offset": offset,
 		"total":  len(notes),
 		"filters": map[string]string{
-			"patient_nhi":           patientNHI,
-			"intervention_plan_id":  interventionPlanID,
+			"patient_nhi":          patientNHI,
+			"intervention_plan_id": interventionPlanID,
 		},
 	})
 }
 
 // UpdateSessionNote updates a session note.
 func (h *OTHandler) UpdateSessionNote(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	vars := mux.Vars(r)
 	id := vars["id"]
 

@@ -11,6 +11,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
+	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 )
 
@@ -78,6 +79,7 @@ type referralUpdateRequest struct {
 type ReferralsHandler struct {
 	pool       db.Pool
 	enc        *encryption.Cipher
+	hpiClient  *hpi.Client
 	auditTrail *audit.Trail
 	logger     *slog.Logger
 }
@@ -148,6 +150,22 @@ func (h *ReferralsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := validateReferralCreate(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "VALIDATION_ERROR", Message: err.Error()})
+		return
+	}
+
+	// HPCA requirement: validate the referring practitioner holds a current APC.
+	apcStatus, err := h.hpiClient.ValidateAPC(ctx, req.ReferringHPI)
+	if err != nil {
+		h.logger.Error("HPI APC validation for referral", slog.Any("error", err))
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "HPI_ERROR", Message: "could not validate practitioner APC"})
+		return
+	}
+	if !apcStatus.Valid {
+		writeJSON(w, http.StatusUnprocessableEntity, apiError{
+			Code:    "INVALID_APC",
+			Message: "referring practitioner does not have a current Annual Practising Certificate",
+			Details: apcStatus,
+		})
 		return
 	}
 

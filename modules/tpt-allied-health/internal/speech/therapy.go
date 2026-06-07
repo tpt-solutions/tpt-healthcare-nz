@@ -5,6 +5,8 @@ package speech
 import (
 	"fmt"
 	"time"
+
+	"github.com/PhillipC05/tpt-healthcare/core/nhi"
 )
 
 // AssessmentType categorises the type of speech-language assessment.
@@ -262,6 +264,9 @@ func (a *Assessment) Validate() error {
 	if a.PatientNHI == "" {
 		return fmt.Errorf("speech: patient NHI is required")
 	}
+	if !nhi.ValidateNHI(a.PatientNHI) {
+		return fmt.Errorf("speech: invalid patient NHI: %s", a.PatientNHI)
+	}
 	if a.ClinicianID == "" {
 		return fmt.Errorf("speech: clinician ID is required")
 	}
@@ -310,6 +315,9 @@ func (p *TherapyPlan) Validate() error {
 	if p.PatientNHI == "" {
 		return fmt.Errorf("speech: patient NHI is required")
 	}
+	if !nhi.ValidateNHI(p.PatientNHI) {
+		return fmt.Errorf("speech: invalid patient NHI: %s", p.PatientNHI)
+	}
 	if p.ClinicianID == "" {
 		return fmt.Errorf("speech: clinician ID is required")
 	}
@@ -355,6 +363,9 @@ func (s *SessionNote) Validate() error {
 	if s.PatientNHI == "" {
 		return fmt.Errorf("speech: patient NHI is required")
 	}
+	if !nhi.ValidateNHI(s.PatientNHI) {
+		return fmt.Errorf("speech: invalid patient NHI: %s", s.PatientNHI)
+	}
 	if s.ClinicianID == "" {
 		return fmt.Errorf("speech: clinician ID is required")
 	}
@@ -378,6 +389,9 @@ func NewSwallowingAssessment() *SwallowingAssessment {
 func (s *SwallowingAssessment) Validate() error {
 	if s.PatientNHI == "" {
 		return fmt.Errorf("speech: patient NHI is required")
+	}
+	if !nhi.ValidateNHI(s.PatientNHI) {
+		return fmt.Errorf("speech: invalid patient NHI: %s", s.PatientNHI)
 	}
 	if s.ClinicianID == "" {
 		return fmt.Errorf("speech: clinician ID is required")

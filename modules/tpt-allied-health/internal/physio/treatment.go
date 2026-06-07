@@ -5,6 +5,8 @@ package physio
 import (
 	"fmt"
 	"time"
+
+	"github.com/PhillipC05/tpt-healthcare/core/nhi"
 )
 
 // TreatmentType categorises the type of physiotherapy treatment.
@@ -177,6 +179,9 @@ func (p *TreatmentPlan) Validate() error {
 	if p.PatientNHI == "" {
 		return fmt.Errorf("physio: patient NHI is required")
 	}
+	if !nhi.ValidateNHI(p.PatientNHI) {
+		return fmt.Errorf("physio: invalid patient NHI: %s", p.PatientNHI)
+	}
 	if p.ClinicianID == "" {
 		return fmt.Errorf("physio: clinician ID is required")
 	}
@@ -233,6 +238,9 @@ func NewSessionNote() *SessionNote {
 func (s *SessionNote) Validate() error {
 	if s.PatientNHI == "" {
 		return fmt.Errorf("physio: patient NHI is required")
+	}
+	if !nhi.ValidateNHI(s.PatientNHI) {
+		return fmt.Errorf("physio: invalid patient NHI: %s", s.PatientNHI)
 	}
 	if s.ClinicianID == "" {
 		return fmt.Errorf("physio: clinician ID is required")

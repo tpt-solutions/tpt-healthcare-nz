@@ -11,6 +11,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
+	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 )
 
@@ -58,17 +59,18 @@ type immunisationCreateRequest struct {
 	Notes          string    `json:"notes,omitempty"`
 }
 
-// ImmunsationsHandler handles all /api/v1/immunisations routes.
-type ImmunsationsHandler struct {
+// ImmunisationsHandler handles all /api/v1/immunisations routes.
+type ImmunisationsHandler struct {
 	pool       db.Pool
 	enc        *encryption.Cipher
+	hpiClient  *hpi.Client
 	auditTrail *audit.Trail
 	logger     *slog.Logger
 }
 
 // List handles GET /api/v1/immunisations.
 // Supports query params: patient (internal ID), vaccine (NZMT code).
-func (h *ImmunsationsHandler) List(w http.ResponseWriter, r *http.Request) {
+func (h *ImmunisationsHandler) List(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID, ok := middleware.TenantFromContext(ctx)
 	if !ok {
@@ -112,7 +114,7 @@ func (h *ImmunsationsHandler) List(w http.ResponseWriter, r *http.Request) {
 // Create handles POST /api/v1/immunisations.
 // Records a vaccination event. The NIR submission is triggered separately via
 // POST /api/v1/immunisations/{id}/submit-nir.
-func (h *ImmunsationsHandler) Create(w http.ResponseWriter, r *http.Request) {
+func (h *ImmunisationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID, ok := middleware.TenantFromContext(ctx)
 	if !ok {
@@ -132,6 +134,22 @@ func (h *ImmunsationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := validateImmunisationCreate(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "VALIDATION_ERROR", Message: err.Error()})
+		return
+	}
+
+	// HPCA requirement: validate the administering practitioner holds a current APC.
+	apcStatus, err := h.hpiClient.ValidateAPC(ctx, req.AdministeredBy)
+	if err != nil {
+		h.logger.Error("HPI APC validation for immunisation", slog.Any("error", err))
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "HPI_ERROR", Message: "could not validate practitioner APC"})
+		return
+	}
+	if !apcStatus.Valid {
+		writeJSON(w, http.StatusUnprocessableEntity, apiError{
+			Code:    "INVALID_APC",
+			Message: "administering practitioner does not have a current Annual Practising Certificate",
+			Details: apcStatus,
+		})
 		return
 	}
 
@@ -157,7 +175,7 @@ func (h *ImmunsationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // Get handles GET /api/v1/immunisations/{id}.
-func (h *ImmunsationsHandler) Get(w http.ResponseWriter, r *http.Request) {
+func (h *ImmunisationsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID, ok := middleware.TenantFromContext(ctx)
 	if !ok {
@@ -203,7 +221,7 @@ func (h *ImmunsationsHandler) Get(w http.ResponseWriter, r *http.Request) {
 // SubmitNIR handles POST /api/v1/immunisations/{id}/submit-nir.
 // Submits the immunisation event to the National Immunisation Register.
 // On success, the NIRReference and NIRSubmittedAt are recorded.
-func (h *ImmunsationsHandler) SubmitNIR(w http.ResponseWriter, r *http.Request) {
+func (h *ImmunisationsHandler) SubmitNIR(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID, ok := middleware.TenantFromContext(ctx)
 	if !ok {
@@ -296,7 +314,7 @@ func validateImmunisationCreate(req *immunisationCreateRequest) error {
 // Data access
 // ---------------------------------------------------------------------------
 
-func (h *ImmunsationsHandler) listImmunisations(
+func (h *ImmunisationsHandler) listImmunisations(
 	ctx context.Context,
 	tenantID, patientFilter, vaccineFilter string,
 ) ([]Immunisation, error) {
@@ -342,7 +360,7 @@ func (h *ImmunsationsHandler) listImmunisations(
 	return results, rows.Err()
 }
 
-func (h *ImmunsationsHandler) getImmunisationByID(ctx context.Context, id, tenantID string) (Immunisation, error) {
+func (h *ImmunisationsHandler) getImmunisationByID(ctx context.Context, id, tenantID string) (Immunisation, error) {
 	var imm Immunisation
 	err := h.pool.QueryRow(ctx,
 		`SELECT id, patient_id, patient_nhi, vaccine_code, vaccine_name,
@@ -371,7 +389,7 @@ func (h *ImmunsationsHandler) getImmunisationByID(ctx context.Context, id, tenan
 	return imm, nil
 }
 
-func (h *ImmunsationsHandler) insertImmunisation(ctx context.Context, req immunisationCreateRequest, tenantID string) (Immunisation, error) {
+func (h *ImmunisationsHandler) insertImmunisation(ctx context.Context, req immunisationCreateRequest, tenantID string) (Immunisation, error) {
 	var imm Immunisation
 	err := h.pool.QueryRow(ctx,
 		`INSERT INTO immunisations
@@ -419,7 +437,7 @@ func (h *ImmunsationsHandler) insertImmunisation(ctx context.Context, req immuni
 	return imm, nil
 }
 
-func (h *ImmunsationsHandler) markNIRSubmitted(ctx context.Context, id, nirRef string, submittedAt time.Time, tenantID string) (Immunisation, error) {
+func (h *ImmunisationsHandler) markNIRSubmitted(ctx context.Context, id, nirRef string, submittedAt time.Time, tenantID string) (Immunisation, error) {
 	var imm Immunisation
 	err := h.pool.QueryRow(ctx,
 		`UPDATE immunisations

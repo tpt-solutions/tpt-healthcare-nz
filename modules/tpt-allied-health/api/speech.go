@@ -4,20 +4,24 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"time"
 
+	"github.com/PhillipC05/tpt-healthcare/core/consent"
+	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-allied-health/internal/speech"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
 
 // SpeechHandler handles speech-language therapy API endpoints.
-type SpeechHandler struct{}
+type SpeechHandler struct {
+	hpiClient    *hpi.Client
+	consentStore *consent.Store
+}
 
 // NewSpeechHandler creates a new speech handler.
-func NewSpeechHandler() *SpeechHandler {
-	return &SpeechHandler{}
+func NewSpeechHandler(hpiClient *hpi.Client, consentStore *consent.Store) *SpeechHandler {
+	return &SpeechHandler{hpiClient: hpiClient, consentStore: consentStore}
 }
 
 // RegisterRoutes registers speech therapy routes.
@@ -48,6 +52,10 @@ func (h *SpeechHandler) RegisterRoutes(r *mux.Router) {
 
 // CreateAssessment creates a new speech-language assessment.
 func (h *SpeechHandler) CreateAssessment(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	var assessment speech.Assessment
 	if err := json.NewDecoder(r.Body).Decode(&assessment); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -74,12 +82,17 @@ func (h *SpeechHandler) GetAssessment(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
+	// TODO: fetch from database; stub returns placeholder data.
 	assessment := speech.Assessment{
 		ID:          id,
 		PatientNHI:  "ABC1234",
 		ClinicianID: "clin-001",
 		Type:        speech.AssessmentLanguage,
 		Status:      speech.AssessmentCompleted,
+	}
+
+	if !checkConsent(w, r, h.consentStore, assessment.PatientNHI) {
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -93,20 +106,10 @@ func (h *SpeechHandler) ListAssessments(w http.ResponseWriter, r *http.Request) 
 	clinicianID := query.Get("clinician_id")
 	assessmentType := query.Get("type")
 	status := query.Get("status")
-	limitStr := query.Get("limit")
-	offsetStr := query.Get("offset")
+	limit, offset := parsePagination(r)
 
-	limit := 50
-	offset := 0
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
-		}
-	}
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil {
-			offset = o
-		}
+	if !checkConsent(w, r, h.consentStore, patientNHI) {
+		return
 	}
 
 	assessments := []speech.Assessment{}
@@ -118,16 +121,20 @@ func (h *SpeechHandler) ListAssessments(w http.ResponseWriter, r *http.Request) 
 		"offset": offset,
 		"total":  len(assessments),
 		"filters": map[string]string{
-			"patient_nhi":     patientNHI,
-			"clinician_id":    clinicianID,
-			"type":            assessmentType,
-			"status":          status,
+			"patient_nhi":  patientNHI,
+			"clinician_id": clinicianID,
+			"type":         assessmentType,
+			"status":       status,
 		},
 	})
 }
 
 // UpdateAssessment updates an assessment.
 func (h *SpeechHandler) UpdateAssessment(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -151,14 +158,19 @@ func (h *SpeechHandler) UpdateAssessment(w http.ResponseWriter, r *http.Request)
 
 // DeleteAssessment deletes an assessment.
 func (h *SpeechHandler) DeleteAssessment(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+	_ = mux.Vars(r)["id"]
 	w.WriteHeader(http.StatusNoContent)
-	_ = id
 }
 
 // CreateTherapyPlan creates a new therapy plan.
 func (h *SpeechHandler) CreateTherapyPlan(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	var plan speech.TherapyPlan
 	if err := json.NewDecoder(r.Body).Decode(&plan); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -185,11 +197,16 @@ func (h *SpeechHandler) GetTherapyPlan(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
+	// TODO: fetch from database; stub returns placeholder data.
 	plan := speech.TherapyPlan{
-		ID:           id,
-		PatientNHI:   "ABC1234",
-		ClinicianID:  "clin-001",
-		Status:       speech.PlanStatusActive,
+		ID:          id,
+		PatientNHI:  "ABC1234",
+		ClinicianID: "clin-001",
+		Status:      speech.PlanStatusActive,
+	}
+
+	if !checkConsent(w, r, h.consentStore, plan.PatientNHI) {
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -202,20 +219,10 @@ func (h *SpeechHandler) ListTherapyPlans(w http.ResponseWriter, r *http.Request)
 	patientNHI := query.Get("patient_nhi")
 	clinicianID := query.Get("clinician_id")
 	status := query.Get("status")
-	limitStr := query.Get("limit")
-	offsetStr := query.Get("offset")
+	limit, offset := parsePagination(r)
 
-	limit := 50
-	offset := 0
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
-		}
-	}
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil {
-			offset = o
-		}
+	if !checkConsent(w, r, h.consentStore, patientNHI) {
+		return
 	}
 
 	plans := []speech.TherapyPlan{}
@@ -236,6 +243,10 @@ func (h *SpeechHandler) ListTherapyPlans(w http.ResponseWriter, r *http.Request)
 
 // UpdateTherapyPlan updates a therapy plan.
 func (h *SpeechHandler) UpdateTherapyPlan(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -259,6 +270,10 @@ func (h *SpeechHandler) UpdateTherapyPlan(w http.ResponseWriter, r *http.Request
 
 // CreateSessionNote creates a new session note.
 func (h *SpeechHandler) CreateSessionNote(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	var note speech.SessionNote
 	if err := json.NewDecoder(r.Body).Decode(&note); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -285,6 +300,7 @@ func (h *SpeechHandler) GetSessionNote(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
+	// TODO: fetch from database; stub returns placeholder data.
 	note := speech.SessionNote{
 		ID:              id,
 		PatientNHI:      "ABC1234",
@@ -299,6 +315,10 @@ func (h *SpeechHandler) GetSessionNote(w http.ResponseWriter, r *http.Request) {
 		DurationMinutes: 45,
 	}
 
+	if !checkConsent(w, r, h.consentStore, note.PatientNHI) {
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(note)
 }
@@ -308,20 +328,10 @@ func (h *SpeechHandler) ListSessionNotes(w http.ResponseWriter, r *http.Request)
 	query := r.URL.Query()
 	patientNHI := query.Get("patient_nhi")
 	therapyPlanID := query.Get("therapy_plan_id")
-	limitStr := query.Get("limit")
-	offsetStr := query.Get("offset")
+	limit, offset := parsePagination(r)
 
-	limit := 50
-	offset := 0
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
-		}
-	}
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil {
-			offset = o
-		}
+	if !checkConsent(w, r, h.consentStore, patientNHI) {
+		return
 	}
 
 	notes := []speech.SessionNote{}
@@ -333,14 +343,18 @@ func (h *SpeechHandler) ListSessionNotes(w http.ResponseWriter, r *http.Request)
 		"offset": offset,
 		"total":  len(notes),
 		"filters": map[string]string{
-			"patient_nhi":       patientNHI,
-			"therapy_plan_id":   therapyPlanID,
+			"patient_nhi":     patientNHI,
+			"therapy_plan_id": therapyPlanID,
 		},
 	})
 }
 
 // UpdateSessionNote updates a session note.
 func (h *SpeechHandler) UpdateSessionNote(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -364,6 +378,10 @@ func (h *SpeechHandler) UpdateSessionNote(w http.ResponseWriter, r *http.Request
 
 // CreateSwallowingAssessment creates a new swallowing assessment.
 func (h *SpeechHandler) CreateSwallowingAssessment(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	var assessment speech.SwallowingAssessment
 	if err := json.NewDecoder(r.Body).Decode(&assessment); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -390,13 +408,18 @@ func (h *SpeechHandler) GetSwallowingAssessment(w http.ResponseWriter, r *http.R
 	vars := mux.Vars(r)
 	id := vars["id"]
 
+	// TODO: fetch from database; stub returns placeholder data.
 	assessment := speech.SwallowingAssessment{
-		ID:              id,
-		PatientNHI:      "ABC1234",
-		ClinicianID:     "clin-001",
-		Date:            time.Now().UnixMilli(),
-		Status:          speech.AssessmentCompleted,
+		ID:                  id,
+		PatientNHI:          "ABC1234",
+		ClinicianID:         "clin-001",
+		Date:                time.Now().UnixMilli(),
+		Status:              speech.AssessmentCompleted,
 		DietRecommendations: "IDDSI Level 4 (Pureed) / Level 0 (Thin)",
+	}
+
+	if !checkConsent(w, r, h.consentStore, assessment.PatientNHI) {
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -408,20 +431,10 @@ func (h *SpeechHandler) ListSwallowingAssessments(w http.ResponseWriter, r *http
 	query := r.URL.Query()
 	patientNHI := query.Get("patient_nhi")
 	clinicianID := query.Get("clinician_id")
-	limitStr := query.Get("limit")
-	offsetStr := query.Get("offset")
+	limit, offset := parsePagination(r)
 
-	limit := 50
-	offset := 0
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
-		}
-	}
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil {
-			offset = o
-		}
+	if !checkConsent(w, r, h.consentStore, patientNHI) {
+		return
 	}
 
 	assessments := []speech.SwallowingAssessment{}
@@ -441,6 +454,10 @@ func (h *SpeechHandler) ListSwallowingAssessments(w http.ResponseWriter, r *http
 
 // UpdateSwallowingAssessment updates a swallowing assessment.
 func (h *SpeechHandler) UpdateSwallowingAssessment(w http.ResponseWriter, r *http.Request) {
+	if !requireAPC(w, r, h.hpiClient) {
+		return
+	}
+
 	vars := mux.Vars(r)
 	id := vars["id"]
 

@@ -227,14 +227,69 @@
 - [x] tpt-nutrition (food diary, meal planning, body composition)
 
 ## tpt-hospital (Milestone 10)
-- [ ] Inpatient management (admission, discharge, transfer — FHIR Encounter)
-- [ ] Ward management and bed management
-- [ ] ED triage workflows
-- [ ] ICU workflows
-- [ ] Surgical scheduling (theatre booking, FHIR Appointment + Schedule)
-- [ ] Clinical coding (ICD-10-AM, ACHI)
-- [ ] Discharge summaries
-- [ ] Hospital billing (casemix, DRG)
+- [x] Inpatient management (admission, discharge, transfer — FHIR Encounter)
+- [x] Ward management and bed management
+- [x] ED triage workflows
+- [x] ICU workflows
+- [x] Surgical scheduling (theatre booking, FHIR Appointment + Schedule)
+- [x] Pre-admission assessment (pre-operative PAC clinic)
+- [x] Clinical coding (ICD-10-AM, ACHI)
+- [x] Discharge summaries
+- [x] Hospital billing (casemix, DRG)
+- [x] Inpatient pharmacy (medication charts, IV pharmacy, reconciliation — NOT community dispensing)
+- [x] Infection control (HAI surveillance, isolation precautions)
+- [x] Hospital outpatient specialist clinics and waitlists
+- [x] Hospital in the Home (HITH / virtual ward)
+
+## Hospital Specialist Modules (Milestone 10b — spun out as independent services)
+> These were separated from tpt-hospital so they can be deployed independently
+> (e.g. oncology centres, community dialysis, maternity-led units).
+
+- [ ] tpt-oncology
+  - [ ] Oncology patient registration and tumour board referral
+  - [ ] Chemotherapy protocol library (ICON, CHOP, FOLFOX, etc.)
+  - [ ] Treatment cycle scheduling and administration recording
+  - [ ] Immunotherapy / targeted therapy workflows
+  - [ ] Side-effect and toxicity grading (CTCAE)
+  - [ ] Radiation therapy referral integration
+  - [ ] Palliative oncology pathways
+- [ ] tpt-renal
+  - [ ] Renal patient registration and CKD staging
+  - [ ] Haemodialysis session scheduling and charting (Kt/V, UFR, access)
+  - [ ] Peritoneal dialysis (APD/CAPD) episode management
+  - [ ] Renal transplant waitlist management
+  - [ ] Fluid balance and dry-weight tracking
+  - [ ] Dialysis machine integration (future)
+- [ ] tpt-maternity
+  - [ ] LMC (Lead Maternity Carer) registration and case-loading
+  - [ ] Antenatal care (booking, growth scans, screening)
+  - [ ] Intrapartum care (birthing suite, partogram, CTG)
+  - [ ] Postnatal care (discharge, community midwife visits)
+  - [ ] Birth notification (NBRS — National Baby Record System)
+  - [ ] NICU admission, ventilation charting, discharge planning
+  - [ ] MMPO claiming integration
+- [ ] tpt-cardiology
+  - [ ] Cardiology outpatient clinic and follow-up
+  - [ ] ECG ordering, interpretation and storage
+  - [ ] Echocardiography requests and reports
+  - [ ] Holter / ambulatory BP monitoring
+  - [ ] Cath lab booking, procedure documentation, post-cath care
+  - [ ] Cardiac rehabilitation programme management
+  - [ ] Implantable device management (pacemaker, ICD)
+- [ ] tpt-rehabilitation
+  - [ ] Inpatient rehabilitation admission and functional assessment
+  - [ ] Goal setting (STG/LTG) with therapy discipline tracking (physio, OT, speech)
+  - [ ] FIM (Functional Independence Measure) scoring
+  - [ ] Community rehabilitation episodes (post-discharge follow-up)
+  - [ ] ACC rehabilitation plan management
+  - [ ] Discharge planning and NASC referral
+- [ ] tpt-paediatrics
+  - [ ] Paediatric inpatient admissions with age/weight-adjusted clinical ranges
+  - [ ] Growth and developmental milestone tracking
+  - [ ] NICU admission, ventilation, and TPN management
+  - [ ] Paediatric community clinic and outreach workflows
+  - [ ] Consent and assent documentation (parent/guardian proxy)
+  - [ ] Child protection flagging and reporting workflow
 
 ## Remaining Modules (Post-Hospital)
 - [x] tpt-blood-bank (cross-matching, blood product inventory, donor management)

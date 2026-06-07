@@ -10,6 +10,7 @@ import (
 
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
+	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 )
 
@@ -52,21 +53,23 @@ type PHOReport struct {
 }
 
 // PHOCapitationRecord is a single row in a capitation extract.
+// PatientNHI is intentionally omitted from the JSON response; NHI is PHI and
+// must only be included in the encrypted submission to the PHO, never in the
+// API response visible to any authenticated caller (HIPC Rule 11/12).
 type PHOCapitationRecord struct {
-	PatientNHI     string `json:"patientNhi"`
-	EnrolledDate   string `json:"enrolledDate"`  // YYYY-MM-DD
-	FundingCode    string `json:"fundingCode"`
-	AgeGroup       string `json:"ageGroup"`
-	Gender         string `json:"gender"`
+	PatientID    string `json:"patientId"`    // internal opaque identifier
+	EnrolledDate string `json:"enrolledDate"` // YYYY-MM-DD
+	FundingCode  string `json:"fundingCode"`
 }
 
 // PHOFFSRecord is a single row in a FFS extract.
+// PatientNHI is omitted from JSON for the same reason as PHOCapitationRecord.
 type PHOFFSRecord struct {
-	PatientNHI     string    `json:"patientNhi"`
-	VisitDate      time.Time `json:"visitDate"`
-	FundingCode    string    `json:"fundingCode"`
-	DiagnosisCode  string    `json:"diagnosisCode"`   // ICD-10-AM
-	ProviderHPI    string    `json:"providerHpi"`
+	PatientID     string    `json:"patientId"`     // internal opaque identifier
+	VisitDate     time.Time `json:"visitDate"`
+	FundingCode   string    `json:"fundingCode"`
+	DiagnosisCode string    `json:"diagnosisCode"` // ICD-10-AM
+	ProviderHPI   string    `json:"providerHpi"`
 }
 
 // phoGenerateRequest is the body for POST /api/v1/pho/reports.
@@ -78,6 +81,7 @@ type phoGenerateRequest struct {
 // PHOHandler handles all /api/v1/pho routes.
 type PHOHandler struct {
 	pool       db.Pool
+	enc        *encryption.Cipher
 	auditTrail *audit.Trail
 	logger     *slog.Logger
 }
@@ -534,23 +538,18 @@ func (h *PHOHandler) markReportSubmitted(ctx context.Context, id, phoRef string,
 }
 
 func (h *PHOHandler) fetchCapitationRecords(ctx context.Context, tenantID, period string) ([]PHOCapitationRecord, error) {
+	// Select distinct enrolled patients using patient_id (internal UUID) as the
+	// dedup key. NHI is not selected here because it is PHI and must not be
+	// exposed in the API response. NHI is only included in the encrypted
+	// payload sent to the PHO via the submission API (HIPC Rules 11 and 12).
 	rows, err := h.pool.Query(ctx,
-		`SELECT DISTINCT ON (e.patient_nhi)
-		        e.patient_nhi, e.enrolment_start, e.funding_code,
-		        CASE
-		            WHEN date_part('year', age(p.dob)) < 6  THEN '0-5'
-		            WHEN date_part('year', age(p.dob)) < 18 THEN '6-17'
-		            WHEN date_part('year', age(p.dob)) < 45 THEN '18-44'
-		            WHEN date_part('year', age(p.dob)) < 65 THEN '45-64'
-		            ELSE '65+'
-		        END AS age_group,
-		        p.gender
+		`SELECT DISTINCT ON (e.patient_id)
+		        e.patient_id, e.enrolment_start::text, e.funding_code
 		 FROM nes_enrolments e
-		 LEFT JOIN patients p ON p.id = e.patient_id
 		 WHERE e.tenant_id = @tenant_id
 		   AND e.enrolment_start <= (@period || '-01')::date + interval '1 month - 1 day'
 		   AND (e.enrolment_end IS NULL OR e.enrolment_end >= (@period || '-01')::date)
-		 ORDER BY e.patient_nhi, e.enrolment_start`,
+		 ORDER BY e.patient_id, e.enrolment_start`,
 		db.NamedArgs{"tenant_id": tenantID, "period": period},
 	)
 	if err != nil {
@@ -561,7 +560,7 @@ func (h *PHOHandler) fetchCapitationRecords(ctx context.Context, tenantID, perio
 	var results []PHOCapitationRecord
 	for rows.Next() {
 		var rec PHOCapitationRecord
-		if err := rows.Scan(&rec.PatientNHI, &rec.EnrolledDate, &rec.FundingCode, &rec.AgeGroup, &rec.Gender); err != nil {
+		if err := rows.Scan(&rec.PatientID, &rec.EnrolledDate, &rec.FundingCode); err != nil {
 			return nil, fmt.Errorf("scan capitation record: %w", err)
 		}
 		results = append(results, rec)
@@ -570,8 +569,10 @@ func (h *PHOHandler) fetchCapitationRecords(ctx context.Context, tenantID, perio
 }
 
 func (h *PHOHandler) fetchFFSRecords(ctx context.Context, tenantID, period string) ([]PHOFFSRecord, error) {
+	// patient_id (internal UUID) is used instead of patient_nhi to avoid
+	// exposing NHI in the API response (HIPC Rules 11 and 12).
 	rows, err := h.pool.Query(ctx,
-		`SELECT enc.patient_nhi, enc.started_at, enc.ffs_funding_code,
+		`SELECT enc.patient_id, enc.started_at, enc.ffs_funding_code,
 		        enc.primary_diagnosis, enc.practitioner_hpi
 		 FROM encounters enc
 		 WHERE enc.tenant_id = @tenant_id
@@ -589,7 +590,7 @@ func (h *PHOHandler) fetchFFSRecords(ctx context.Context, tenantID, period strin
 	var results []PHOFFSRecord
 	for rows.Next() {
 		var rec PHOFFSRecord
-		if err := rows.Scan(&rec.PatientNHI, &rec.VisitDate, &rec.FundingCode, &rec.DiagnosisCode, &rec.ProviderHPI); err != nil {
+		if err := rows.Scan(&rec.PatientID, &rec.VisitDate, &rec.FundingCode, &rec.DiagnosisCode, &rec.ProviderHPI); err != nil {
 			return nil, fmt.Errorf("scan FFS record: %w", err)
 		}
 		results = append(results, rec)

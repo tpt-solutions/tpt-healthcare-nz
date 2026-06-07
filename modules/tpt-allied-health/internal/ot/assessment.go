@@ -5,6 +5,8 @@ package ot
 import (
 	"fmt"
 	"time"
+
+	"github.com/PhillipC05/tpt-healthcare/core/nhi"
 )
 
 // AssessmentType categorises the type of OT assessment.
@@ -240,6 +242,9 @@ func (a *Assessment) Validate() error {
 	if a.PatientNHI == "" {
 		return fmt.Errorf("ot: patient NHI is required")
 	}
+	if !nhi.ValidateNHI(a.PatientNHI) {
+		return fmt.Errorf("ot: invalid patient NHI: %s", a.PatientNHI)
+	}
 	if a.ClinicianID == "" {
 		return fmt.Errorf("ot: clinician ID is required")
 	}
@@ -288,6 +293,9 @@ func (p *InterventionPlan) Validate() error {
 	if p.PatientNHI == "" {
 		return fmt.Errorf("ot: patient NHI is required")
 	}
+	if !nhi.ValidateNHI(p.PatientNHI) {
+		return fmt.Errorf("ot: invalid patient NHI: %s", p.PatientNHI)
+	}
 	if p.ClinicianID == "" {
 		return fmt.Errorf("ot: clinician ID is required")
 	}
@@ -332,6 +340,9 @@ func NewSessionNote() *SessionNote {
 func (s *SessionNote) Validate() error {
 	if s.PatientNHI == "" {
 		return fmt.Errorf("ot: patient NHI is required")
+	}
+	if !nhi.ValidateNHI(s.PatientNHI) {
+		return fmt.Errorf("ot: invalid patient NHI: %s", s.PatientNHI)
 	}
 	if s.ClinicianID == "" {
 		return fmt.Errorf("ot: clinician ID is required")
