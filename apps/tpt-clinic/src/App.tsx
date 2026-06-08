@@ -91,9 +91,12 @@ const NaturopathyPage    = React.lazy(() => import('@/pages/NaturopathyPage'));
 const TcmPage            = React.lazy(() => import('@/pages/TcmPage'));
 const NutritionPage      = React.lazy(() => import('@/pages/NutritionPage'));
 const VisionPage         = React.lazy(() => import('@/pages/VisionPage'));
+const AddictionPage      = React.lazy(() => import('@/pages/AddictionPage'));
 
 // Allied Health pages.
 const AlliedHealthPage   = React.lazy(() => import('@/pages/AlliedHealthPage'));
+const CommunityHealthPage = React.lazy(() => import('@/pages/CommunityHealthPage'));
+const PalliativePage     = React.lazy(() => import('@/pages/PalliativePage'));
 
 // ---------------------------------------------------------------------------
 // Protected route guard
@@ -344,7 +347,10 @@ function AppRoutes() {
         <Route path="/tcm/*"          element={<ProtectedRoute><TcmPage /></ProtectedRoute>} />
         <Route path="/nutrition/*"    element={<ProtectedRoute><NutritionPage /></ProtectedRoute>} />
         <Route path="/vision"         element={<ProtectedRoute><VisionPage /></ProtectedRoute>} />
+        <Route path="/addiction/*"    element={<ProtectedRoute><AddictionPage /></ProtectedRoute>} />
         <Route path="/allied-health"  element={<ProtectedRoute><AlliedHealthPage /></ProtectedRoute>} />
+        <Route path="/community-health" element={<ProtectedRoute><CommunityHealthPage /></ProtectedRoute>} />
+        <Route path="/palliative/*"    element={<ProtectedRoute><PalliativePage /></ProtectedRoute>} />
 
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

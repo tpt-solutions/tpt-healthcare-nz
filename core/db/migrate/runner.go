@@ -5,6 +5,8 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -14,13 +16,19 @@ import (
 
 // Runner executes SQL migrations embedded in an fs.FS against a pgxpool.Pool.
 type Runner struct {
-	fs   embed.FS
+	fs   fs.FS
 	pool *pgxpool.Pool
 }
 
 // New returns a new Runner backed by the given embed.FS and pgxpool.Pool.
-func New(fs embed.FS, pool *pgxpool.Pool) *Runner {
-	return &Runner{fs: fs, pool: pool}
+func New(fsys embed.FS, pool *pgxpool.Pool) *Runner {
+	return &Runner{fs: fsys, pool: pool}
+}
+
+// NewFromDir returns a Runner that reads migrations from a filesystem
+// directory. Use this for module-specific migrations that are not embedded.
+func NewFromDir(dir string, pool *pgxpool.Pool) *Runner {
+	return &Runner{fs: os.DirFS(dir), pool: pool}
 }
 
 // newMigrate constructs a migrate.Migrate instance wired to the embedded FS and pool DSN.

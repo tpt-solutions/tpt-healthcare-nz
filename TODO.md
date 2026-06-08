@@ -245,29 +245,37 @@
 > These were separated from tpt-hospital so they can be deployed independently
 > (e.g. oncology centres, community dialysis, maternity-led units).
 
-- [ ] tpt-oncology
-  - [ ] Oncology patient registration and tumour board referral
-  - [ ] Chemotherapy protocol library (ICON, CHOP, FOLFOX, etc.)
-  - [ ] Treatment cycle scheduling and administration recording
-  - [ ] Immunotherapy / targeted therapy workflows
-  - [ ] Side-effect and toxicity grading (CTCAE)
-  - [ ] Radiation therapy referral integration
-  - [ ] Palliative oncology pathways
-- [ ] tpt-renal
-  - [ ] Renal patient registration and CKD staging
-  - [ ] Haemodialysis session scheduling and charting (Kt/V, UFR, access)
-  - [ ] Peritoneal dialysis (APD/CAPD) episode management
-  - [ ] Renal transplant waitlist management
-  - [ ] Fluid balance and dry-weight tracking
+- [x] tpt-oncology
+  - [x] Oncology patient registration and tumour board referral
+  - [x] Chemotherapy protocol library (ICON, CHOP, FOLFOX, etc.)
+  - [x] Treatment cycle scheduling and administration recording
+  - [x] Immunotherapy / targeted therapy workflows
+  - [x] Side-effect and toxicity grading (CTCAE)
+  - [x] Radiation therapy referral integration
+  - [x] Palliative oncology pathways
+- [x] tpt-renal
+  - [x] Renal patient registration and CKD staging
+  - [x] Haemodialysis session scheduling and charting (Kt/V, UFR, access)
+  - [x] Peritoneal dialysis (APD/CAPD) episode management
+  - [x] Renal transplant waitlist management
+  - [x] Fluid balance and dry-weight tracking
   - [ ] Dialysis machine integration (future)
-- [ ] tpt-maternity
+- [ ] tpt-maternal-child-health
   - [ ] LMC (Lead Maternity Carer) registration and case-loading
   - [ ] Antenatal care (booking, growth scans, screening)
   - [ ] Intrapartum care (birthing suite, partogram, CTG)
   - [ ] Postnatal care (discharge, community midwife visits)
   - [ ] Birth notification (NBRS — National Baby Record System)
-  - [ ] NICU admission, ventilation charting, discharge planning
+  - [ ] Neonatal NICU (≤28 days / <44 weeks corrected): ventilation charting, discharge planning
+  - [ ] SCBU (Special Care Baby Unit, ~32–36 weeks): step-down from NICU
   - [ ] MMPO claiming integration
+  - [ ] Paediatric inpatient admissions with age/weight-adjusted clinical ranges
+  - [ ] PICU (Paediatric ICU, children >28 days): respiratory support, TPN, inotropes
+  - [ ] Growth and developmental milestone tracking
+  - [ ] Consent and assent documentation (parent/guardian proxy)
+  - [ ] Child protection flagging and reporting (Children's Act 2014)
+  - [ ] Well Child Tamariki Ora schedule (Plunket checks neonatal → B4 School Check)
+  - [ ] B4 School Check including SDQ (Strengths and Difficulties Questionnaire)
 - [ ] tpt-cardiology
   - [ ] Cardiology outpatient clinic and follow-up
   - [ ] ECG ordering, interpretation and storage
@@ -283,20 +291,13 @@
   - [ ] Community rehabilitation episodes (post-discharge follow-up)
   - [ ] ACC rehabilitation plan management
   - [ ] Discharge planning and NASC referral
-- [ ] tpt-paediatrics
-  - [ ] Paediatric inpatient admissions with age/weight-adjusted clinical ranges
-  - [ ] Growth and developmental milestone tracking
-  - [ ] NICU admission, ventilation, and TPN management
-  - [ ] Paediatric community clinic and outreach workflows
-  - [ ] Consent and assent documentation (parent/guardian proxy)
-  - [ ] Child protection flagging and reporting workflow
 
 ## Remaining Modules (Post-Hospital)
 - [x] tpt-blood-bank (cross-matching, blood product inventory, donor management)
 - [x] tpt-dental (FDI tooth charting, ACC, dental-specific workflows)
 - [x] tpt-vision (optometry/ophthalmology, prescription management, optical dispensing)
-- [ ] tpt-allied-health (physio, OT, speech therapy, podiatry)
-- [ ] tpt-community-health (district nursing, home visits, outreach)
+- [x] tpt-allied-health (physio, OT, speech therapy, podiatry)
+- [x] tpt-community-health (district nursing, home visits, outreach)
 - [ ] tpt-addiction (methadone programme, counselling workflows)
 - [ ] tpt-palliative (hospice, advance care planning, pain protocols)
 - [ ] tpt-disability (NASC, support plans, funded hours)

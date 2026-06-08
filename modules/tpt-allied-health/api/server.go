@@ -3,51 +3,48 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/auth"
 	"github.com/PhillipC05/tpt-healthcare/core/consent"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
-	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/rs/zerolog/log"
 )
 
 // Server holds the HTTP server and dependencies.
 type Server struct {
-	router       *mux.Router
-	server       *http.Server
+	mux          *http.ServeMux
 	auth         auth.Provider
 	config       Config
 	pool         *pgxpool.Pool
 	auditTrail   *audit.Trail
 	hpiClient    *hpi.Client
 	consentStore *consent.Store
+	logger       *slog.Logger
 }
 
 // Config holds server configuration.
 type Config struct {
 	Addr           string
-	ReadTimeout    time.Duration
-	WriteTimeout   time.Duration
-	IdleTimeout    time.Duration
+	ReadTimeout    int
+	WriteTimeout   int
+	IdleTimeout    int
 	AllowedOrigins []string
+	Logger         *slog.Logger
 }
 
 // DefaultConfig returns default server configuration.
 func DefaultConfig() Config {
 	return Config{
 		Addr:           ":8080",
-		ReadTimeout:    15 * time.Second,
-		WriteTimeout:   15 * time.Second,
-		IdleTimeout:    60 * time.Second,
+		ReadTimeout:    15,
+		WriteTimeout:   15,
+		IdleTimeout:    60,
 		AllowedOrigins: []string{"*"},
+		Logger:         slog.Default(),
 	}
 }
 
@@ -59,67 +56,65 @@ func NewServer(pool *pgxpool.Pool, authProvider auth.Provider, auditTrail *audit
 	if len(cfg.AllowedOrigins) == 0 {
 		cfg.AllowedOrigins = []string{"*"}
 	}
-
-	router := mux.NewRouter()
+	if cfg.Logger == nil {
+		cfg.Logger = slog.Default()
+	}
 
 	s := &Server{
-		router:       router,
 		auth:         authProvider,
 		config:       cfg,
 		pool:         pool,
 		auditTrail:   auditTrail,
 		hpiClient:    hpiClient,
 		consentStore: consentStore,
+		logger:       cfg.Logger,
 	}
 
-	s.setupMiddleware()
-	s.setupRoutes()
-
-	s.server = &http.Server{
-		Addr:         cfg.Addr,
-		Handler:      router,
-		ReadTimeout:  cfg.ReadTimeout,
-		WriteTimeout: cfg.WriteTimeout,
-		IdleTimeout:  cfg.IdleTimeout,
-	}
-
+	s.mux = s.buildRoutes()
 	return s
 }
 
-// setupMiddleware configures global middleware (applied to all routes including health checks).
-func (s *Server) setupMiddleware() {
-	s.router.Use(middleware.RecoveryMiddleware())
-	s.router.Use(middleware.CORS(s.config.AllowedOrigins))
-	s.router.Use(middleware.RateLimit(100, 200))
+// Handler returns the root HTTP handler with middleware applied.
+func (s *Server) Handler() http.Handler {
+	var h http.Handler = s.mux
+	if s.auditTrail != nil {
+		h = middleware.AuditWrap(s.auditTrail)(h)
+	}
+	h = middleware.CORS(s.config.AllowedOrigins)(h)
+	h = middleware.RateLimit(100, 200)(h)
+	h = middleware.RecoveryMiddleware()(h)
+	return h
 }
 
-// setupRoutes registers all API routes.
-func (s *Server) setupRoutes() {
-	// Public routes — no auth, no tenant extraction, no audit.
-	s.router.HandleFunc("/health", s.healthCheck).Methods("GET")
-	s.router.HandleFunc("/ready", s.readinessCheck).Methods("GET")
+// buildRoutes registers all routes.
+func (s *Server) buildRoutes() *http.ServeMux {
+	mux := http.NewServeMux()
 
-	// Protected API routes. A subrouter with no path prefix is used purely
-	// to scope middleware — auth, tenant extraction, and audit apply only here.
-	protected := s.router.NewRoute().Subrouter()
-	protected.Use(middleware.TenantExtraction())
-	protected.Use(auth.RequireAuth(s.auth))
-	protected.Use(middleware.AuditWrap(s.auditTrail))
+	// Public routes — no auth, no tenant extraction, no audit.
+	mux.HandleFunc("/health", s.healthCheck)
+	mux.HandleFunc("/ready", s.readinessCheck)
+
+	// Protected route builder.
+	p := func(h http.HandlerFunc) http.Handler {
+		return auth.RequireAuth(s.auth)(middleware.TenantExtraction()(h))
+	}
 
 	physioHandler := NewPhysioHandler(s.hpiClient, s.consentStore)
-	physioHandler.RegisterRoutes(protected)
+	physioHandler.RegisterRoutes(mux, p)
 
 	otHandler := NewOTHandler(s.hpiClient, s.consentStore)
-	otHandler.RegisterRoutes(protected)
+	otHandler.RegisterRoutes(mux, p)
 
 	speechHandler := NewSpeechHandler(s.hpiClient, s.consentStore)
-	speechHandler.RegisterRoutes(protected)
+	speechHandler.RegisterRoutes(mux, p)
 
 	podiatryHandler := NewPodiatryHandler(s.hpiClient, s.consentStore)
-	podiatryHandler.RegisterRoutes(protected)
+	podiatryHandler.RegisterRoutes(mux, p)
 
 	accHandler := NewACCHandler(s.hpiClient, s.consentStore, s.pool)
-	accHandler.RegisterRoutes(protected)
+	accHandler.RegisterRoutes(mux, p)
+
+	return mux
 }
 
 // healthCheck handles GET /health.
@@ -131,8 +126,7 @@ func (s *Server) healthCheck(w http.ResponseWriter, r *http.Request) {
 
 // readinessCheck handles GET /ready.
 func (s *Server) readinessCheck(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 2)
 	defer cancel()
 	if err := s.pool.Ping(ctx); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -141,37 +135,4 @@ func (s *Server) readinessCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ready","service":"tpt-allied-health"}`))
-}
-
-// Start starts the HTTP server with graceful shutdown.
-func (s *Server) Start() error {
-	log.Info().Str("addr", s.config.Addr).Msg("Starting tpt-allied-health server")
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal().Err(err).Msg("Server failed to start")
-		}
-	}()
-
-	<-stop
-	log.Info().Msg("Shutting down server...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := s.server.Shutdown(ctx); err != nil {
-		log.Error().Err(err).Msg("Server forced to shutdown")
-		return err
-	}
-
-	log.Info().Msg("Server exited gracefully")
-	return nil
-}
-
-// Router returns the underlying router for testing.
-func (s *Server) Router() *mux.Router {
-	return s.router
 }

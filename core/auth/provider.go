@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -28,6 +29,12 @@ type Principal struct {
 type Provider interface {
 	Validate(ctx context.Context, token string) (*Principal, error)
 }
+
+// Common errors returned by auth provider implementations.
+var (
+	ErrInvalidConfig   = errors.New("auth: invalid configuration")
+	ErrNotImplemented  = errors.New("auth: not implemented")
+)
 
 // contextKey is an unexported type for context keys in this package, preventing
 // collisions with keys from other packages.

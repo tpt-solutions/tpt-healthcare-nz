@@ -11,11 +11,11 @@ import (
 
 // Config holds configuration for the pgxpool connection pool.
 type Config struct {
-	DSN                string
-	MaxConns           int32
-	MinConns           int32
-	MaxConnLifetime    time.Duration
-	MaxConnIdleTime    time.Duration
+	DSN             string
+	MaxConns        int32
+	MinConns        int32
+	MaxConnLifetime time.Duration
+	MaxConnIdleTime time.Duration
 }
 
 // New creates a new pgxpool.Pool from the provided Config and verifies connectivity via Ping.
@@ -68,4 +68,15 @@ func NewFromEnv(ctx context.Context) (*pgxpool.Pool, error) {
 	}
 
 	return New(ctx, cfg)
+}
+
+// Connect is a convenience wrapper around New for code that only has a DSN string.
+func Connect(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
+	return New(ctx, Config{
+		DSN:             dsn,
+		MaxConns:        25,
+		MinConns:        2,
+		MaxConnLifetime: 1 * time.Hour,
+		MaxConnIdleTime: 30 * time.Minute,
+	})
 }

@@ -1,19 +1,50 @@
-.PHONY: dev test build lint clean install icons help
+.PHONY: help dev dev-down test test-race build lint clean install icons \
+        build-% test-% lint-%
 
-INTEROP_BIN=./bin/tpt-health-interop
-DOCTOR_BIN=./bin/tpt-doctor
+# ---------------------------------------------------------------------------
+# Binaries
+# ---------------------------------------------------------------------------
+INTEROP_BIN := ./bin/tpt-health-interop
+
+# Modules that have a cmd/<binary> entrypoint (verified by listing cmd/).
+MODULES_WITH_CMD := \
+	doctor \
+	pharmacy \
+	pathology \
+	acupuncture \
+	chiropractic \
+	osteopathy \
+	massage \
+	counselling \
+	naturopathy \
+	tcm \
+	nutrition \
+	vision \
+	allied-health \
+	hospital \
+	dental \
+	blood-bank
+
+MODULE_BINS := $(foreach m,$(MODULES_WITH_CMD),./bin/tpt-$(shell echo $(m) | tr '_' '-'))
 
 help:
 	@echo "tpt-healthcare"
 	@echo ""
-	@echo "  make dev       Start full dev stack (PostgreSQL + Redis + interop)"
-	@echo "  make test      Run all Go tests"
-	@echo "  make build     Build all Go binaries"
-	@echo "  make lint      Run golangci-lint across all modules"
-	@echo "  make clean     Remove build artifacts"
-	@echo "  make install   Install binaries to /usr/local/bin"
-	@echo "  make icons     Generate PWA icons for all frontend apps"
+	@echo "  make dev                Start full dev stack (PostgreSQL + Redis + interop)"
+	@echo "  make dev-down           Stop the dev stack"
+	@echo "  make test               Run all Go tests (core + interop + modules)"
+	@echo "  make test-race          Run all Go tests with race detector"
+	@echo "  make lint               Run golangci-lint across all workspace modules"
+	@echo "  make build              Build all Go binaries (interop + modules)"
+	@echo "  make build-<module>     Build a single module binary (e.g. make build-vision)"
+	@echo "  make test-<module>      Test a single module (e.g. make test-core)"
+	@echo "  make clean              Remove build artifacts"
+	@echo "  make install            Install interop binary to /usr/local/bin"
+	@echo "  make icons              Generate PWA icons for all frontend apps"
 
+# ---------------------------------------------------------------------------
+# Development stack
+# ---------------------------------------------------------------------------
 dev:
 	docker compose -f deploy/docker-compose.dev.yml up -d
 	@echo "Dev stack running. Interop: http://localhost:8080"
@@ -21,26 +52,58 @@ dev:
 dev-down:
 	docker compose -f deploy/docker-compose.dev.yml down
 
+# ---------------------------------------------------------------------------
+# Testing
+# ---------------------------------------------------------------------------
 test:
-	go test ./core/... ./interop/...
+	go test ./core/... ./interop/... ./modules/...
 
 test-race:
-	go test -race ./core/... ./interop/...
+	go test -race ./core/... ./interop/... ./modules/...
 
-build:
-	mkdir -p bin
+# Per-module test target (accepts any package path).
+test-%:
+	go test ./$(subst -,,$*)/...
+
+# ---------------------------------------------------------------------------
+# Linting
+# ---------------------------------------------------------------------------
+lint:
+	golangci-lint run ./core/... ./interop/... ./modules/...
+
+lint-%:
+	golangci-lint run ./$(subst -,,$*)/...
+
+# ---------------------------------------------------------------------------
+# Building
+# ---------------------------------------------------------------------------
+build: build-interop build-modules
+
+build-interop:
+	@mkdir -p bin
 	go build -o $(INTEROP_BIN) ./interop/cmd/tpt-health-interop/
 
-lint:
-	golangci-lint run ./core/... ./interop/...
+build-modules:
+	@mkdir -p bin
+	@for module in $(MODULES_WITH_CMD); do \
+		binname="tpt-$$(echo $$module | tr '_' '-')"; \
+		go build -o ./bin/$$binname ./modules/tpt-$$module/cmd/tpt-$$module/; \
+	done
 
+# Build a single module by name, e.g. make build-vision.
+build-%:
+	@mkdir -p bin
+	@module=$(subst build-,,$@); \
+	binname="tpt-$$(echo $$module | tr '_' '-')"; \
+	go build -o ./bin/$$binname ./modules/tpt-$$module/cmd/tpt-$$module/
+
+# ---------------------------------------------------------------------------
+# Housekeeping
+# ---------------------------------------------------------------------------
 clean:
 	rm -rf bin/
 
-migrate:
-	$(INTEROP_BIN) migrate
-
-install: build
+install: build-interop
 	cp $(INTEROP_BIN) /usr/local/bin/
 
 icons:
