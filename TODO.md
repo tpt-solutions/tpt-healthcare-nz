@@ -260,37 +260,37 @@
   - [x] Renal transplant waitlist management
   - [x] Fluid balance and dry-weight tracking
   - [ ] Dialysis machine integration (future)
-- [ ] tpt-maternal-child-health
-  - [ ] LMC (Lead Maternity Carer) registration and case-loading
-  - [ ] Antenatal care (booking, growth scans, screening)
-  - [ ] Intrapartum care (birthing suite, partogram, CTG)
-  - [ ] Postnatal care (discharge, community midwife visits)
-  - [ ] Birth notification (NBRS — National Baby Record System)
-  - [ ] Neonatal NICU (≤28 days / <44 weeks corrected): ventilation charting, discharge planning
-  - [ ] SCBU (Special Care Baby Unit, ~32–36 weeks): step-down from NICU
-  - [ ] MMPO claiming integration
-  - [ ] Paediatric inpatient admissions with age/weight-adjusted clinical ranges
-  - [ ] PICU (Paediatric ICU, children >28 days): respiratory support, TPN, inotropes
-  - [ ] Growth and developmental milestone tracking
-  - [ ] Consent and assent documentation (parent/guardian proxy)
-  - [ ] Child protection flagging and reporting (Children's Act 2014)
-  - [ ] Well Child Tamariki Ora schedule (Plunket checks neonatal → B4 School Check)
-  - [ ] B4 School Check including SDQ (Strengths and Difficulties Questionnaire)
-- [ ] tpt-cardiology
-  - [ ] Cardiology outpatient clinic and follow-up
-  - [ ] ECG ordering, interpretation and storage
-  - [ ] Echocardiography requests and reports
-  - [ ] Holter / ambulatory BP monitoring
-  - [ ] Cath lab booking, procedure documentation, post-cath care
-  - [ ] Cardiac rehabilitation programme management
-  - [ ] Implantable device management (pacemaker, ICD)
-- [ ] tpt-rehabilitation
-  - [ ] Inpatient rehabilitation admission and functional assessment
-  - [ ] Goal setting (STG/LTG) with therapy discipline tracking (physio, OT, speech)
-  - [ ] FIM (Functional Independence Measure) scoring
-  - [ ] Community rehabilitation episodes (post-discharge follow-up)
-  - [ ] ACC rehabilitation plan management
-  - [ ] Discharge planning and NASC referral
+- [x] tpt-maternal-child-health
+  - [x] LMC (Lead Maternity Carer) registration and case-loading
+  - [x] Antenatal care (booking, growth scans, screening)
+  - [x] Intrapartum care (birthing suite, partogram, CTG)
+  - [x] Postnatal care (discharge, community midwife visits)
+  - [x] Birth notification (NBRS — National Baby Record System)
+  - [x] Neonatal NICU (≤28 days / <44 weeks corrected): ventilation charting, discharge planning
+  - [x] SCBU (Special Care Baby Unit, ~32–36 weeks): step-down from NICU
+  - [x] MMPO claiming integration
+  - [x] Paediatric inpatient admissions with age/weight-adjusted clinical ranges
+  - [x] PICU (Paediatric ICU, children >28 days): respiratory support, TPN, inotropes
+  - [x] Growth and developmental milestone tracking
+  - [x] Consent and assent documentation (parent/guardian proxy)
+  - [x] Child protection flagging and reporting (Children's Act 2014)
+  - [x] Well Child Tamariki Ora schedule (Plunket checks neonatal → B4 School Check)
+  - [x] B4 School Check including SDQ (Strengths and Difficulties Questionnaire)
+- [x] tpt-cardiology
+  - [x] Cardiology outpatient clinic and follow-up
+  - [x] ECG ordering, interpretation and storage
+  - [x] Echocardiography requests and reports
+  - [x] Holter / ambulatory BP monitoring
+  - [x] Cath lab booking, procedure documentation, post-cath care
+  - [x] Cardiac rehabilitation programme management
+  - [x] Implantable device management (pacemaker, ICD)
+- [x] tpt-rehabilitation
+  - [x] Inpatient rehabilitation admission and functional assessment
+  - [x] Goal setting (STG/LTG) with therapy discipline tracking (physio, OT, speech)
+  - [x] FIM (Functional Independence Measure) scoring
+  - [x] Community rehabilitation episodes (post-discharge follow-up)
+  - [x] ACC rehabilitation plan management
+  - [x] Discharge planning and NASC referral
 
 ## Remaining Modules (Post-Hospital)
 - [x] tpt-blood-bank (cross-matching, blood product inventory, donor management)
@@ -298,8 +298,8 @@
 - [x] tpt-vision (optometry/ophthalmology, prescription management, optical dispensing)
 - [x] tpt-allied-health (physio, OT, speech therapy, podiatry)
 - [x] tpt-community-health (district nursing, home visits, outreach)
-- [ ] tpt-addiction (methadone programme, counselling workflows)
-- [ ] tpt-palliative (hospice, advance care planning, pain protocols)
+- [x] tpt-addiction (methadone programme, counselling workflows)
+- [x] tpt-palliative (hospice, advance care planning, pain protocols)
 - [ ] tpt-disability (NASC, support plans, funded hours)
 - [ ] tpt-screening (national programmes, recall systems, results management)
 - [ ] tpt-epidemiology (disease surveillance, outbreak investigation, public health reporting)

@@ -1,11 +1,14 @@
-// Package api implements the tpt-palliative HTTP server and route handlers.
-// All resources carry extra_sensitive = true for end-of-life data protection.
+// Package api implements the tpt-palliative HTTP server.
+// Covers hospice patient management, advance care planning, and WHO analgesic ladder pain protocols.
+// All palliative resources carry extra_sensitive = true for enhanced HIPC protection.
 package api
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -13,13 +16,17 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/auth"
 	"github.com/PhillipC05/tpt-healthcare/core/auth/auth0"
-	"github.com/PhillipC05/tpt-healthcare/core/db"
+	coredb "github.com/PhillipC05/tpt-healthcare/core/db"
+	"github.com/PhillipC05/tpt-healthcare/core/db/migrate"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
+	palldb "github.com/PhillipC05/tpt-healthcare/modules/tpt-palliative/db"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Config holds all configuration for the tpt-palliative server.
+// Config holds all runtime configuration for the palliative server.
 type Config struct {
 	Host          string
 	Port          int
@@ -36,7 +43,7 @@ type Config struct {
 type Server struct {
 	cfg        Config
 	mux        *http.ServeMux
-	pool       db.Pool
+	pool       *pgxpool.Pool
 	enc        *encryption.Cipher
 	auth       auth.Provider
 	hpiClient  *hpi.Client
@@ -53,7 +60,7 @@ func NewServer(cfg Config) (*Server, error) {
 		cfg.TenantHeader = "X-Tenant-ID"
 	}
 
-	pool, err := db.Connect(context.Background(), cfg.DatabaseURL)
+	pool, err := coredb.Connect(context.Background(), cfg.DatabaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("connect to database: %w", err)
 	}
@@ -74,7 +81,7 @@ func NewServer(cfg Config) (*Server, error) {
 		enc:        enc,
 		auth:       authProvider,
 		hpiClient:  hpi.NewClient(cfg.RedisURL, cfg.Logger),
-		auditTrail: audit.NewTrail(pool),
+		auditTrail: audit.New(pool),
 		logger:     cfg.Logger,
 	}
 	s.mux = s.buildRoutes()
@@ -85,10 +92,6 @@ func NewServer(cfg Config) (*Server, error) {
 func (s *Server) Handler() http.Handler { return s.mux }
 
 func (s *Server) buildRoutes() *http.ServeMux {
-	hospice := &HospiceHandler{pool: s.pool, auditTrail: s.auditTrail, logger: s.logger}
-	acp := &ACPHandler{pool: s.pool, auditTrail: s.auditTrail, logger: s.logger}
-	pain := &PainHandler{pool: s.pool, auditTrail: s.auditTrail, logger: s.logger}
-
 	chain := func(h http.Handler) http.Handler {
 		h = middleware.AuditWrap(h, s.auditTrail)
 		h = middleware.Auth(h, s.auth)
@@ -103,7 +106,16 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/ready", s.handleReady)
 
-	// -- Hospice / palliative patient routes --
+	deps := handlerDeps{
+		pool:       s.pool,
+		enc:        s.enc,
+		hpiClient:  s.hpiClient,
+		auditTrail: s.auditTrail,
+		logger:     s.logger,
+	}
+
+	// Hospice / palliative patient routes
+	hospice := &hospiceHandler{handlerDeps: deps}
 	mux.Handle("GET /api/v1/palliative/patients", chain(http.HandlerFunc(hospice.ListPatients)))
 	mux.Handle("POST /api/v1/palliative/patients", chain(http.HandlerFunc(hospice.CreatePatient)))
 	mux.Handle("GET /api/v1/palliative/patients/{patientId}", chain(http.HandlerFunc(hospice.GetPatient)))
@@ -113,7 +125,8 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.Handle("GET /api/v1/palliative/patients/{patientId}/goals-of-care", chain(http.HandlerFunc(hospice.ListGoalsOfCare)))
 	mux.Handle("POST /api/v1/palliative/patients/{patientId}/goals-of-care", chain(http.HandlerFunc(hospice.AddGoalOfCare)))
 
-	// -- Advance Care Planning routes --
+	// Advance Care Planning routes
+	acp := &acpHandler{handlerDeps: deps}
 	mux.Handle("GET /api/v1/palliative/acp-plans", chain(http.HandlerFunc(acp.ListPlans)))
 	mux.Handle("POST /api/v1/palliative/acp-plans", chain(http.HandlerFunc(acp.CreatePlan)))
 	mux.Handle("GET /api/v1/palliative/acp-plans/{planId}", chain(http.HandlerFunc(acp.GetPlan)))
@@ -121,7 +134,8 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.Handle("GET /api/v1/palliative/acp-plans/{planId}/decisions", chain(http.HandlerFunc(acp.ListDecisions)))
 	mux.Handle("POST /api/v1/palliative/acp-plans/{planId}/decisions", chain(http.HandlerFunc(acp.AddDecision)))
 
-	// -- Pain protocol routes --
+	// Pain protocol routes
+	pain := &painHandler{handlerDeps: deps}
 	mux.Handle("GET /api/v1/palliative/pain-assessments", chain(http.HandlerFunc(pain.ListAssessments)))
 	mux.Handle("POST /api/v1/palliative/pain-assessments", chain(http.HandlerFunc(pain.CreateAssessment)))
 	mux.Handle("GET /api/v1/palliative/pain-assessments/{assessmentId}", chain(http.HandlerFunc(pain.GetAssessment)))
@@ -144,69 +158,68 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	if err := s.pool.Ping(r.Context()); err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable", "reason": "database not reachable"})
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ready", "service": "tpt-palliative"})
 }
 
-// RunMigrations runs database migrations for the tpt-palliative module.
+// RunMigrations runs the module's embedded SQL migrations.
 func RunMigrations(ctx context.Context, databaseURL string, logger *slog.Logger) error {
-	pool, err := db.Connect(ctx, databaseURL)
+	pool, err := coredb.Connect(ctx, databaseURL)
 	if err != nil {
 		return fmt.Errorf("connect for migrations: %w", err)
 	}
 	defer pool.Close()
-	if err := db.Migrate(ctx, pool, logger); err != nil {
-		return fmt.Errorf("run migrations: %w", err)
-	}
-	return nil
+	r := migrate.New(palldb.Migrations, pool)
+	return r.Up(ctx)
 }
 
 // ValidateConnectivity checks that the database is reachable.
 func ValidateConnectivity(ctx context.Context, cfg Config) error {
-	pool, err := db.Connect(ctx, cfg.DatabaseURL)
+	pool, err := coredb.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("database connection failed: %w", err)
 	}
 	defer pool.Close()
-	if err := pool.Ping(ctx); err != nil {
-		return fmt.Errorf("database ping failed: %w", err)
-	}
-	cfg.Logger.Info("connectivity validation complete")
-	return nil
+	return pool.Ping(ctx)
+}
+
+// handlerDeps is a shared dependency bundle injected into all domain handlers.
+type handlerDeps struct {
+	pool       *pgxpool.Pool
+	enc        *encryption.Cipher
+	hpiClient  *hpi.Client
+	auditTrail *audit.Trail
+	logger     *slog.Logger
 }
 
 type apiError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
-	Details any    `json:"details,omitempty"`
 }
+
+var errNotFound = errors.New("record not found")
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(v); err != nil {
-		slog.Error("writeJSON encode error", slog.Any("error", err))
-	}
+	_ = json.NewEncoder(w).Encode(v)
 }
 
 func decodeJSON(r *http.Request, v any) error {
 	defer r.Body.Close()
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(v); err != nil {
 		return fmt.Errorf("decode request body: %w", err)
 	}
 	return nil
 }
 
 func genUUID() string {
-	return "stub-uuid"
+	return uuid.New().String()
 }
 
 func parseTime(s string) time.Time {
 	t, _ := time.Parse(time.RFC3339, s)
-	if t.IsZero() {
-		t = time.Now()
-	}
 	return t
 }

@@ -17,11 +17,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var (
-	cfgFile string
-	host    string
-	port    int
-)
+var cfgFile string
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
@@ -35,24 +31,15 @@ var rootCmd = &cobra.Command{
 	Short: "tpt-community-health — District nursing, home visits, and outreach for NZ",
 	Long: `tpt-community-health provides community health workflows including
 home visit scheduling and documentation, district nursing care plans,
-and community outreach program management for the tpt-healthcare NZ platform.`,
+and community outreach programme management for the tpt-healthcare NZ platform.`,
 }
 
 func init() {
 	cobra.OnInitialize(initConfig)
-
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: tpt-community-health.yaml in current directory or /etc/tpt)")
-
 	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(migrateCmd)
 	rootCmd.AddCommand(validateCmd)
-
-	serveCmd.Flags().StringVar(&host, "host", "0.0.0.0", "host address to bind")
-	serveCmd.Flags().IntVar(&port, "port", 8092, "port to listen on")
-	serveCmd.Flags().String("config", "", "path to config file")
-
-	_ = viper.BindPFlag("server.host", serveCmd.Flags().Lookup("host"))
-	_ = viper.BindPFlag("server.port", serveCmd.Flags().Lookup("port"))
 }
 
 func initConfig() {
@@ -65,10 +52,8 @@ func initConfig() {
 		viper.AddConfigPath("/etc/tpt")
 		viper.AddConfigPath("$HOME/.tpt")
 	}
-
 	viper.SetEnvPrefix("TPT_COMMUNITY_HEALTH")
 	viper.AutomaticEnv()
-
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			fmt.Fprintf(os.Stderr, "error reading config: %v\n", err)
@@ -80,27 +65,27 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the tpt-community-health HTTP server",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			Level: slog.LevelInfo,
-		}))
+		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 		cfg := api.Config{
-			Addr:          fmt.Sprintf("%s:%d", viper.GetString("server.host"), viper.GetInt("server.port")),
-			ReadTimeout:   15,
-			WriteTimeout:  15,
-			IdleTimeout:   60,
+			Host:          viper.GetString("server.host"),
+			Port:          viper.GetInt("server.port"),
 			DatabaseURL:   viper.GetString("database.url"),
+			RedisURL:      viper.GetString("redis.url"),
+			EncryptionKey: viper.GetString("encryption.key"),
 			Auth0Domain:   viper.GetString("auth0.domain"),
 			Auth0Audience: viper.GetString("auth0.audience"),
+			TenantHeader:  viper.GetString("server.tenant_header"),
 			Logger:        logger,
 		}
-
+		if cfg.Host == "" {
+			cfg.Host = "0.0.0.0"
+		}
+		if cfg.Port == 0 {
+			cfg.Port = 8092
+		}
 		if cfg.DatabaseURL == "" {
 			return fmt.Errorf("database.url is required (set TPT_COMMUNITY_HEALTH_DATABASE_URL)")
-		}
-
-		if cfg.AllowedOrigins == nil {
-			cfg.AllowedOrigins = []string{"*"}
 		}
 
 		srv, err := api.NewServer(cfg)
@@ -108,16 +93,17 @@ var serveCmd = &cobra.Command{
 			return fmt.Errorf("create server: %w", err)
 		}
 
+		addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 		httpSrv := &http.Server{
-			Addr:         cfg.Addr,
+			Addr:         addr,
 			Handler:      srv.Handler(),
-			ReadTimeout:  time.Duration(cfg.ReadTimeout) * time.Second,
-			WriteTimeout: time.Duration(cfg.WriteTimeout) * time.Second,
-			IdleTimeout:  time.Duration(cfg.IdleTimeout) * time.Second,
+			ReadTimeout:  15 * time.Second,
+			WriteTimeout: 15 * time.Second,
+			IdleTimeout:  60 * time.Second,
 		}
 
 		go func() {
-			logger.Info("tpt-community-health server starting", slog.String("addr", cfg.Addr))
+			logger.Info("tpt-community-health server starting", slog.String("addr", addr))
 			if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				logger.Error("server error", slog.Any("error", err))
 				os.Exit(1)
@@ -143,16 +129,12 @@ var migrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Run database migrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			Level: slog.LevelInfo,
-		}))
-
+		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 		dbURL := viper.GetString("database.url")
 		if dbURL == "" {
 			return fmt.Errorf("database.url is required (set TPT_COMMUNITY_HEALTH_DATABASE_URL)")
 		}
-
-		logger.Info("running migrations", slog.String("database_url", dbURL))
+		logger.Info("running migrations")
 		if err := api.RunMigrations(context.Background(), dbURL, logger); err != nil {
 			return fmt.Errorf("migrations failed: %w", err)
 		}
@@ -165,43 +147,33 @@ var validateCmd = &cobra.Command{
 	Use:   "validate",
 	Short: "Validate configuration and connectivity",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			Level: slog.LevelInfo,
-		}))
-
+		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 		logger.Info("validating tpt-community-health configuration")
 
-		checks := []struct {
-			name string
-			key  string
-		}{
+		checks := []struct{ name, key string }{
 			{"database URL", "database.url"},
 			{"auth0 domain", "auth0.domain"},
 			{"auth0 audience", "auth0.audience"},
+			{"encryption key", "encryption.key"},
 		}
-
 		allOK := true
 		for _, c := range checks {
-			val := viper.GetString(c.key)
-			if val == "" {
+			if viper.GetString(c.key) == "" {
 				logger.Warn("missing configuration", slog.String("key", c.name))
 				allOK = false
 			} else {
 				logger.Info("configuration OK", slog.String("key", c.name))
 			}
 		}
-
 		if !allOK {
 			return fmt.Errorf("configuration validation failed — see warnings above")
 		}
-
 		if err := api.ValidateConnectivity(context.Background(), api.Config{
 			DatabaseURL: viper.GetString("database.url"),
 			Logger:      logger,
 		}); err != nil {
 			return fmt.Errorf("connectivity check failed: %w", err)
 		}
-
 		logger.Info("all checks passed")
 		return nil
 	},

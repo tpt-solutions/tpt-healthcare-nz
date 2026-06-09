@@ -114,6 +114,12 @@ func (h *episodeHandler) List(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, apiError{Code: "SCAN_ERROR", Message: err.Error()})
 			return
 		}
+		nhi, err := h.decryptNHI(ep.PatientNHI)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, apiError{Code: "DECRYPT_ERROR", Message: "failed to decrypt patient NHI"})
+			return
+		}
+		ep.PatientNHI = nhi
 		episodes = append(episodes, ep)
 	}
 	if err := rows.Err(); err != nil {
@@ -142,9 +148,17 @@ func (h *episodeHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if req.RiskLevel == "" {
 		req.RiskLevel = string(RiskLevelStandard)
 	}
+	if !h.validateHPI(w, r, req.LMCHpi) {
+		return
+	}
+	nhiEnc, err := h.encryptNHI(req.PatientNHI)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "ENCRYPT_ERROR", Message: "failed to encrypt patient NHI"})
+		return
+	}
 
 	var ep Episode
-	err := h.pool.QueryRow(r.Context(), `
+	err = h.pool.QueryRow(r.Context(), `
 		INSERT INTO maternity_episodes
 		    (patient_nhi, lmc_hpi, status, edd, lmp, gestation_at_booking_weeks, gravida, parity, risk_level, notes, tenant_id)
 		VALUES
@@ -153,7 +167,7 @@ func (h *episodeHandler) Create(w http.ResponseWriter, r *http.Request) {
 		          gestation_at_booking_weeks, gravida, parity, risk_level, notes, tenant_id,
 		          created_at, updated_at
 	`, pgx.NamedArgs{
-		"nhi":        req.PatientNHI,
+		"nhi":        nhiEnc,
 		"lmc_hpi":    req.LMCHpi,
 		"edd":        req.EDD,
 		"lmp":        req.LMP,
@@ -172,6 +186,13 @@ func (h *episodeHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: fmt.Sprintf("create episode: %s", err)})
 		return
 	}
+	nhi, err := h.decryptNHI(ep.PatientNHI)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DECRYPT_ERROR", Message: "failed to decrypt patient NHI"})
+		return
+	}
+	ep.PatientNHI = nhi
+	h.recordAudit(r, "create", "MaternityEpisode", ep.ID, nhiEnc)
 	writeJSON(w, http.StatusCreated, ep)
 }
 
@@ -203,6 +224,12 @@ func (h *episodeHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: err.Error()})
 		return
 	}
+	nhi, err := h.decryptNHI(ep.PatientNHI)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DECRYPT_ERROR", Message: "failed to decrypt patient NHI"})
+		return
+	}
+	ep.PatientNHI = nhi
 	writeJSON(w, http.StatusOK, ep)
 }
 
@@ -260,6 +287,13 @@ func (h *episodeHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: err.Error()})
 		return
 	}
+	h.recordAudit(r, "update", "MaternityEpisode", ep.ID, ep.PatientNHI)
+	nhi, err := h.decryptNHI(ep.PatientNHI)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DECRYPT_ERROR", Message: "failed to decrypt patient NHI"})
+		return
+	}
+	ep.PatientNHI = nhi
 	writeJSON(w, http.StatusOK, ep)
 }
 
@@ -284,5 +318,6 @@ func (h *episodeHandler) Close(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "episode not found or already closed"})
 		return
 	}
+	h.recordAudit(r, "delete", "MaternityEpisode", id, "")
 	writeJSON(w, http.StatusOK, map[string]string{"status": "closed"})
 }

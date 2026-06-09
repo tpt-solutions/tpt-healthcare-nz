@@ -1,4 +1,4 @@
--- 003_pain_protocols.sql
+-- 003_pain_protocols.up.sql
 -- WHO analgesic ladder pain assessment and protocol tables.
 
 CREATE TABLE IF NOT EXISTS pain_assessments (
@@ -23,14 +23,13 @@ CREATE TABLE IF NOT EXISTS pain_assessments (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_pain_assessments_patient ON pain_assessments(tenant_id, patient_nhi, assessment_date DESC);
-CREATE INDEX idx_pain_assessments_severity ON pain_assessments(tenant_id, severity) WHERE severity IN ('moderate','severe');
+CREATE INDEX IF NOT EXISTS idx_pain_assessments_patient ON pain_assessments(tenant_id, patient_nhi, assessment_date DESC);
+CREATE INDEX IF NOT EXISTS idx_pain_assessments_severity ON pain_assessments(tenant_id, severity) WHERE severity IN ('moderate','severe');
 
 ALTER TABLE pain_assessments ENABLE ROW LEVEL SECURITY;
 CREATE POLICY pain_assessments_tenant_only ON pain_assessments
     USING (tenant_id = current_setting('app.current_tenant_id')::UUID);
 
--- Pain protocol records (WHO ladder step assignment with regimen)
 CREATE TABLE IF NOT EXISTS pain_protocols (
     id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id            UUID NOT NULL,
@@ -53,8 +52,8 @@ CREATE TABLE IF NOT EXISTS pain_protocols (
     updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_pain_protocols_patient ON pain_protocols(tenant_id, patient_nhi, start_date DESC);
-CREATE INDEX idx_pain_protocols_active ON pain_protocols(tenant_id, end_date) WHERE end_date IS NULL;
+CREATE INDEX IF NOT EXISTS idx_pain_protocols_patient ON pain_protocols(tenant_id, patient_nhi, start_date DESC);
+CREATE INDEX IF NOT EXISTS idx_pain_protocols_active ON pain_protocols(tenant_id, end_date) WHERE end_date IS NULL;
 
 ALTER TABLE pain_protocols ENABLE ROW LEVEL SECURITY;
 CREATE POLICY pain_protocols_tenant_only ON pain_protocols
