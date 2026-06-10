@@ -265,9 +265,9 @@ func (h *EDHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "EDPresentation",
-		ResourceID: id, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "EDPresentation",
+		ResourceID: id, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, updated)
 }
@@ -287,7 +287,7 @@ func (h *EDHandler) Assign(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getPresentationByID(ctx, id, tenantID)
+	existing, err := h.getPresentationByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "presentation not found"})
@@ -323,10 +323,11 @@ func (h *EDHandler) Assign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "EDPresentation",
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "EDPresentation",
 		ResourceID: id, TenantID: tenantID,
-		Metadata: map[string]string{"action": "assign", "clinician": req.ClinicianHPI},
+		Details:    map[string]any{"action": "assign", "clinician": req.ClinicianHPI},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, updated)
 }
@@ -346,7 +347,7 @@ func (h *EDHandler) Dispose(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getPresentationByID(ctx, id, tenantID)
+	existing, err := h.getPresentationByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "presentation not found"})
@@ -385,10 +386,11 @@ func (h *EDHandler) Dispose(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "EDPresentation",
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "EDPresentation",
 		ResourceID: id, TenantID: tenantID,
-		Metadata: map[string]string{"action": "dispose", "disposition": string(req.Disposition)},
+		Details:    map[string]any{"action": "dispose", "disposition": string(req.Disposition)},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, disposed)
 }
