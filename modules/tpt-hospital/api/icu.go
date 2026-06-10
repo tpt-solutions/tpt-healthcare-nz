@@ -221,7 +221,7 @@ func (h *ICUHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	adm, err := h.getICUAdmissionByID(ctx, id, tenantID)
+	adm, err := h.getICUAdmissionByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "ICU admission not found"})
@@ -232,9 +232,9 @@ func (h *ICUHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "ICUAdmission",
-		ResourceID: id, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "ICUAdmission",
+		ResourceID: id, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, adm)
 }
@@ -254,7 +254,7 @@ func (h *ICUHandler) AddChart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	if _, err := h.getICUAdmissionByID(ctx, id, tenantID); err != nil {
+	if _, err := h.getICUAdmissionByID(ctx, id, tenantID.String()); err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "ICU admission not found"})
 			return
