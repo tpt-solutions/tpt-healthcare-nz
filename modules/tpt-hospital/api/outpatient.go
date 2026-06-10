@@ -173,16 +173,16 @@ func (h *OutpatientHandler) ListAppointments(w http.ResponseWriter, r *http.Requ
 
 	clinicID := r.PathValue("id")
 	statusFilter := r.URL.Query().Get("status")
-	appts, err := h.listAppointments(ctx, clinicID, tenantID, statusFilter)
+	appts, err := h.listAppointments(ctx, clinicID, tenantID.String(), statusFilter)
 	if err != nil {
 		h.logger.Error("list outpatient appointments", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list appointments"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "OutpatientAppointment",
-		ResourceID: clinicID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "OutpatientAppointment",
+		ResourceID: clinicID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"appointments": appts, "total": len(appts)})
 }
