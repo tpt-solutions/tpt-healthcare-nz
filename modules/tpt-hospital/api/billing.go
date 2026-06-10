@@ -187,16 +187,16 @@ func (h *BillingHandler) CreateInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	invoice, err := h.insertInvoice(ctx, admissionID, req, tenantID)
+	invoice, err := h.insertInvoice(ctx, admissionID, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("create hospital invoice", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create invoice"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "HospitalInvoice",
-		ResourceID: invoice.ID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "HospitalInvoice",
+		ResourceID: invoice.ID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, invoice)
 }
@@ -216,7 +216,7 @@ func (h *BillingHandler) SubmitInvoice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	admissionID := r.PathValue("admissionId")
-	existing, err := h.getInvoiceByAdmission(ctx, admissionID, tenantID)
+	existing, err := h.getInvoiceByAdmission(ctx, admissionID, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "no invoice found for this admission"})
@@ -232,16 +232,18 @@ func (h *BillingHandler) SubmitInvoice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC()
-	submitted, err := h.submitInvoice(ctx, existing.ID, now, tenantID)
+	submitted, err := h.submitInvoice(ctx, existing.ID, now, tenantID.String())
 	if err != nil {
 		h.logger.Error("submit hospital invoice", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "SUBMIT_ERROR", Message: "failed to submit invoice"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "HospitalInvoice",
-		ResourceID: existing.ID, TenantID: tenantID, Metadata: map[string]string{"action": "submit"},
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "HospitalInvoice",
+		ResourceID: existing.ID, TenantID: tenantID,
+		Details:    map[string]any{"action": "submit"},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, submitted)
 }
