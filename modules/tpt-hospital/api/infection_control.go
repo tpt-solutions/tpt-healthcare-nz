@@ -341,7 +341,7 @@ func (h *InfectionControlHandler) RemoveIsolation(w http.ResponseWriter, r *http
 	admissionID := r.PathValue("admissionId")
 	isolationID := r.PathValue("isolationId")
 
-	if err := h.endIsolationOrder(ctx, isolationID, admissionID, tenantID); err != nil {
+	if err := h.endIsolationOrder(ctx, isolationID, admissionID, tenantID.String()); err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "isolation order not found"})
 			return
@@ -351,10 +351,11 @@ func (h *InfectionControlHandler) RemoveIsolation(w http.ResponseWriter, r *http
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "IsolationOrder",
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "delete", ResourceType: "IsolationOrder",
 		ResourceID: isolationID, TenantID: tenantID,
-		Metadata: map[string]string{"action": "remove", "admissionId": admissionID},
+		Details:    map[string]any{"action": "remove", "admission_id": admissionID},
+		OccurredAt: time.Now().UTC(),
 	})
 	w.WriteHeader(http.StatusNoContent)
 }

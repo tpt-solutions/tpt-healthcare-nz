@@ -125,7 +125,7 @@ func (h *OutpatientHandler) ListClinics(w http.ResponseWriter, r *http.Request) 
 	}
 
 	specialty := r.URL.Query().Get("specialty")
-	clinics, err := h.listClinics(ctx, tenantID, specialty)
+	clinics, err := h.listClinics(ctx, tenantID.String(), specialty)
 	if err != nil {
 		h.logger.Error("list outpatient clinics", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list clinics"})
@@ -144,7 +144,7 @@ func (h *OutpatientHandler) GetClinic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	clinic, err := h.getClinicByID(ctx, id, tenantID)
+	clinic, err := h.getClinicByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "clinic not found"})
