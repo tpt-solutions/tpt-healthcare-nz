@@ -213,7 +213,7 @@ func (h *InfectionControlHandler) UpdateAlert(w http.ResponseWriter, r *http.Req
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getAlertByID(ctx, id, tenantID)
+	existing, err := h.getAlertByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "alert not found"})
@@ -253,9 +253,9 @@ func (h *InfectionControlHandler) UpdateAlert(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "ICAlert",
-		ResourceID: id, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "ICAlert",
+		ResourceID: id, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, updated)
 }
@@ -270,7 +270,7 @@ func (h *InfectionControlHandler) ListIsolation(w http.ResponseWriter, r *http.R
 	}
 
 	admissionID := r.PathValue("admissionId")
-	orders, err := h.listIsolationOrders(ctx, admissionID, tenantID)
+	orders, err := h.listIsolationOrders(ctx, admissionID, tenantID.String())
 	if err != nil {
 		h.logger.Error("list isolation orders", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list isolation orders"})
@@ -308,17 +308,18 @@ func (h *InfectionControlHandler) ApplyIsolation(w http.ResponseWriter, r *http.
 		return
 	}
 
-	order, err := h.insertIsolationOrder(ctx, admissionID, req, tenantID)
+	order, err := h.insertIsolationOrder(ctx, admissionID, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("apply isolation order", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to apply isolation order"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "IsolationOrder",
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "IsolationOrder",
 		ResourceID: order.ID, TenantID: tenantID,
-		Metadata: map[string]string{"admissionId": admissionID, "type": string(req.IsolationType)},
+		Details:    map[string]any{"admission_id": admissionID, "type": string(req.IsolationType)},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, order)
 }
