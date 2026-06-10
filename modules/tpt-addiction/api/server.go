@@ -21,6 +21,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
+	"github.com/PhillipC05/tpt-healthcare/core/primhd"
 	addictiondb "github.com/PhillipC05/tpt-healthcare/modules/tpt-addiction/db"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -35,19 +36,25 @@ type Config struct {
 	Auth0Domain   string
 	Auth0Audience string
 	TenantHeader  string
-	Logger        *slog.Logger
+	// PRIMHDBaseURL is the root URL for the PRIMHD outcomes reporting API.
+	// Leave empty to disable PRIMHD reporting.
+	PRIMHDBaseURL string
+	// PRIMHDToken is the bearer token for PRIMHD API requests.
+	PRIMHDToken string
+	Logger      *slog.Logger
 }
 
 // Server is the tpt-addiction HTTP server.
 type Server struct {
-	cfg        Config
-	mux        *http.ServeMux
-	pool       *pgxpool.Pool
-	enc        *encryption.Cipher
-	auth       auth.Provider
-	hpiClient  *hpi.Client
-	auditTrail *audit.Trail
-	logger     *slog.Logger
+	cfg          Config
+	mux          *http.ServeMux
+	pool         *pgxpool.Pool
+	enc          *encryption.Cipher
+	auth         auth.Provider
+	hpiClient    *hpi.Client
+	primhdClient *primhd.Client
+	auditTrail   *audit.Trail
+	logger       *slog.Logger
 }
 
 // NewServer constructs and wires the addiction server.
@@ -67,14 +74,23 @@ func NewServer(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("init auth0 provider: %w", err)
 	}
+	var primhdClient *primhd.Client
+	if cfg.PRIMHDBaseURL != "" {
+		token := cfg.PRIMHDToken
+		primhdClient = primhd.New(cfg.PRIMHDBaseURL, func(_ context.Context) (string, error) {
+			return token, nil
+		})
+	}
+
 	s := &Server{
-		cfg:        cfg,
-		pool:       pool,
-		enc:        enc,
-		auth:       authProvider,
-		hpiClient:  hpi.NewClient(cfg.RedisURL, cfg.Logger),
-		auditTrail: audit.New(pool),
-		logger:     cfg.Logger,
+		cfg:          cfg,
+		pool:         pool,
+		enc:          enc,
+		auth:         authProvider,
+		hpiClient:    hpi.NewClient(cfg.RedisURL, cfg.Logger),
+		primhdClient: primhdClient,
+		auditTrail:   audit.New(pool),
+		logger:       cfg.Logger,
 	}
 	s.mux = s.buildRoutes()
 	return s, nil
@@ -85,11 +101,12 @@ func (s *Server) Handler() http.Handler { return s.mux }
 
 func (s *Server) buildRoutes() *http.ServeMux {
 	deps := handlerDeps{
-		pool:       s.pool,
-		enc:        s.enc,
-		hpiClient:  s.hpiClient,
-		auditTrail: s.auditTrail,
-		logger:     s.logger,
+		pool:         s.pool,
+		enc:          s.enc,
+		hpiClient:    s.hpiClient,
+		primhdClient: s.primhdClient,
+		auditTrail:   s.auditTrail,
+		logger:       s.logger,
 	}
 
 	// chain applies the standard middleware stack. All addiction routes require the
@@ -188,11 +205,12 @@ func ValidateConnectivity(ctx context.Context, cfg Config) error {
 
 // handlerDeps is the shared dependency bundle injected into all domain handlers.
 type handlerDeps struct {
-	pool       *pgxpool.Pool
-	enc        *encryption.Cipher
-	hpiClient  *hpi.Client
-	auditTrail *audit.Trail
-	logger     *slog.Logger
+	pool         *pgxpool.Pool
+	enc          *encryption.Cipher
+	hpiClient    *hpi.Client
+	primhdClient *primhd.Client
+	auditTrail   *audit.Trail
+	logger       *slog.Logger
 }
 
 type apiError struct {

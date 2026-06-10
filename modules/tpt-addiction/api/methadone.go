@@ -2,36 +2,41 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/PhillipC05/tpt-healthcare/core/primhd"
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-addiction/internal/methadone"
 	"github.com/jackc/pgx/v5"
 )
 
 // Programme is the API representation of an OST programme (maps addiction_programmes).
 type Programme struct {
-	ID               string     `json:"id"`
-	TenantID         string     `json:"tenantId"`
-	PatientNHI       string     `json:"patientNhi"`
-	ClinicianID      string     `json:"clinicianId"`
-	PracticeID       string     `json:"practiceId"`
-	StartDate        time.Time  `json:"startDate"`
-	EndDate          *time.Time `json:"endDate,omitempty"`
-	Phase            string     `json:"phase"`
-	SubstancePrimary string     `json:"substancePrimary"`
-	SubstanceOther   string     `json:"substanceOther,omitempty"`
-	InitialDoseMg    float64    `json:"initialDoseMg"`
-	CurrentDoseMg    float64    `json:"currentDoseMg"`
-	TargetDoseMg     *float64   `json:"targetDoseMg,omitempty"`
-	TakeHomeLevel    int        `json:"takeHomeLevel"`
-	TakeHomeMaxDays  int        `json:"takeHomeMaxDays"`
-	Pregnancy        bool       `json:"pregnancy"`
-	Comorbidities    []string   `json:"comorbidities"`
-	LastUrineDate    *time.Time `json:"lastUrineDate,omitempty"`
-	NextReviewDate   time.Time  `json:"nextReviewDate"`
-	CreatedAt        time.Time  `json:"createdAt"`
-	UpdatedAt        time.Time  `json:"updatedAt"`
+	ID                string     `json:"id"`
+	TenantID          string     `json:"tenantId"`
+	PatientNHI        string     `json:"patientNhi"`
+	ClinicianID       string     `json:"clinicianId"`
+	PracticeID        string     `json:"practiceId"`
+	StartDate         time.Time  `json:"startDate"`
+	EndDate           *time.Time `json:"endDate,omitempty"`
+	Phase             string     `json:"phase"`
+	SubstancePrimary  string     `json:"substancePrimary"`
+	SubstanceOther    string     `json:"substanceOther,omitempty"`
+	InitialDoseMg     float64    `json:"initialDoseMg"`
+	CurrentDoseMg     float64    `json:"currentDoseMg"`
+	TargetDoseMg      *float64   `json:"targetDoseMg,omitempty"`
+	TakeHomeLevel     int        `json:"takeHomeLevel"`
+	TakeHomeMaxDays   int        `json:"takeHomeMaxDays"`
+	Pregnancy         bool       `json:"pregnancy"`
+	Comorbidities     []string   `json:"comorbidities"`
+	LastUrineDate     *time.Time `json:"lastUrineDate,omitempty"`
+	NextReviewDate    time.Time  `json:"nextReviewDate"`
+	// PRIMHDReferralID is the identifier issued by PRIMHD when the referral was
+	// opened for this patient. Required for activity and discharge reporting.
+	PRIMHDReferralID  string     `json:"primhdReferralId,omitempty"`
+	CreatedAt         time.Time  `json:"createdAt"`
+	UpdatedAt         time.Time  `json:"updatedAt"`
 }
 
 const progSelectCols = `id, tenant_id, patient_nhi, clinician_id, practice_id,
@@ -40,6 +45,7 @@ const progSelectCols = `id, tenant_id, patient_nhi, clinician_id, practice_id,
        initial_dose_mg, current_dose_mg, target_dose_mg,
        take_home_level, take_home_max_days, pregnancy,
        COALESCE(comorbidities, '{}'), last_urine_date, next_review_date,
+       COALESCE(primhd_referral_id,''),
        created_at, updated_at`
 
 func scanProgramme(row interface{ Scan(...any) error }, p *Programme) error {
@@ -50,6 +56,7 @@ func scanProgramme(row interface{ Scan(...any) error }, p *Programme) error {
 		&p.InitialDoseMg, &p.CurrentDoseMg, &p.TargetDoseMg,
 		&p.TakeHomeLevel, &p.TakeHomeMaxDays, &p.Pregnancy,
 		&p.Comorbidities, &p.LastUrineDate, &p.NextReviewDate,
+		&p.PRIMHDReferralID,
 		&p.CreatedAt, &p.UpdatedAt,
 	)
 }
@@ -227,6 +234,7 @@ func (h *methadoneHandler) CreateProgramme(w http.ResponseWriter, r *http.Reques
 		&p.InitialDoseMg, &p.CurrentDoseMg, &p.TargetDoseMg,
 		&p.TakeHomeLevel, &p.TakeHomeMaxDays, &p.Pregnancy,
 		&p.Comorbidities, &p.LastUrineDate, &p.NextReviewDate,
+		&p.PRIMHDReferralID,
 		&p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
@@ -256,6 +264,7 @@ func (h *methadoneHandler) GetProgramme(w http.ResponseWriter, r *http.Request) 
 		&p.InitialDoseMg, &p.CurrentDoseMg, &p.TargetDoseMg,
 		&p.TakeHomeLevel, &p.TakeHomeMaxDays, &p.Pregnancy,
 		&p.Comorbidities, &p.LastUrineDate, &p.NextReviewDate,
+		&p.PRIMHDReferralID,
 		&p.CreatedAt, &p.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -329,6 +338,7 @@ func (h *methadoneHandler) UpdateProgramme(w http.ResponseWriter, r *http.Reques
 		&p.InitialDoseMg, &p.CurrentDoseMg, &p.TargetDoseMg,
 		&p.TakeHomeLevel, &p.TakeHomeMaxDays, &p.Pregnancy,
 		&p.Comorbidities, &p.LastUrineDate, &p.NextReviewDate,
+		&p.PRIMHDReferralID,
 		&p.CreatedAt, &p.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -340,6 +350,27 @@ func (h *methadoneHandler) UpdateProgramme(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	h.recordAudit(r, "update", "AddictionProgramme", p.ID, nhiEnc)
+
+	// PRIMHD reporting: when a programme is discharged, close the referral.
+	// Required for all DHB-funded addiction services under PRIMHD obligations.
+	if h.primhdClient != nil &&
+		p.Phase == string(methadone.PhaseDischarged) &&
+		p.EndDate != nil &&
+		p.PRIMHDReferralID != "" {
+		if _, err := h.primhdClient.CloseReferral(r.Context(), p.PRIMHDReferralID, *p.EndDate); err != nil {
+			h.logger.Error("PRIMHD close referral failed",
+				slog.String("programme", p.ID),
+				slog.String("primhd_referral_id", p.PRIMHDReferralID),
+				slog.Any("error", err),
+			)
+		} else {
+			h.logger.Info("PRIMHD referral closed",
+				slog.String("programme", p.ID),
+				slog.String("primhd_referral_id", p.PRIMHDReferralID),
+			)
+		}
+	}
+
 	nhi, _ := h.decryptNHI(nhiEnc)
 	p.PatientNHI = nhi
 	writeJSON(w, http.StatusOK, p)

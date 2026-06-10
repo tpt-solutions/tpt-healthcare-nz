@@ -30,6 +30,7 @@ const navGroups = [
     label: 'Integrations',
     items: [
       { to: '/integrations', label: 'All providers', icon: CogIcon },
+      { to: '/acc-provider', label: 'ACC Provider', icon: ShieldIcon },
     ],
   },
   {

@@ -397,19 +397,19 @@
 
 ### Mandatory Regulatory Reporting
 - [x] `core/primhd/` — PRIMHD outcomes reporting client (required for all DHB-funded mental health/addiction services)
-  - [ ] Wire into tpt-counselling session close handler
-  - [ ] Wire into tpt-addiction discharge handler
+  - [x] Wire into tpt-counselling session close handler
+  - [x] Wire into tpt-addiction discharge handler
 - [x] `core/medsafe/` — adverse drug event (ADE) reporting client (mandatory under Medicines Act 1981)
-  - [ ] Wire into tpt-pharmacy dispensing handler and tpt-doctor prescription handler
+  - [x] Wire into tpt-pharmacy dispensing handler and tpt-doctor prescription handler
 - [x] `core/episurv/` — EpiSurv / ESR notifiable disease reporting client
-  - [ ] Wire into tpt-doctor diagnosis handler for notifiable conditions (measles, TB, COVID, salmonella, etc.)
+  - [x] Wire into tpt-doctor diagnosis handler for notifiable conditions (measles, TB, COVID, salmonella, etc.)
 
 ### Community Pharmacy Dispensing Gateway
 - [x] `core/pharmacy-gateway/` — FHIR MedicationRequest dispatch to community pharmacy PMS
   - [x] Fred Dispense connector (`core/pharmacy-gateway/fred/`)
   - [x] Toniq connector (`core/pharmacy-gateway/toniq/`)
   - [x] HL7 v2 RDE^O11 fallback for legacy systems (`core/pharmacy-gateway/hl7v2/`) + `core/hl7/client.go` MLLPClient
-- [ ] e-Prescription flow: tpt-doctor → pharmacy-gateway → community pharmacy (replaces fax/print for in-network pharmacies)
+- [x] e-Prescription flow: tpt-doctor → pharmacy-gateway → community pharmacy (replaces fax/print for in-network pharmacies)
 
 ### Care Coordination
 - [x] `core/erms/` — ERMS electronic referral routing (DHB-specific, supplements Healthlink EDI for region-specific workflows)

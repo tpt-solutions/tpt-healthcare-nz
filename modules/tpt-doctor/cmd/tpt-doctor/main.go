@@ -92,8 +92,10 @@ var serveCmd = &cobra.Command{
 			EncryptionKey: viper.GetString("encryption.key"),
 			Auth0Domain:   viper.GetString("auth0.domain"),
 			Auth0Audience: viper.GetString("auth0.audience"),
-			TenantHeader:  viper.GetString("tenant.header"),
-			Logger:        logger,
+			TenantHeader:    viper.GetString("tenant.header"),
+			WorkSafeBaseURL: viper.GetString("worksafe.base_url"),
+			WorkSafeToken:   viper.GetString("worksafe.token"),
+			Logger:          logger,
 		})
 		if err != nil {
 			return fmt.Errorf("create server: %w", err)

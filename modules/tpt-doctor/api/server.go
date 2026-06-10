@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/PhillipC05/tpt-healthcare/core/acc"
@@ -16,11 +17,18 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/auth/auth0"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
+	"github.com/PhillipC05/tpt-healthcare/core/episurv"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
+	"github.com/PhillipC05/tpt-healthcare/core/medsafe"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 	"github.com/PhillipC05/tpt-healthcare/core/nhi"
 	"github.com/PhillipC05/tpt-healthcare/core/nes"
+	pharmacygateway "github.com/PhillipC05/tpt-healthcare/core/pharmacy-gateway"
+	"github.com/PhillipC05/tpt-healthcare/core/pharmacy-gateway/fred"
+	"github.com/PhillipC05/tpt-healthcare/core/pharmacy-gateway/hl7v2"
+	"github.com/PhillipC05/tpt-healthcare/core/pharmacy-gateway/toniq"
 	"github.com/PhillipC05/tpt-healthcare/core/pharmac"
+	"github.com/PhillipC05/tpt-healthcare/core/worksafe"
 )
 
 // Config holds all configuration for the tpt-doctor server.
@@ -36,10 +44,50 @@ type Config struct {
 	// ACCBaseURL is the root URL for the ACC FHIR endpoint. Leave empty to
 	// disable ACC integration (claim submissions will return 503).
 	ACCBaseURL          string
+	// WorkSafeBaseURL is the root URL for the WorkSafe NZ FHIR endpoint. Leave
+	// empty to disable WorkSafe integration for work-related injury claims.
+	WorkSafeBaseURL     string
+	// WorkSafeToken is the bearer token for WorkSafe API requests. Required when
+	// WorkSafeBaseURL is set.
+	WorkSafeToken       string
 	// TenantHPIFacilityID is the HPI facility OrgID for this practice,
 	// required for NES enrolment transfers. Leave empty to disable transfers.
 	TenantHPIFacilityID string
-	Logger              *slog.Logger
+	// EpiSurvBaseURL is the root URL for the ESR EpiSurv notifiable disease API.
+	// Leave empty to disable automatic EpiSurv notifications.
+	EpiSurvBaseURL      string
+	// EpiSurvToken is the bearer token for EpiSurv API requests.
+	EpiSurvToken        string
+	// MedsafeBaseURL is the root URL for the Medsafe/CARM ADE reporting API.
+	// Leave empty to disable ADE reporting endpoints.
+	MedsafeBaseURL      string
+	// MedsafeToken is the bearer token for Medsafe CARM API requests.
+	MedsafeToken        string
+	// PharmacyGatewayHL7v2Addr is the MLLP host:port used as the HL7 v2 fallback
+	// connector for pharmacies not registered with a FHIR PMS. Leave empty to
+	// disable the fallback (dispatches to unregistered pharmacies will fail).
+	PharmacyGatewayHL7v2Addr string
+	// PharmacyGatewayHL7v2SendingApp is the MSH-3 sending application identifier
+	// for HL7 v2 RDE^O11 messages. Defaults to "TPT-DOCTOR" when not set.
+	PharmacyGatewayHL7v2SendingApp string
+	// PharmacyGatewayFredBaseURL is the Fred Dispense FHIR endpoint base URL.
+	// Leave empty to disable Fred Dispense connectivity.
+	PharmacyGatewayFredBaseURL string
+	// PharmacyGatewayFredAPIKey is the API key for the Fred Dispense instance.
+	PharmacyGatewayFredAPIKey string
+	// PharmacyGatewayFredHPIs is a comma-separated list of pharmacy HPI facility
+	// IDs that route to the Fred Dispense connector.
+	PharmacyGatewayFredHPIs string
+	// PharmacyGatewayToniqBaseURL is the Toniq FHIR endpoint base URL.
+	PharmacyGatewayToniqBaseURL string
+	// PharmacyGatewayToniqClientID is the OAuth2 client ID for Toniq.
+	PharmacyGatewayToniqClientID string
+	// PharmacyGatewayToniqClientSecret is the OAuth2 client secret for Toniq.
+	PharmacyGatewayToniqClientSecret string
+	// PharmacyGatewayToniqHPIs is a comma-separated list of pharmacy HPI facility
+	// IDs that route to the Toniq connector.
+	PharmacyGatewayToniqHPIs string
+	Logger                   *slog.Logger
 }
 
 // Server is the tpt-doctor HTTP server.
@@ -54,6 +102,10 @@ type Server struct {
 	hpiClient           *hpi.Client
 	pharmac             *pharmac.Client
 	accClient           *acc.Client
+	worksafeClient      *worksafe.Client
+	episurvClient       *episurv.Client
+	medsafeClient       *medsafe.Client
+	pharmacyGateway     *pharmacygateway.Gateway
 	auditTrail          *audit.Trail
 	tenantHPIFacilityID string
 	logger              *slog.Logger
@@ -94,6 +146,35 @@ func NewServer(cfg Config) (*Server, error) {
 		accClient = acc.NewClient(cfg.ACCBaseURL, cfg.Logger)
 	}
 
+	var wsClient *worksafe.Client
+	if cfg.WorkSafeBaseURL != "" {
+		token := cfg.WorkSafeToken
+		wsClient = worksafe.New(cfg.WorkSafeBaseURL, func(_ context.Context) (string, error) {
+			return token, nil
+		})
+	}
+
+	var episurvClient *episurv.Client
+	if cfg.EpiSurvBaseURL != "" {
+		token := cfg.EpiSurvToken
+		episurvClient = episurv.New(cfg.EpiSurvBaseURL, func(_ context.Context) (string, error) {
+			return token, nil
+		})
+	}
+
+	var medsafeClient *medsafe.Client
+	if cfg.MedsafeBaseURL != "" {
+		token := cfg.MedsafeToken
+		medsafeClient = medsafe.New(cfg.MedsafeBaseURL, func(_ context.Context) (string, error) {
+			return token, nil
+		})
+	}
+
+	pgw, err := buildPharmacyGateway(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("init pharmacy gateway: %w", err)
+	}
+
 	s := &Server{
 		cfg:                 cfg,
 		pool:                pool,
@@ -104,6 +185,10 @@ func NewServer(cfg Config) (*Server, error) {
 		hpiClient:           hpiClient,
 		pharmac:             pharmClient,
 		accClient:           accClient,
+		worksafeClient:      wsClient,
+		episurvClient:       episurvClient,
+		medsafeClient:       medsafeClient,
+		pharmacyGateway:     pgw,
 		auditTrail:          trail,
 		tenantHPIFacilityID: cfg.TenantHPIFacilityID,
 		logger:              cfg.Logger,
@@ -137,26 +222,30 @@ func (s *Server) buildRoutes() *http.ServeMux {
 		logger:     s.logger,
 	}
 	encounters := &EncountersHandler{
-		pool:       s.pool,
-		enc:        s.enc,
-		hpiClient:  s.hpiClient,
-		auditTrail: s.auditTrail,
-		logger:     s.logger,
+		pool:          s.pool,
+		enc:           s.enc,
+		hpiClient:     s.hpiClient,
+		episurvClient: s.episurvClient,
+		auditTrail:    s.auditTrail,
+		logger:        s.logger,
 	}
 	prescriptions := &PrescriptionsHandler{
-		pool:       s.pool,
-		enc:        s.enc,
-		hpiClient:  s.hpiClient,
-		pharmac:    s.pharmac,
-		auditTrail: s.auditTrail,
-		logger:     s.logger,
+		pool:            s.pool,
+		enc:             s.enc,
+		hpiClient:       s.hpiClient,
+		pharmac:         s.pharmac,
+		medsafeClient:   s.medsafeClient,
+		pharmacyGateway: s.pharmacyGateway,
+		auditTrail:      s.auditTrail,
+		logger:          s.logger,
 	}
 	claims := &ClaimsHandler{
-		pool:       s.pool,
-		enc:        s.enc,
-		accClient:  s.accClient,
-		auditTrail: s.auditTrail,
-		logger:     s.logger,
+		pool:           s.pool,
+		enc:            s.enc,
+		accClient:      s.accClient,
+		worksafeClient: s.worksafeClient,
+		auditTrail:     s.auditTrail,
+		logger:         s.logger,
 	}
 	referrals := &ReferralsHandler{
 		pool:       s.pool,
@@ -242,6 +331,8 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.Handle("GET /api/v1/prescriptions/{id}", chain(http.HandlerFunc(prescriptions.Get)))
 	mux.Handle("PUT /api/v1/prescriptions/{id}", chain(http.HandlerFunc(prescriptions.Update)))
 	mux.Handle("POST /api/v1/prescriptions/{id}/print", chain(http.HandlerFunc(prescriptions.Print)))
+	mux.Handle("POST /api/v1/prescriptions/{id}/dispatch", chain(http.HandlerFunc(prescriptions.Dispatch)))
+	mux.Handle("POST /api/v1/prescriptions/{id}/ade", chain(http.HandlerFunc(prescriptions.ReportADE)))
 
 	// Referral routes.
 	mux.Handle("GET /api/v1/referrals", chain(http.HandlerFunc(referrals.List)))
@@ -346,6 +437,64 @@ func ValidateConnectivity(ctx context.Context, cfg Config) error {
 	cfg.Logger.Info("database connectivity OK")
 	cfg.Logger.Info("connectivity validation complete")
 	return nil
+}
+
+// buildPharmacyGateway constructs the pharmacy gateway from config. Returns nil
+// when no gateway config is provided (all dispatch calls will return 503).
+func buildPharmacyGateway(cfg Config) (*pharmacygateway.Gateway, error) {
+	hasFred := cfg.PharmacyGatewayFredBaseURL != ""
+	hasToniq := cfg.PharmacyGatewayToniqBaseURL != ""
+	hasHL7v2 := cfg.PharmacyGatewayHL7v2Addr != ""
+
+	if !hasFred && !hasToniq && !hasHL7v2 {
+		return nil, nil
+	}
+
+	var pgw *pharmacygateway.Gateway
+	if hasHL7v2 {
+		sendingApp := cfg.PharmacyGatewayHL7v2SendingApp
+		if sendingApp == "" {
+			sendingApp = "TPT-DOCTOR"
+		}
+		hl7Conn, err := hl7v2.New(cfg.PharmacyGatewayHL7v2Addr, sendingApp, cfg.TenantHPIFacilityID)
+		if err != nil {
+			return nil, fmt.Errorf("hl7v2 connector: %w", err)
+		}
+		pgw = pharmacygateway.New(hl7Conn)
+	} else {
+		pgw = pharmacygateway.New(nil)
+	}
+
+	if hasFred {
+		fc := fred.New(cfg.PharmacyGatewayFredBaseURL, cfg.PharmacyGatewayFredAPIKey)
+		for _, hpi := range splitTrimmed(cfg.PharmacyGatewayFredHPIs) {
+			pgw.Register(hpi, fc)
+		}
+	}
+	if hasToniq {
+		tc := toniq.New(cfg.PharmacyGatewayToniqBaseURL, cfg.PharmacyGatewayToniqClientID, cfg.PharmacyGatewayToniqClientSecret)
+		for _, hpi := range splitTrimmed(cfg.PharmacyGatewayToniqHPIs) {
+			pgw.Register(hpi, tc)
+		}
+	}
+
+	return pgw, nil
+}
+
+// splitTrimmed splits a comma-separated string and trims whitespace from each
+// element, discarding empty elements.
+func splitTrimmed(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // apiError is the standard error response envelope.

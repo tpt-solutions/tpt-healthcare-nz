@@ -14,6 +14,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/consent"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 	"github.com/PhillipC05/tpt-healthcare/core/nhi"
+	"github.com/PhillipC05/tpt-healthcare/core/primhd"
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-counselling/internal/eap"
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-counselling/internal/private"
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-counselling/internal/session"
@@ -209,6 +210,14 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, []session.Session{})
 }
 
+// sessionCreateRequest wraps session.Session with an optional PRIMHD referral ID.
+// If PRIMHDReferralID is provided, a PRIMHD ActivityRecord is submitted to
+// report this contact to the PRIMHD outcomes system.
+type sessionCreateRequest struct {
+	session.Session
+	PRIMHDReferralID string `json:"primhdReferralId,omitempty"`
+}
+
 func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	principal, ok := requirePrincipal(w, r)
 	if !ok {
@@ -218,22 +227,27 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	var sess session.Session
-	if err := decodeJSON(r, &sess); err != nil {
+	var req sessionCreateRequest
+	if err := decodeJSON(r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_JSON", Message: err.Error()})
 		return
 	}
-	if !nhi.ValidateNHI(sess.ClientNHI) {
+	if !nhi.ValidateNHI(req.ClientNHI) {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_NHI", Message: "clientNhi format is invalid"})
 		return
 	}
-	sess.ID = uuid.New().String()
-	sess.ClinicianID = principal.PractitionerID
+	req.ID = uuid.New().String()
+	req.ClinicianID = principal.PractitionerID
 	now := time.Now().UnixMilli()
-	sess.CreatedAt = now
-	sess.UpdatedAt = now
-	s.recordEvent(r, principal, "create", "CounsellingSession", sess.ID, sess.ClientNHI)
-	writeJSON(w, http.StatusCreated, sess)
+	req.CreatedAt = now
+	req.UpdatedAt = now
+	s.recordEvent(r, principal, "create", "CounsellingSession", req.ID, req.ClientNHI)
+
+	if s.primhdClient != nil && req.PRIMHDReferralID != "" {
+		s.submitPRIMHDActivity(r, req.Session, req.PRIMHDReferralID)
+	}
+
+	writeJSON(w, http.StatusCreated, req.Session)
 }
 
 func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
@@ -253,6 +267,13 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("session %s not found", sessionID)})
 }
 
+// sessionUpdateRequest wraps session.Session with an optional PRIMHD referral ID.
+// When PRIMHDReferralID is provided the session contact is reported to PRIMHD.
+type sessionUpdateRequest struct {
+	session.Session
+	PRIMHDReferralID string `json:"primhdReferralId,omitempty"`
+}
+
 func (s *Server) handleUpdateSession(w http.ResponseWriter, r *http.Request) {
 	principal, ok := requirePrincipal(w, r)
 	if !ok {
@@ -267,17 +288,72 @@ func (s *Server) handleUpdateSession(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID := r.PathValue("sessionId")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	var sess session.Session
-	if err := decodeJSON(r, &sess); err != nil {
+	var req sessionUpdateRequest
+	if err := decodeJSON(r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_JSON", Message: err.Error()})
 		return
 	}
-	sess.ID = sessionID
-	sess.ClientNHI = patientNHI
-	sess.ClinicianID = principal.PractitionerID
-	sess.UpdatedAt = time.Now().UnixMilli()
+	req.ID = sessionID
+	req.ClientNHI = patientNHI
+	req.ClinicianID = principal.PractitionerID
+	req.UpdatedAt = time.Now().UnixMilli()
 	s.recordEvent(r, principal, "update", "CounsellingSession", sessionID, patientNHI)
-	writeJSON(w, http.StatusOK, sess)
+
+	// PRIMHD: report this clinical contact as an activity record.
+	if s.primhdClient != nil && req.PRIMHDReferralID != "" {
+		s.submitPRIMHDActivity(r, req.Session, req.PRIMHDReferralID)
+	}
+
+	writeJSON(w, http.StatusOK, req.Session)
+}
+
+// submitPRIMHDActivity reports a counselling session as a PRIMHD ActivityRecord.
+// Failures are logged but do not fail the HTTP response.
+func (s *Server) submitPRIMHDActivity(r *http.Request, sess session.Session, referralID string) {
+	act := primhd.ActivityRecord{
+		ReferralID:   referralID,
+		ActivityType: sessionModality(sess.Modality),
+		Duration:     sess.DurationMin,
+		ContactDate:  time.UnixMilli(sess.SessionDate).UTC(),
+		ClinicianHPI: sess.ClinicianID,
+		Setting:      sessionMode(sess.Mode),
+	}
+	if _, err := s.primhdClient.SubmitActivity(r.Context(), act); err != nil {
+		s.logger.Error("PRIMHD activity submission failed",
+			slog.String("session", sess.ID),
+			slog.String("referral_id", referralID),
+			slog.Any("error", err),
+		)
+	} else {
+		s.logger.Info("PRIMHD activity submitted",
+			slog.String("session", sess.ID),
+			slog.String("referral_id", referralID),
+		)
+	}
+}
+
+// sessionModality maps a counselling modality string to a PRIMHD activity type.
+func sessionModality(modality string) string {
+	switch strings.ToLower(modality) {
+	case "cbt", "act", "dbt", "emdr", "psychodynamic", "person_centred":
+		return "face-to-face"
+	case "group":
+		return "group"
+	default:
+		return "face-to-face"
+	}
+}
+
+// sessionMode maps a session delivery mode to a PRIMHD setting value.
+func sessionMode(mode string) string {
+	switch strings.ToLower(mode) {
+	case "video":
+		return "telehealth"
+	case "phone":
+		return "phone"
+	default:
+		return "outpatient"
+	}
 }
 
 // ---- Private Practice Handlers ----

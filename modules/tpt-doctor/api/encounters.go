@@ -11,6 +11,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
+	"github.com/PhillipC05/tpt-healthcare/core/episurv"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 )
@@ -112,11 +113,12 @@ type encounterUpdateRequest struct {
 
 // EncountersHandler handles all /api/v1/encounters routes.
 type EncountersHandler struct {
-	pool       db.Pool
-	enc        *encryption.Cipher
-	hpiClient  *hpi.Client
-	auditTrail *audit.Trail
-	logger     *slog.Logger
+	pool          db.Pool
+	enc           *encryption.Cipher
+	hpiClient     *hpi.Client
+	episurvClient *episurv.Client
+	auditTrail    *audit.Trail
+	logger        *slog.Logger
 }
 
 // List handles GET /api/v1/encounters.
@@ -437,7 +439,45 @@ func (h *EncountersHandler) Complete(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("audit write", slog.Any("error", err))
 	}
 
+	// Health Act 1956 s74: notify EpiSurv for any notifiable diagnoses.
+	if h.episurvClient != nil {
+		h.submitNotifiableDiseases(ctx, completed)
+	}
+
 	writeJSON(w, http.StatusOK, completed)
+}
+
+// submitNotifiableDiseases iterates the completed encounter's diagnoses,
+// maps ICD-10-AM codes to notifiable conditions, and submits to EpiSurv.
+// Failures are logged but do not fail the HTTP response — the encounter is
+// already committed and clinical flow must not be blocked by a reporting outage.
+func (h *EncountersHandler) submitNotifiableDiseases(ctx context.Context, enc Encounter) {
+	for _, code := range enc.Diagnoses {
+		condition, ok := icd10ToNotifiable(code)
+		if !ok {
+			continue
+		}
+		n := episurv.Notification{
+			PatientNHI:     enc.PatientNHI,
+			ReporterHPI:    enc.PractitionerHPI,
+			Condition:      condition,
+			Classification: episurv.ClassSuspect,
+			DiagnosisDate:  *enc.CompletedAt,
+		}
+		if _, err := h.episurvClient.Notify(ctx, n); err != nil {
+			h.logger.Error("episurv notification failed",
+				slog.String("condition", string(condition)),
+				slog.String("icd10", code),
+				slog.String("encounter", enc.ID),
+				slog.Any("error", err),
+			)
+		} else {
+			h.logger.Info("episurv notified",
+				slog.String("condition", string(condition)),
+				slog.String("encounter", enc.ID),
+			)
+		}
+	}
 }
 
 // listEncounters queries the encounters table with optional filters.

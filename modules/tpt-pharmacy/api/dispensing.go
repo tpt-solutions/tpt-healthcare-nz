@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/PhillipC05/tpt-healthcare/core/medsafe"
 )
 
 // --- Domain types ---
@@ -89,7 +91,8 @@ type Schedule2ConfirmRequest struct {
 
 // DispensingHandler handles all /api/v1/dispensing routes.
 type DispensingHandler struct {
-	logger *slog.Logger
+	medsafeClient *medsafe.Client
+	logger        *slog.Logger
 }
 
 // ListPrescriptions handles GET /api/v1/prescriptions — lists incoming GP prescriptions.
@@ -331,10 +334,103 @@ func (h *DispensingHandler) Schedule2Confirm(w http.ResponseWriter, r *http.Requ
 	)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"dispensingId":        id,
-		"secondPharmacistId":  req.SecondPharmacistID,
-		"status":              string(DispensingStatusDispensed),
-		"confirmedAt":         time.Now().UTC(),
-		"auditEventWritten":   true,
+		"dispensingId":       id,
+		"secondPharmacistId": req.SecondPharmacistID,
+		"status":             string(DispensingStatusDispensed),
+		"confirmedAt":        time.Now().UTC(),
+		"auditEventWritten":  true,
 	})
+}
+
+// dispensingADERequest is the body for POST /api/v1/dispensing/{id}/ade.
+type dispensingADERequest struct {
+	PharmacistHPICPN string              `json:"pharmacistHpiCpn"`
+	PatientNHI       string              `json:"patientNhi"`
+	NZULMCode        string              `json:"nzulmCode"`
+	GenericName      string              `json:"genericName"`
+	EventDate        time.Time           `json:"eventDate"`
+	EventDescription string              `json:"eventDescription"`
+	Seriousness      medsafe.Seriousness `json:"seriousness"`
+	Outcome          string              `json:"outcome,omitempty"`
+	PatientAge       int                 `json:"patientAge,omitempty"`
+	PatientSex       string              `json:"patientSex,omitempty"`
+	RelevantHistory  string              `json:"relevantHistory,omitempty"`
+}
+
+// ReportADE handles POST /api/v1/dispensing/{id}/ade.
+// Allows a pharmacist to report a suspected adverse drug event to Medsafe/CARM
+// for a medicine that was dispensed. Medicines Act 1981 s45 obliges reporters.
+func (h *DispensingHandler) ReportADE(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "id path parameter is required")
+		return
+	}
+
+	if h.medsafeClient == nil {
+		writeError(w, http.StatusServiceUnavailable, "Medsafe ADE reporting is not configured")
+		return
+	}
+
+	var req dispensingADERequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("ade report: decode: %v", err))
+		return
+	}
+
+	if req.PharmacistHPICPN == "" {
+		writeError(w, http.StatusUnprocessableEntity, "pharmacistHpiCpn is required")
+		return
+	}
+	if req.PatientNHI == "" {
+		writeError(w, http.StatusUnprocessableEntity, "patientNhi is required")
+		return
+	}
+	if req.EventDescription == "" {
+		writeError(w, http.StatusUnprocessableEntity, "eventDescription is required")
+		return
+	}
+	if req.Seriousness == "" {
+		writeError(w, http.StatusUnprocessableEntity, "seriousness is required")
+		return
+	}
+
+	report := medsafe.ADEReport{
+		PatientNHI:       req.PatientNHI,
+		PatientAge:       req.PatientAge,
+		PatientSex:       req.PatientSex,
+		ReporterHPI:      req.PharmacistHPICPN,
+		ReporterType:     "pharmacist",
+		EventDate:        req.EventDate,
+		EventDescription: req.EventDescription,
+		Seriousness:      req.Seriousness,
+		Outcome:          req.Outcome,
+		RelevantHistory:  req.RelevantHistory,
+		SuspectDrugs: []medsafe.SuspectDrug{
+			{
+				NZULM:       req.NZULMCode,
+				GenericName: req.GenericName,
+				Causality:   medsafe.CausalityPossible,
+			},
+		},
+	}
+
+	submitted, err := h.medsafeClient.SubmitADE(r.Context(), report)
+	if err != nil {
+		h.logger.Error("medsafe ADE submission failed",
+			"dispensing_id", id,
+			"error", err,
+			"request_id", r.Context().Value(requestIDKey),
+		)
+		writeError(w, http.StatusBadGateway, "ADE report submission to Medsafe failed")
+		return
+	}
+
+	h.logger.Info("medsafe ADE submitted",
+		"dispensing_id", id,
+		"carm_report_id", submitted.CARMReportID,
+		"request_id", r.Context().Value(requestIDKey),
+	)
+
+	writeJSON(w, http.StatusCreated, submitted)
 }
