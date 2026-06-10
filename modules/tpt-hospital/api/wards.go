@@ -102,7 +102,7 @@ func (h *WardsHandler) ListWards(w http.ResponseWriter, r *http.Request) {
 	}
 
 	wardType := r.URL.Query().Get("type")
-	wards, err := h.listWards(ctx, tenantID, wardType)
+	wards, err := h.listWards(ctx, tenantID.String(), wardType)
 	if err != nil {
 		h.logger.Error("list wards", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list wards"})
@@ -121,7 +121,7 @@ func (h *WardsHandler) GetWard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	wardID := r.PathValue("wardId")
-	ward, err := h.getWardByID(ctx, wardID, tenantID)
+	ward, err := h.getWardByID(ctx, wardID, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "ward not found"})
@@ -145,7 +145,7 @@ func (h *WardsHandler) ListBeds(w http.ResponseWriter, r *http.Request) {
 
 	wardID := r.PathValue("wardId")
 	statusFilter := r.URL.Query().Get("status")
-	beds, err := h.listBeds(ctx, wardID, tenantID, statusFilter)
+	beds, err := h.listBeds(ctx, wardID, tenantID.String(), statusFilter)
 	if err != nil {
 		h.logger.Error("list beds", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list beds"})
@@ -177,7 +177,7 @@ func (h *WardsHandler) UpdateBed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bed, err := h.updateBed(ctx, wardID, bedID, req, tenantID)
+	bed, err := h.updateBed(ctx, wardID, bedID, req, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "bed not found"})
@@ -188,10 +188,11 @@ func (h *WardsHandler) UpdateBed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "Bed",
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "Bed",
 		ResourceID: bedID, TenantID: tenantID,
-		Metadata: map[string]string{"status": string(req.Status)},
+		Details:    map[string]any{"status": string(req.Status)},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, bed)
 }
@@ -205,7 +206,7 @@ func (h *WardsHandler) HospitalCapacity(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	snapshot, err := h.capacitySnapshot(ctx, tenantID)
+	snapshot, err := h.capacitySnapshot(ctx, tenantID.String())
 	if err != nil {
 		h.logger.Error("capacity snapshot", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "CAPACITY_ERROR", Message: "failed to retrieve capacity"})
