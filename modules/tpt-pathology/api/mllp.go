@@ -422,18 +422,25 @@ func (c *mllpConverter) insertReport(ctx context.Context, rep convertedReport, o
 	}
 
 	// Write audit record (system actor for MLLP-originated writes).
-	_ = c.auditTrail.Write(ctx, audit.Event{
-		Actor:        audit.SystemActor("tpt-pathology-mllp"),
-		Action:       audit.ActionWrite,
-		ResourceType: "DiagnosticReport",
-		ResourceID:   reportID,
-		TenantID:     tenantID,
-		Metadata: map[string]string{
-			"accession":   rep.accessionNumber,
-			"loinc_code":  rep.loincCode,
-			"patient_nhi": rep.patientNHI,
-		},
-	})
+	{
+		var tid uuid.UUID
+		if u, err := uuid.Parse(tenantID); err == nil {
+			tid = u
+		}
+		_ = c.auditTrail.Record(ctx, audit.Event{
+			PrincipalID:  "tpt-pathology-mllp",
+			Action:       "create",
+			ResourceType: "DiagnosticReport",
+			ResourceID:   reportID,
+			TenantID:     tid,
+			Details: map[string]any{
+				"accession":   rep.accessionNumber,
+				"loinc_code":  rep.loincCode,
+				"patient_nhi": rep.patientNHI,
+			},
+			OccurredAt: time.Now().UTC(),
+		})
+	}
 
 	return reportID, nil
 }

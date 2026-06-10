@@ -15,6 +15,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
+	"github.com/google/uuid"
 )
 
 // defaultShareTTL is the default validity period for a new sharing token.
@@ -78,7 +79,7 @@ func (h *SharingHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify the study exists in this tenant.
-	if _, err := h.getStudyByIDForSharing(ctx, studyID, tenantID); err != nil {
+	if _, err := h.getStudyByIDForSharing(ctx, studyID, tenantID.String()); err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "study not found"})
 			return
@@ -96,7 +97,7 @@ func (h *SharingHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	creatorHPI := principal.ID
-	share, err := h.insertShare(ctx, studyID, tenantID, creatorHPI, tokenHash, req.RecipientEmail, req.RecipientNPI, ttl)
+	share, err := h.insertShare(ctx, studyID, tenantID.String(), creatorHPI, tokenHash, req.RecipientEmail, req.RecipientNPI, ttl)
 	if err != nil {
 		h.logger.Error("insert imaging share", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create sharing token"})
@@ -106,13 +107,14 @@ func (h *SharingHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	// Return the plaintext token — it is never stored.
 	share.Token = plaintext
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "ImagingShare",
 		ResourceID:   share.ID,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"study_id": studyID, "recipient": req.RecipientEmail},
+		Details:      map[string]any{"study_id": studyID, "recipient": req.RecipientEmail},
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusCreated, share)
@@ -135,7 +137,7 @@ func (h *SharingHandler) RevokeShare(w http.ResponseWriter, r *http.Request) {
 	studyID := r.PathValue("id")
 	shareID := r.PathValue("shareId")
 
-	if err := h.revokeShare(ctx, shareID, studyID, tenantID); err != nil {
+	if err := h.revokeShare(ctx, shareID, studyID, tenantID.String()); err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "share not found"})
 			return
@@ -145,13 +147,14 @@ func (h *SharingHandler) RevokeShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "delete",
 		ResourceType: "ImagingShare",
 		ResourceID:   shareID,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "revoke", "study_id": studyID},
+		Details:      map[string]any{"action": "revoke", "study_id": studyID},
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
@@ -205,14 +208,18 @@ func (h *SharingHandler) AccessShare(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        audit.SystemActor("share-access"),
-		Action:       audit.ActionRead,
-		ResourceType: "ImagingStudy",
-		ResourceID:   share.ImagingStudyID,
-		TenantID:     share.TenantID,
-		Metadata:     map[string]string{"share_id": share.ID, "action": "share-access"},
-	})
+	{
+		tid, _ := uuid.Parse(share.TenantID)
+		_ = h.auditTrail.Record(ctx, audit.Event{
+			PrincipalID:  "share-access",
+			Action:       "read",
+			ResourceType: "ImagingStudy",
+			ResourceID:   share.ImagingStudyID,
+			TenantID:     tid,
+			Details:      map[string]any{"share_id": share.ID, "action": "share-access"},
+			OccurredAt:   time.Now().UTC(),
+		})
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"share": map[string]any{

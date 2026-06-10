@@ -109,9 +109,9 @@ func (p *Provider) SyncInvoice(ctx context.Context, inv billing.Invoice, contact
 	lines := make([]map[string]any, len(inv.Lines))
 	for i, l := range inv.Lines {
 		lines[i] = map[string]any{
-			"name":         l.Service.Description,
+			"name":         l.ServiceCode.Description,
 			"qty":          l.Quantity,
-			"unit_cost":    map[string]any{"amount": fmt.Sprintf("%.2f", float64(l.Service.UnitFee)/100), "code": "NZD"},
+			"unit_cost":    map[string]any{"amount": fmt.Sprintf("%.2f", float64(l.ServiceCode.UnitFee)/100), "code": "NZD"},
 		}
 	}
 	payload := map[string]any{

@@ -164,16 +164,16 @@ func (h *AdmissionsHandler) List(w http.ResponseWriter, r *http.Request) {
 	wardFilter := q.Get("ward")
 	typeFilter := q.Get("type")
 
-	admissions, err := h.listAdmissions(ctx, tenantID, statusFilter, wardFilter, typeFilter)
+	admissions, err := h.listAdmissions(ctx, tenantID.String(), statusFilter, wardFilter, typeFilter)
 	if err != nil {
-		h.logger.Error("list admissions", slog.Any("error", err), slog.String("tenant", tenantID))
+		h.logger.Error("list admissions", slog.Any("error", err), slog.String("tenant", tenantID.String()))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list admissions"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "Admission",
-		ResourceID: "list", TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "Admission",
+		ResourceID: "list", TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"admissions": admissions, "total": len(admissions)})
 }

@@ -81,19 +81,20 @@ func (h *StudiesHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := r.URL.Query()
-	studies, err := h.listStudies(ctx, tenantID, q.Get("patientNhi"), q.Get("modality"), q.Get("status"))
+	studies, err := h.listStudies(ctx, tenantID.String(), q.Get("patientNhi"), q.Get("modality"), q.Get("status"))
 	if err != nil {
 		h.logger.Error("list imaging studies", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list studies"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "ImagingStudy",
 		ResourceID:   "list",
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, map[string]any{"studies": studies, "total": len(studies)})
@@ -131,7 +132,7 @@ func (h *StudiesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	study, err := h.insertStudy(ctx, req, tenantID)
+	study, err := h.insertStudy(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert imaging study", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create study"})
@@ -142,13 +143,14 @@ func (h *StudiesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("publish imaging study event", slog.Any("error", pubErr))
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "ImagingStudy",
 		ResourceID:   study.ID,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"modality": study.Modality, "patient_nhi": study.PatientNHI},
+		Details:      map[string]any{"modality": study.Modality, "patient_nhi": study.PatientNHI},
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusCreated, study)
@@ -169,7 +171,7 @@ func (h *StudiesHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	study, err := h.getStudyByID(ctx, id, tenantID)
+	study, err := h.getStudyByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "study not found"})
@@ -180,12 +182,13 @@ func (h *StudiesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "ImagingStudy",
 		ResourceID:   id,
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, study)
@@ -212,7 +215,7 @@ func (h *StudiesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := h.getStudyByID(ctx, id, tenantID)
+	existing, err := h.getStudyByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "study not found"})
@@ -246,12 +249,13 @@ func (h *StudiesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "ImagingStudy",
 		ResourceID:   id,
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, updated)
@@ -314,18 +318,19 @@ func (h *StudiesHandler) STOWStudy(w http.ResponseWriter, r *http.Request) {
 
 	respBody, err := h.orthanc.ProxySTOW(ctx, path, r.Header.Get("Content-Type"), r.Body)
 	if err != nil {
-		h.logger.Error("STOW-RS proxy", slog.Any("error", err), slog.String("tenant", tenantID))
+		h.logger.Error("STOW-RS proxy", slog.Any("error", err), slog.String("tenant", tenantID.String()))
 		writeJSON(w, http.StatusBadGateway, apiError{Code: "ORTHANC_ERROR", Message: "DICOM store failed"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "ImagingStudy",
 		ResourceID:   "stow",
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"operation": "STOW-RS"},
+		Details:      map[string]any{"operation": "STOW-RS"},
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	w.Header().Set("Content-Type", "application/dicom+json")

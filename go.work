@@ -1,33 +1,33 @@
-go 1.22
+go 1.22.0
 
 use (
 	./core
 	./interop
+	./modules/tpt-acupuncture
+	./modules/tpt-addiction
+	./modules/tpt-aged-care
+	./modules/tpt-allied-health
+	./modules/tpt-cardiology
+	./modules/tpt-chiropractic
+	./modules/tpt-community-health
+	./modules/tpt-counselling
 	./modules/tpt-doctor
-	./modules/tpt-pharmacy
+	./modules/tpt-hospital
 	./modules/tpt-immunisation
+	./modules/tpt-massage
+	./modules/tpt-maternal-child-health
 	./modules/tpt-mental-health
+	./modules/tpt-naturopathy
+	./modules/tpt-nutrition
+	./modules/tpt-oncology
+	./modules/tpt-osteopathy
 	./modules/tpt-palliative
 	./modules/tpt-pathology
-	./modules/tpt-radiology
-	./modules/tpt-aged-care
+	./modules/tpt-pharmacy
 	./modules/tpt-practice
-	./modules/tpt-acupuncture
-	./modules/tpt-chiropractic
-	./modules/tpt-osteopathy
-	./modules/tpt-massage
-	./modules/tpt-counselling
-	./modules/tpt-naturopathy
-	./modules/tpt-tcm
-	./modules/tpt-nutrition
-	./modules/tpt-vision
-	./modules/tpt-allied-health
-	./modules/tpt-addiction
-	./modules/tpt-hospital
-	./modules/tpt-oncology
-	./modules/tpt-renal
-	./modules/tpt-maternal-child-health
-	./modules/tpt-cardiology
+	./modules/tpt-radiology
 	./modules/tpt-rehabilitation
-	./modules/tpt-community-health
+	./modules/tpt-renal
+	./modules/tpt-tcm
+	./modules/tpt-vision
 )

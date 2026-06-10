@@ -6,7 +6,6 @@ package api
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -17,6 +16,17 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 )
+
+// Vitals holds basic clinical observations recorded during a HITH visit.
+type Vitals struct {
+	SystolicBP  *float64 `json:"systolicBp,omitempty"`
+	DiastolicBP *float64 `json:"diastolicBp,omitempty"`
+	HeartRate   *float64 `json:"heartRate,omitempty"`
+	Temperature *float64 `json:"temperature,omitempty"` // °C
+	SpO2        *float64 `json:"spo2,omitempty"`         // %
+	RespRate    *float64 `json:"respRate,omitempty"`     // breaths/min
+	Weight      *float64 `json:"weight,omitempty"`       // kg
+}
 
 // HITHEpisodeStatus tracks the patient's HITH care episode.
 type HITHEpisodeStatus string
@@ -129,7 +139,7 @@ func (h *HITHHandler) ListEpisodes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	statusFilter := r.URL.Query().Get("status")
-	episodes, err := h.listEpisodes(ctx, tenantID, statusFilter)
+	episodes, err := h.listEpisodes(ctx, tenantID.String(), statusFilter)
 	if err != nil {
 		h.logger.Error("list HITH episodes", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list HITH episodes"})
@@ -178,16 +188,16 @@ func (h *HITHHandler) CreateEpisode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	episode, err := h.insertEpisode(ctx, req, tenantID)
+	episode, err := h.insertEpisode(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("create HITH episode", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create HITH episode"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "HITHEpisode",
-		ResourceID: episode.ID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "HITHEpisode",
+		ResourceID: episode.ID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, episode)
 }
@@ -207,7 +217,7 @@ func (h *HITHHandler) GetEpisode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	episode, err := h.getEpisodeByID(ctx, id, tenantID)
+	episode, err := h.getEpisodeByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "HITH episode not found"})
@@ -218,9 +228,9 @@ func (h *HITHHandler) GetEpisode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "HITHEpisode",
-		ResourceID: id, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "HITHEpisode",
+		ResourceID: id, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, episode)
 }
@@ -240,7 +250,7 @@ func (h *HITHHandler) UpdateEpisode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getEpisodeByID(ctx, id, tenantID)
+	existing, err := h.getEpisodeByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "HITH episode not found"})
@@ -283,9 +293,9 @@ func (h *HITHHandler) UpdateEpisode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "HITHEpisode",
-		ResourceID: id, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "HITHEpisode",
+		ResourceID: id, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, updated)
 }
@@ -305,7 +315,7 @@ func (h *HITHHandler) AddVisit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	episodeID := r.PathValue("id")
-	ep, err := h.getEpisodeByID(ctx, episodeID, tenantID)
+	ep, err := h.getEpisodeByID(ctx, episodeID, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "HITH episode not found"})
@@ -330,17 +340,18 @@ func (h *HITHHandler) AddVisit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	visit, err := h.insertVisit(ctx, episodeID, req, tenantID)
+	visit, err := h.insertVisit(ctx, episodeID, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("add HITH visit", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to add HITH visit"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "HITHVisit",
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "HITHVisit",
 		ResourceID: visit.ID, TenantID: tenantID,
-		Metadata: map[string]string{"episodeId": episodeID, "escalated": fmt.Sprintf("%v", req.Escalated)},
+		Details:    map[string]any{"episode_id": episodeID, "escalated": req.Escalated},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, visit)
 }
@@ -360,16 +371,16 @@ func (h *HITHHandler) ListVisits(w http.ResponseWriter, r *http.Request) {
 	}
 
 	episodeID := r.PathValue("id")
-	visits, err := h.listVisits(ctx, episodeID, tenantID)
+	visits, err := h.listVisits(ctx, episodeID, tenantID.String())
 	if err != nil {
 		h.logger.Error("list HITH visits", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list HITH visits"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "HITHVisit",
-		ResourceID: episodeID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "HITHVisit",
+		ResourceID: episodeID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"visits": visits, "total": len(visits)})
 }
@@ -397,7 +408,7 @@ func (h *HITHHandler) UpdateVisit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	visit, err := h.updateVisit(ctx, visitID, episodeID, req, tenantID)
+	visit, err := h.updateVisit(ctx, visitID, episodeID, req, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "visit not found"})
@@ -408,9 +419,9 @@ func (h *HITHHandler) UpdateVisit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "HITHVisit",
-		ResourceID: visitID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "HITHVisit",
+		ResourceID: visitID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, visit)
 }
@@ -430,7 +441,7 @@ func (h *HITHHandler) Discharge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getEpisodeByID(ctx, id, tenantID)
+	existing, err := h.getEpisodeByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "HITH episode not found"})
@@ -456,9 +467,11 @@ func (h *HITHHandler) Discharge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "HITHEpisode",
-		ResourceID: id, TenantID: tenantID, Metadata: map[string]string{"action": "discharge"},
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "HITHEpisode",
+		ResourceID: id, TenantID: tenantID,
+		Details:    map[string]any{"action": "discharge"},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, completed)
 }

@@ -98,25 +98,26 @@ func (h *AppointmentsHandler) List(w http.ResponseWriter, r *http.Request) {
 	statusFilter := q.Get("status")
 	patientFilter := q.Get("patient")
 
-	appointments, err := h.listAppointments(ctx, tenantID, dateFilter, providerFilter, statusFilter, patientFilter)
+	appointments, err := h.listAppointments(ctx, tenantID.String(), dateFilter, providerFilter, statusFilter, patientFilter)
 	if err != nil {
-		h.logger.Error("list appointments", slog.Any("error", err), slog.String("tenant", tenantID))
+		h.logger.Error("list appointments", slog.Any("error", err), slog.String("tenant", tenantID.String()))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list appointments"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	if err := h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "Appointment",
 		ResourceID:   "list",
 		TenantID:     tenantID,
-		Metadata: map[string]string{
+		Details: map[string]any{
 			"date":     dateFilter,
 			"provider": providerFilter,
 			"status":   statusFilter,
 			"patient":  patientFilter,
 		},
+		OccurredAt: time.Now().UTC(),
 	}); err != nil {
 		h.logger.Error("audit write", slog.Any("error", err))
 	}
@@ -169,19 +170,20 @@ func (h *AppointmentsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	appt, err := h.insertAppointment(ctx, req, tenantID)
+	appt, err := h.insertAppointment(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert appointment", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create appointment"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	if err := h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "Appointment",
 		ResourceID:   appt.ID,
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	}); err != nil {
 		h.logger.Error("audit write", slog.Any("error", err))
 	}
@@ -209,7 +211,7 @@ func (h *AppointmentsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	appt, err := h.getAppointmentByID(ctx, id, tenantID)
+	appt, err := h.getAppointmentByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "appointment not found"})
@@ -220,12 +222,13 @@ func (h *AppointmentsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	if err := h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "Appointment",
 		ResourceID:   id,
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	}); err != nil {
 		h.logger.Error("audit write", slog.Any("error", err))
 	}
@@ -261,7 +264,7 @@ func (h *AppointmentsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := h.getAppointmentByID(ctx, id, tenantID)
+	existing, err := h.getAppointmentByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "appointment not found"})
@@ -322,12 +325,13 @@ func (h *AppointmentsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	if err := h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "Appointment",
 		ResourceID:   id,
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	}); err != nil {
 		h.logger.Error("audit write", slog.Any("error", err))
 	}
@@ -356,7 +360,7 @@ func (h *AppointmentsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := h.getAppointmentByID(ctx, id, tenantID)
+	existing, err := h.getAppointmentByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "appointment not found"})
@@ -379,13 +383,14 @@ func (h *AppointmentsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	if err := h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "delete",
 		ResourceType: "Appointment",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "cancel"},
+		Details:      map[string]any{"action": "cancel"},
+		OccurredAt:   time.Now().UTC(),
 	}); err != nil {
 		h.logger.Error("audit write", slog.Any("error", err))
 	}

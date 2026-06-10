@@ -296,7 +296,7 @@ func scanHomeVisit(s scanner) (*homevisit.HomeVisit, error) {
 	var v homevisit.HomeVisit
 	var sd, ast, aet, ca, ua time.Time
 	var lat, lon *float64
-	var prev, cn, triph, cnrs *string
+	var prev, cn, cnrs *string
 	var ro *int
 
 	err := s.Scan(

@@ -277,7 +277,7 @@ func (r *OutreachRepository) ListScreenings(ctx context.Context, eventID string)
 
 func scanProgram(s scanner) (*outreach.Program, error) {
 	var p outreach.Program
-	var sd, ed, ca, ua time.Time
+	var sd, ca, ua time.Time
 	var e *time.Time
 	err := s.Scan(&p.ID, &p.PracticeID, &p.ProgramName, &p.ProgramType, &p.Description, &p.TargetPopulation, &p.Status, &sd, &e, &p.FundingSource, &p.FundingCode, &p.Budget, &p.Spent, &ca, &ua)
 	if err != nil {

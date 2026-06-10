@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -80,3 +81,10 @@ func Connect(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 		MaxConnIdleTime: 30 * time.Minute,
 	})
 }
+
+// Pool is a type alias for *pgxpool.Pool, allowing modules to reference the pool
+// type as db.Pool without importing pgxpool directly.
+type Pool = *pgxpool.Pool
+
+// NamedArgs is a type alias for pgx.NamedArgs, preserved for module compatibility.
+type NamedArgs = pgx.NamedArgs

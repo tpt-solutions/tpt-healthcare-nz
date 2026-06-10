@@ -71,7 +71,7 @@ func migrateCmd() *cobra.Command {
 				return fmt.Errorf("db connect: %w", err)
 			}
 			defer pool.Close()
-			return db.Migrate(ctx, pool)
+			return db.Migrate(ctx, pool, "")
 		},
 	}
 }

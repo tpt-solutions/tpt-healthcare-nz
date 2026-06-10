@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
+	"github.com/PhillipC05/tpt-healthcare/core/auth"
 	"github.com/google/uuid"
 	"golang.org/x/time/rate"
 )
@@ -30,6 +31,11 @@ type auditTrailer interface {
 func TenantFromContext(ctx context.Context) (uuid.UUID, bool) {
 	v, ok := ctx.Value(TenantKey).(uuid.UUID)
 	return v, ok
+}
+
+// PrincipalFromContext is a compatibility shim that delegates to auth.PrincipalFromContext.
+func PrincipalFromContext(ctx context.Context) (*auth.Principal, bool) {
+	return auth.PrincipalFromContext(ctx)
 }
 
 // RateLimit returns middleware that enforces a token-bucket rate limit of rps

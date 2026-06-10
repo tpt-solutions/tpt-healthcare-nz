@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 )
 
 // upcomingAppt is a minimal appointment projection needed for reminder dispatch.
@@ -146,6 +147,39 @@ func (w *ReminderWorker) dispatch(ctx context.Context, appt upcomingAppt, now ti
 			slog.String("apptID", appt.ID.String()),
 			slog.String("error", err.Error()),
 		)
+	}
+}
+
+// Run starts a self-contained River client that executes this worker on a
+// periodic schedule (every minute). It blocks until ctx is cancelled.
+func (w *ReminderWorker) Run(ctx context.Context) {
+	workers := river.NewWorkers()
+	river.AddWorker(workers, w)
+
+	riverClient, err := river.NewClient(riverpgxv5.New(w.pool), &river.Config{
+		Queues: map[string]river.QueueConfig{
+			river.QueueDefault: {MaxWorkers: 1},
+		},
+		Workers: workers,
+		PeriodicJobs: []*river.PeriodicJob{
+			river.NewPeriodicJob(
+				river.PeriodicInterval(time.Minute),
+				func() (river.JobArgs, *river.InsertOpts) { return ReminderArgs{}, nil },
+				&river.PeriodicJobOpts{RunOnStart: true},
+			),
+		},
+	})
+	if err != nil {
+		w.logger.ErrorContext(ctx, "reminder worker: init", slog.String("error", err.Error()))
+		return
+	}
+	if err := riverClient.Start(ctx); err != nil {
+		w.logger.ErrorContext(ctx, "reminder worker: start", slog.String("error", err.Error()))
+		return
+	}
+	<-ctx.Done()
+	if err := riverClient.Stop(context.Background()); err != nil {
+		w.logger.WarnContext(ctx, "reminder worker: stop", slog.String("error", err.Error()))
 	}
 }
 

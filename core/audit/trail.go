@@ -34,6 +34,9 @@ func New(pool *pgxpool.Pool) *Trail {
 	return &Trail{pool: pool}
 }
 
+// NewTrail is a compatibility alias for New, preserved for module compatibility.
+func NewTrail(pool *pgxpool.Pool) *Trail { return New(pool) }
+
 // Record synchronously inserts an audit event into the audit_events table.
 // It returns an error if the insert fails.
 func (t *Trail) Record(ctx context.Context, e Event) error {

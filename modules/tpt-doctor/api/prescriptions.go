@@ -133,24 +133,25 @@ func (h *PrescriptionsHandler) List(w http.ResponseWriter, r *http.Request) {
 	statusFilter := q.Get("status")
 	providerFilter := q.Get("provider")
 
-	prescriptions, err := h.listPrescriptions(ctx, tenantID, patientFilter, statusFilter, providerFilter)
+	prescriptions, err := h.listPrescriptions(ctx, tenantID.String(), patientFilter, statusFilter, providerFilter)
 	if err != nil {
-		h.logger.Error("list prescriptions", slog.Any("error", err), slog.String("tenant", tenantID))
+		h.logger.Error("list prescriptions", slog.Any("error", err), slog.String("tenant", tenantID.String()))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list prescriptions"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	if err := h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "MedicationRequest",
 		ResourceID:   "list",
 		TenantID:     tenantID,
-		Metadata: map[string]string{
+		Details: map[string]any{
 			"patient":  patientFilter,
 			"status":   statusFilter,
 			"provider": providerFilter,
 		},
+		OccurredAt: time.Now().UTC(),
 	}); err != nil {
 		h.logger.Error("audit write", slog.Any("error", err))
 	}
@@ -216,33 +217,23 @@ func (h *PrescriptionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. Validate NZULM product code and retrieve medication details.
-	medication, err := h.pharmac.LookupNZULM(ctx, req.NZULMCode)
+	medication, err := h.pharmac.GetByNZULM(ctx, req.NZULMCode)
 	if err != nil {
-		if errors.Is(err, pharmac.ErrProductNotFound) {
-			writeJSON(w, http.StatusUnprocessableEntity, apiError{
-				Code:    "INVALID_NZULM",
-				Message: fmt.Sprintf("NZULM product code %q not found in PHARMAC formulary", req.NZULMCode),
-			})
-			return
-		}
 		h.logger.Error("PHARMAC NZULM lookup", slog.Any("error", err))
-		writeJSON(w, http.StatusBadGateway, apiError{Code: "PHARMAC_ERROR", Message: "PHARMAC formulary lookup failed"})
+		writeJSON(w, http.StatusUnprocessableEntity, apiError{
+			Code:    "INVALID_NZULM",
+			Message: fmt.Sprintf("NZULM product code %q not found in PHARMAC formulary: %v", req.NZULMCode, err),
+		})
 		return
 	}
 
-	// 3. Check PHARMAC subsidy eligibility.
+	// 3. Check PHARMAC subsidy eligibility (subsidy info is carried on Medicine).
 	subsidyCheckSkipped := false
-	subsidy, err := h.pharmac.CheckSubsidy(ctx, req.NZULMCode, req.PatientNHI)
-	if err != nil {
-		h.logger.Error("PHARMAC subsidy check", slog.Any("error", err))
-		// Non-fatal: proceed without subsidy rather than blocking the prescription.
-		subsidy = &pharmac.SubsidyResult{Subsidised: false}
-		subsidyCheckSkipped = true
-	}
+	subsidised := medication.SubsidyType != pharmac.Unsubsidised
 
 	// 4. Drug interaction check against patient's active medications.
 	interactionCheckSkipped := false
-	activeMedCodes, err := h.getActiveNZULMCodes(ctx, req.PatientID, tenantID)
+	activeMedCodes, err := h.getActiveNZULMCodes(ctx, req.PatientID, tenantID.String())
 	if err != nil {
 		h.logger.Error("get active medications for interaction check", slog.Any("error", err))
 		activeMedCodes = nil
@@ -251,16 +242,19 @@ func (h *PrescriptionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var interactionWarnings []string
 	if len(activeMedCodes) > 0 {
-		interactions, err := h.pharmac.CheckInteractions(ctx, req.NZULMCode, activeMedCodes)
+		nzulms := append([]string{req.NZULMCode}, activeMedCodes...)
+		interactions, err := h.pharmac.CheckInteractions(ctx, nzulms)
 		if err != nil {
 			h.logger.Error("PHARMAC interaction check", slog.Any("error", err))
 			interactionCheckSkipped = true
 		} else {
-			interactionWarnings = interactions
+			for _, ia := range interactions {
+				interactionWarnings = append(interactionWarnings, ia.Description)
+			}
 		}
 	}
 
-	rx, err := h.insertPrescription(ctx, req, medication, subsidy, interactionWarnings, tenantID)
+	rx, err := h.insertPrescription(ctx, req, medication, subsidised, interactionWarnings, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert prescription", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to save prescription"})
@@ -271,13 +265,14 @@ func (h *PrescriptionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	rx.InteractionCheckSkipped = interactionCheckSkipped
 	rx.SubsidyCheckSkipped = subsidyCheckSkipped
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	if err := h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "MedicationRequest",
 		ResourceID:   rx.ID,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"nzulm": req.NZULMCode},
+		Details:      map[string]any{"nzulm": req.NZULMCode},
+		OccurredAt:   time.Now().UTC(),
 	}); err != nil {
 		h.logger.Error("audit write", slog.Any("error", err))
 	}
@@ -305,7 +300,7 @@ func (h *PrescriptionsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rx, err := h.getPrescriptionByID(ctx, id, tenantID)
+	rx, err := h.getPrescriptionByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "prescription not found"})
@@ -316,12 +311,13 @@ func (h *PrescriptionsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	if err := h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "MedicationRequest",
 		ResourceID:   id,
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	}); err != nil {
 		h.logger.Error("audit write", slog.Any("error", err))
 	}
@@ -356,7 +352,7 @@ func (h *PrescriptionsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := h.getPrescriptionByID(ctx, id, tenantID)
+	existing, err := h.getPrescriptionByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "prescription not found"})
@@ -392,12 +388,13 @@ func (h *PrescriptionsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	if err := h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "MedicationRequest",
 		ResourceID:   id,
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	}); err != nil {
 		h.logger.Error("audit write", slog.Any("error", err))
 	}
@@ -427,7 +424,7 @@ func (h *PrescriptionsHandler) Print(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rx, err := h.getPrescriptionByID(ctx, id, tenantID)
+	rx, err := h.getPrescriptionByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "prescription not found"})
@@ -459,13 +456,14 @@ func (h *PrescriptionsHandler) Print(w http.ResponseWriter, r *http.Request) {
 		PrintedAt:       time.Now().UTC(),
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	if err := h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "MedicationRequest",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "print"},
+		Details:      map[string]any{"action": "print"},
+		OccurredAt:   time.Now().UTC(),
 	}); err != nil {
 		h.logger.Error("audit write", slog.Any("error", err))
 	}
@@ -591,15 +589,12 @@ func (h *PrescriptionsHandler) getPrescriptionByID(ctx context.Context, id, tena
 func (h *PrescriptionsHandler) insertPrescription(
 	ctx context.Context,
 	req prescriptionCreateRequest,
-	medication *pharmac.Medication,
-	subsidy *pharmac.SubsidyResult,
+	medication *pharmac.Medicine,
+	subsidised bool,
 	warnings []string,
 	tenantID string,
 ) (Prescription, error) {
 	subsidyCode := ""
-	if subsidy != nil && subsidy.Subsidised {
-		subsidyCode = subsidy.SubsidyCode
-	}
 
 	row := h.pool.QueryRow(ctx,
 		`INSERT INTO prescriptions
@@ -623,10 +618,10 @@ func (h *PrescriptionsHandler) insertPrescription(
 			"practitioner_hpi":     req.PractitionerHPI,
 			"encounter_id":         req.EncounterID,
 			"nzulm_code":           req.NZULMCode,
-			"medication_name":      medication.Name,
+			"medication_name":      medication.GenericName,
 			"status":               PrescriptionStatusActive,
 			"dosage":               req.Dosage,
-			"pharmac_subsidised":   subsidy != nil && subsidy.Subsidised,
+			"pharmac_subsidised":   subsidised,
 			"subsidy_code":         subsidyCode,
 			"interaction_warnings": warnings,
 			"repeats":              req.Repeats,

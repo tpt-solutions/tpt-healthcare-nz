@@ -59,7 +59,7 @@ func (h *ACPHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 		t := time.Now()
 		plan.DNACPRDocumentedAt = &t
 	}
-	h.auditTrail.Record(r.Context(), "palliative.acp.created", plan.ID, req.PatientNHI, nil)
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "palliative.acp.created", ResourceID: plan.ID, PatientNHI: req.PatientNHI, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, plan)
 }
 
@@ -83,7 +83,7 @@ func (h *ACPHandler) UpdatePlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = id
-	h.auditTrail.Record(r.Context(), "palliative.acp.updated", id, "", nil)
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "palliative.acp.updated", ResourceID: id, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
@@ -119,6 +119,6 @@ func (h *ACPHandler) AddDecision(w http.ResponseWriter, r *http.Request) {
 		t := parseTime(*req.TimeLimitedUntil)
 		d.TimeLimitedUntil = &t
 	}
-	h.auditTrail.Record(r.Context(), "palliative.acp.decision.added", d.ID, planID, map[string]any{"treatment": req.Treatment, "decision": req.Decision})
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "palliative.acp.decision.added", ResourceID: d.ID, Details: map[string]any{"treatment": req.Treatment, "decision": req.Decision}, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, d)
 }

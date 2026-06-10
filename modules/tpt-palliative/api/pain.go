@@ -70,7 +70,7 @@ func (h *PainHandler) CreateAssessment(w http.ResponseWriter, r *http.Request) {
 		Notes:                req.Notes,
 		CreatedAt:            time.Now(),
 	}
-	h.auditTrail.Record(r.Context(), "palliative.pain.assessment.created", a.ID, req.PatientNHI, map[string]any{"pain_score": req.PainScore})
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "palliative.pain.assessment.created", ResourceID: a.ID, PatientNHI: req.PatientNHI, Details: map[string]any{"pain_score": req.PainScore}, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, a)
 }
 
@@ -116,7 +116,7 @@ func (h *PainHandler) CreateProtocol(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:           time.Now(),
 		UpdatedAt:           time.Now(),
 	}
-	h.auditTrail.Record(r.Context(), "palliative.pain.protocol.created", p.ID, req.PatientNHI, map[string]any{"step": req.Step})
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "palliative.pain.protocol.created", ResourceID: p.ID, PatientNHI: req.PatientNHI, Details: map[string]any{"step": req.Step}, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, p)
 }
 
@@ -141,7 +141,7 @@ func (h *PainHandler) UpdateProtocol(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = id
-	h.auditTrail.Record(r.Context(), "palliative.pain.protocol.updated", id, "", nil)
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "palliative.pain.protocol.updated", ResourceID: id, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
@@ -156,6 +156,6 @@ func (h *PainHandler) RecordOutcome(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "bad_request", Message: err.Error()})
 		return
 	}
-	h.auditTrail.Record(r.Context(), "palliative.pain.protocol.outcome", protocolID, "", map[string]any{"outcome_score": req.OutcomeScore})
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "palliative.pain.protocol.outcome", ResourceID: protocolID, Details: map[string]any{"outcome_score": req.OutcomeScore}, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusOK, map[string]any{"protocolId": protocolID, "outcomeScore": req.OutcomeScore, "outcomeDate": parseTime(req.OutcomeDate)})
 }

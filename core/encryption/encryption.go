@@ -30,6 +30,19 @@ func New(key []byte) (*Encryptor, error) {
 	return &Encryptor{key: k}, nil
 }
 
+// Cipher is a type alias for Encryptor, preserved for module compatibility.
+type Cipher = Encryptor
+
+// NewCipher constructs an Encryptor from a hex-encoded 32-byte key string.
+// This is a compatibility constructor; prefer NewFromEnv() for production use.
+func NewCipher(hexKey string) (*Encryptor, error) {
+	key, err := hex.DecodeString(hexKey)
+	if err != nil {
+		return nil, fmt.Errorf("encryption: decode key: %w", err)
+	}
+	return New(key)
+}
+
 // NewFromEnv creates an Encryptor by reading the ENCRYPTION_KEY environment variable.
 // The variable must be a hex-encoded 32-byte (64 hex-character) key.
 func NewFromEnv() (*Encryptor, error) {

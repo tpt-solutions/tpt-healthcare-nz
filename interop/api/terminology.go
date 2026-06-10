@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -261,13 +260,6 @@ func writeTermResults(w http.ResponseWriter, system string, concepts []TermConce
 		"total":    len(concepts),
 		"concepts": concepts,
 	})
-}
-
-// writeJSON writes a JSON-encoded body with the given status code.
-func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
 }
 
 // parseLimit reads the "limit" query parameter, clamping to [1, maxTermLimit].

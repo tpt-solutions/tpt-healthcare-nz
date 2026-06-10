@@ -325,10 +325,9 @@ func (p *Prescription) ToFHIRObservation() map[string]any {
 }
 
 func (p *Prescription) eyeToFHIRComponent(eye string, ep EyePrescription) map[string]any {
-	eyeCode := "right"
+	_ = eye // eyeCode unused; side-effect captured via eyeDisplay only
 	eyeDisplay := "Right eye"
 	if eye == "left" {
-		eyeCode = "left"
 		eyeDisplay = "Left eye"
 	}
 

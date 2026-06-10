@@ -61,7 +61,7 @@ func (h *PrescribingHandler) CreatePrescription(w http.ResponseWriter, r *http.R
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
 	}
-	h.auditTrail.Record(r.Context(), "ost.prescription.created", p.ID, req.PatientNHI, map[string]any{"drug": req.Drug, "dose_mg": req.DoseMg})
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "ost.prescription.created", ResourceID: p.ID, PatientNHI: req.PatientNHI, Details: map[string]any{"drug": req.Drug, "dose_mg": req.DoseMg}, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, p)
 }
 
@@ -84,7 +84,7 @@ func (h *PrescribingHandler) UpdatePrescription(w http.ResponseWriter, r *http.R
 		return
 	}
 	_ = id
-	h.auditTrail.Record(r.Context(), "ost.prescription.updated", id, "", nil)
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "ost.prescription.updated", ResourceID: id, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
@@ -113,7 +113,7 @@ func (h *PrescribingHandler) AdjustDose(w http.ResponseWriter, r *http.Request) 
 		AdjustedAt:     time.Now(),
 		CreatedAt:      time.Now(),
 	}
-	h.auditTrail.Record(r.Context(), "ost.dose.adjusted", a.ID, prescriptionID, map[string]any{"from": req.PreviousDoseMg, "to": req.NewDoseMg})
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "ost.dose.adjusted", ResourceID: a.ID, Details: map[string]any{"from": req.PreviousDoseMg, "to": req.NewDoseMg}, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, a)
 }
 

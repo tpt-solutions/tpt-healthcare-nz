@@ -52,7 +52,7 @@ func (h *MethadoneHandler) CreateProgramme(w http.ResponseWriter, r *http.Reques
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}
-	h.auditTrail.Record(r.Context(), "methadone.programme.created", p.ID, req.PatientNHI, nil)
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "methadone.programme.created", ResourceID: p.ID, PatientNHI: req.PatientNHI, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, p)
 }
 
@@ -76,7 +76,7 @@ func (h *MethadoneHandler) UpdateProgramme(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	_ = id
-	h.auditTrail.Record(r.Context(), "methadone.programme.updated", id, "", nil)
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "methadone.programme.updated", ResourceID: id, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusOK, map[string]string{"status":"updated"})
 }
 
@@ -117,7 +117,7 @@ func (h *MethadoneHandler) RecordDose(w http.ResponseWriter, r *http.Request) {
 		TakeHome:       req.TakeHome,
 		CreatedAt:      time.Now(),
 	}
-	h.auditTrail.Record(r.Context(), "methadone.dose.recorded", d.ID, programmeID, map[string]any{"dose_mg": req.DoseMg, "status": req.Status})
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "methadone.dose.recorded", ResourceID: d.ID, Details: map[string]any{"dose_mg": req.DoseMg, "status": req.Status}, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, d)
 }
 
@@ -150,7 +150,7 @@ func (h *MethadoneHandler) ApproveTakeHome(w http.ResponseWriter, r *http.Reques
 		t := parseTime(req.ExpiresAt)
 		th.ExpiresAt = &t
 	}
-	h.auditTrail.Record(r.Context(), "methadone.takehome.approved", th.ID, programmeID, map[string]any{"level": req.Level})
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "methadone.takehome.approved", ResourceID: th.ID, Details: map[string]any{"level": req.Level}, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, th)
 }
 
@@ -192,7 +192,7 @@ func (h *MethadoneHandler) RecordUrineScreen(w http.ResponseWriter, r *http.Requ
 		ClinicalNotes: req.ClinicalNotes,
 		CreatedAt:   time.Now(),
 	}
-	h.auditTrail.Record(r.Context(), "methadone.urine.recorded", us.ID, programmeID, map[string]any{"mssa_result": req.MSSAResult})
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "methadone.urine.recorded", ResourceID: us.ID, Details: map[string]any{"mssa_result": req.MSSAResult}, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, us)
 }
 

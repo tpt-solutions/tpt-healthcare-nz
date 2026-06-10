@@ -151,7 +151,7 @@ func (r *CarePlanRepository) ListNursingVisits(ctx context.Context, patientNHI, 
 
 func scanCarePlan(s scanner) (*districtnursing.CarePlan, error) {
 	var p districtnursing.CarePlan
-	var sd, rd, ed, cd, ca, ua time.Time
+	var sd, rd, cd, ca, ua time.Time
 	var e *time.Time
 	err := s.Scan(&p.ID, &p.PatientNHI, &p.ClinicianID, &p.PracticeID, &p.PlanName, &p.PlanType, &p.Status,
 		&sd, &rd, &e, &p.Goals, &p.RiskLevel, &p.ConsentGiven, &cd, &p.DHBFunded, &p.FundingCode, &ca, &ua)

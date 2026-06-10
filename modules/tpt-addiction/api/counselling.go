@@ -67,7 +67,7 @@ func (h *CounsellingHandler) CreateSession(w http.ResponseWriter, r *http.Reques
 		t := parseTime(req.NextSessionDate)
 		cs.NextSessionDate = &t
 	}
-	h.auditTrail.Record(r.Context(), "addiction.counselling.session", cs.ID, req.PatientNHI, map[string]any{"modality": req.Modality, "type": req.SessionType})
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "addiction.counselling.session", ResourceID: cs.ID, PatientNHI: req.PatientNHI, Details: map[string]any{"modality": req.Modality, "type": req.SessionType}, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, cs)
 }
 
@@ -94,7 +94,7 @@ func (h *CounsellingHandler) UpdateSession(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	_ = id
-	h.auditTrail.Record(r.Context(), "addiction.counselling.session.updated", id, "", nil)
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "addiction.counselling.session.updated", ResourceID: id, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
@@ -132,7 +132,7 @@ func (h *CounsellingHandler) CreateGroupSession(w http.ResponseWriter, r *http.R
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 	}
-	h.auditTrail.Record(r.Context(), "addiction.group.session.created", gs.ID, "", map[string]any{"topic": req.Topic, "attendees": len(req.Attendees)})
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "addiction.group.session.created", ResourceID: gs.ID, Details: map[string]any{"topic": req.Topic, "attendees": len(req.Attendees)}, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, gs)
 }
 
@@ -165,7 +165,7 @@ func (h *CounsellingHandler) CreateTreatmentPlan(w http.ResponseWriter, r *http.
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
-	h.auditTrail.Record(r.Context(), "addiction.treatmentplan.created", tp.ID, req.PatientNHI, nil)
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "addiction.treatmentplan.created", ResourceID: tp.ID, PatientNHI: req.PatientNHI, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, tp)
 }
 
@@ -187,7 +187,7 @@ func (h *CounsellingHandler) UpdateTreatmentPlan(w http.ResponseWriter, r *http.
 		return
 	}
 	_ = id
-	h.auditTrail.Record(r.Context(), "addiction.treatmentplan.updated", id, "", nil)
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "addiction.treatmentplan.updated", ResourceID: id, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
@@ -214,7 +214,7 @@ func (h *CounsellingHandler) AddGoal(w http.ResponseWriter, r *http.Request) {
 		t := parseTime(req.TargetDate)
 		g.TargetDate = &t
 	}
-	h.auditTrail.Record(r.Context(), "addiction.treatmentplan.goal.added", g.ID, planID, nil)
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "addiction.treatmentplan.goal.added", ResourceID: g.ID, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, g)
 }
 
@@ -244,6 +244,6 @@ func (h *CounsellingHandler) RecordRelapse(w http.ResponseWriter, r *http.Reques
 		PlanModified:  req.PlanModified,
 		CreatedAt:     time.Now(),
 	}
-	h.auditTrail.Record(r.Context(), "addiction.relapse.recorded", e.ID, planID, map[string]any{"severity": req.Severity, "substance": req.SubstanceUsed})
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "addiction.relapse.recorded", ResourceID: e.ID, Details: map[string]any{"severity": req.Severity, "substance": req.SubstanceUsed}, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, e)
 }

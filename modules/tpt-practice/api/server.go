@@ -54,19 +54,19 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) routes() {
 	chain := func(h http.Handler) http.Handler {
 		if s.cfg.Auth != nil {
-			h = middleware.AuditWrap(h, nil)
+			h = middleware.AuditWrap(nil)(h)
 			h = auth.RequireAuth(s.cfg.Auth)(h)
 		}
-		h = middleware.CORS(h)
-		h = middleware.RateLimit(h)
-		h = middleware.Recovery(h, s.cfg.Logger)
+		h = middleware.CORS([]string{"*"})(h)
+		h = middleware.RateLimit(10, 30)(h)
+		h = middleware.RecoveryMiddleware()(h)
 		return h
 	}
 	// open: CORS + rate-limit only, no auth required (ThemeProvider calls GET pre-login).
 	open := func(h http.Handler) http.Handler {
-		h = middleware.CORS(h)
-		h = middleware.RateLimit(h)
-		h = middleware.Recovery(h, s.cfg.Logger)
+		h = middleware.CORS([]string{"*"})(h)
+		h = middleware.RateLimit(10, 30)(h)
+		h = middleware.RecoveryMiddleware()(h)
 		return h
 	}
 

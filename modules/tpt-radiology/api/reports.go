@@ -78,19 +78,20 @@ func (h *ReportsHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := r.URL.Query()
-	reports, err := h.listReports(ctx, tenantID, q.Get("patientNhi"), q.Get("status"))
+	reports, err := h.listReports(ctx, tenantID.String(), q.Get("patientNhi"), q.Get("status"))
 	if err != nil {
 		h.logger.Error("list radiology reports", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list reports"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "RadiologyReport",
 		ResourceID:   "list",
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, map[string]any{"reports": reports, "total": len(reports)})
@@ -124,20 +125,21 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	report, err := h.insertReport(ctx, req, tenantID)
+	report, err := h.insertReport(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert radiology report", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create report"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "RadiologyReport",
 		ResourceID:   report.ID,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"patient_nhi": report.PatientNHI, "radiologist": report.RadiologistHPI},
+		Details:      map[string]any{"patient_nhi": report.PatientNHI, "radiologist": report.RadiologistHPI},
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusCreated, report)
@@ -158,7 +160,7 @@ func (h *ReportsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	report, err := h.getReportByID(ctx, id, tenantID)
+	report, err := h.getReportByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "report not found"})
@@ -169,12 +171,13 @@ func (h *ReportsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "RadiologyReport",
 		ResourceID:   id,
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, report)
@@ -201,7 +204,7 @@ func (h *ReportsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := h.getReportByID(ctx, id, tenantID)
+	existing, err := h.getReportByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "report not found"})
@@ -231,12 +234,13 @@ func (h *ReportsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "RadiologyReport",
 		ResourceID:   id,
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, updated)
@@ -258,7 +262,7 @@ func (h *ReportsHandler) Sign(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getReportByID(ctx, id, tenantID)
+	existing, err := h.getReportByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "report not found"})
@@ -293,13 +297,14 @@ func (h *ReportsHandler) Sign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "RadiologyReport",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "sign", "radiologist": existing.RadiologistHPI},
+		Details:      map[string]any{"action": "sign", "radiologist": existing.RadiologistHPI},
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, updated)
@@ -332,7 +337,7 @@ func (h *ReportsHandler) Amend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := h.getReportByID(ctx, id, tenantID)
+	existing, err := h.getReportByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "report not found"})
@@ -362,13 +367,14 @@ func (h *ReportsHandler) Amend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "RadiologyReport",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "amend", "reason": req.AmendmentReason},
+		Details:      map[string]any{"action": "amend", "reason": req.AmendmentReason},
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, updated)

@@ -82,19 +82,20 @@ func (h *OrdersHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := r.URL.Query()
-	orders, err := h.listOrders(ctx, tenantID, q.Get("patientNhi"), q.Get("status"), q.Get("modality"))
+	orders, err := h.listOrders(ctx, tenantID.String(), q.Get("patientNhi"), q.Get("status"), q.Get("modality"))
 	if err != nil {
 		h.logger.Error("list radiology orders", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list orders"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "RadiologyOrder",
 		ResourceID:   "list",
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, map[string]any{"orders": orders, "total": len(orders)})
@@ -135,20 +136,21 @@ func (h *OrdersHandler) Create(w http.ResponseWriter, r *http.Request) {
 		req.Priority = "routine"
 	}
 
-	order, err := h.insertOrder(ctx, req, tenantID)
+	order, err := h.insertOrder(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert radiology order", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create order"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "RadiologyOrder",
 		ResourceID:   order.ID,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"modality": order.Modality, "priority": order.Priority, "patient_nhi": order.PatientNHI},
+		Details:      map[string]any{"modality": order.Modality, "priority": order.Priority, "patient_nhi": order.PatientNHI},
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusCreated, order)
@@ -169,7 +171,7 @@ func (h *OrdersHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	order, err := h.getOrderByID(ctx, id, tenantID)
+	order, err := h.getOrderByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "order not found"})
@@ -180,12 +182,13 @@ func (h *OrdersHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "RadiologyOrder",
 		ResourceID:   id,
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, order)
@@ -212,7 +215,7 @@ func (h *OrdersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := h.getOrderByID(ctx, id, tenantID)
+	existing, err := h.getOrderByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "order not found"})
@@ -246,12 +249,13 @@ func (h *OrdersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "RadiologyOrder",
 		ResourceID:   id,
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, updated)
@@ -282,7 +286,7 @@ func (h *OrdersHandler) Schedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := h.getOrderByID(ctx, id, tenantID)
+	existing, err := h.getOrderByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "order not found"})
@@ -309,13 +313,14 @@ func (h *OrdersHandler) Schedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "RadiologyOrder",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "schedule"},
+		Details:      map[string]any{"action": "schedule"},
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, updated)
@@ -336,7 +341,7 @@ func (h *OrdersHandler) Complete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getOrderByID(ctx, id, tenantID)
+	existing, err := h.getOrderByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "order not found"})
@@ -363,13 +368,14 @@ func (h *OrdersHandler) Complete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "RadiologyOrder",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "complete"},
+		Details:      map[string]any{"action": "complete"},
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, updated)
@@ -390,7 +396,7 @@ func (h *OrdersHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getOrderByID(ctx, id, tenantID)
+	existing, err := h.getOrderByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "order not found"})
@@ -414,13 +420,14 @@ func (h *OrdersHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "delete",
 		ResourceType: "RadiologyOrder",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "cancel"},
+		Details:      map[string]any{"action": "cancel"},
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, updated)

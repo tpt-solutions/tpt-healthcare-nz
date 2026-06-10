@@ -246,12 +246,12 @@ func billingLinesToQBO(lines []billing.BillingLine) []map[string]any {
 	for i, l := range lines {
 		result[i] = map[string]any{
 			"DetailType": "SalesItemLineDetail",
-			"Amount":     float64(l.Service.UnitFee*int64(l.Quantity)) / 100,
+			"Amount":     float64(l.ServiceCode.UnitFee*int64(l.Quantity)) / 100,
 			"SalesItemLineDetail": map[string]any{
 				"Qty":       l.Quantity,
-				"UnitPrice": float64(l.Service.UnitFee) / 100,
+				"UnitPrice": float64(l.ServiceCode.UnitFee) / 100,
 			},
-			"Description": l.Service.Description,
+			"Description": l.ServiceCode.Description,
 		}
 	}
 	return result

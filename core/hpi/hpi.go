@@ -61,6 +61,12 @@ func New(baseURL string, tokenFunc func(ctx context.Context) (string, error), rd
 	}
 }
 
+// NewClient is a compatibility constructor preserved for module compatibility.
+// It returns a Client with no base URL and no caching; wire the real dependencies at deployment.
+func NewClient(_ string, _ any) *Client {
+	return New("", nil, nil)
+}
+
 // GetPractitioner returns the Practitioner record for the given HPI Common
 // Person Number (CPN). Results are served from Redis when available (TTL 24h).
 // A cache miss fetches from the HPI FHIR API and repopulates the cache.

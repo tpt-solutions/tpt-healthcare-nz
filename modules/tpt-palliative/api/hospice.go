@@ -4,6 +4,7 @@ package api
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
@@ -49,7 +50,7 @@ func (h *HospiceHandler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 		PreferredPlaceOfDeath:  req.PreferredPlaceOfDeath,
 		DNACPRInPlace:          req.DNACPRInPlace,
 	}
-	h.auditTrail.Record(r.Context(), "palliative.patient.created", p.ID, req.PatientNHI, nil)
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "palliative.patient.created", ResourceID: p.ID, PatientNHI: req.PatientNHI, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, p)
 }
 
@@ -76,7 +77,7 @@ func (h *HospiceHandler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = id
-	h.auditTrail.Record(r.Context(), "palliative.patient.updated", id, "", nil)
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "palliative.patient.updated", ResourceID: id, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
@@ -116,7 +117,7 @@ func (h *HospiceHandler) RecordVisit(w http.ResponseWriter, r *http.Request) {
 		t := parseTime(*req.NextReviewDate)
 		v.NextReviewDate = &t
 	}
-	h.auditTrail.Record(r.Context(), "palliative.visit.recorded", v.ID, patientID, nil)
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "palliative.visit.recorded", ResourceID: v.ID, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, v)
 }
 
@@ -145,6 +146,6 @@ func (h *HospiceHandler) AddGoalOfCare(w http.ResponseWriter, r *http.Request) {
 		Priority: req.Priority,
 		Achieved: false,
 	}
-	h.auditTrail.Record(r.Context(), "palliative.goal.added", g.ID, patientID, map[string]any{"goal": req.Goal})
+	_ = h.auditTrail.Record(r.Context(), audit.Event{Action: "palliative.goal.added", ResourceID: g.ID, Details: map[string]any{"goal": req.Goal}, OccurredAt: time.Now().UTC()})
 	writeJSON(w, http.StatusCreated, g)
 }

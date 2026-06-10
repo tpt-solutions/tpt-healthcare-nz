@@ -329,51 +329,61 @@ func (r *postgresRepo) AverageWaitMinutes(ctx context.Context, queueID uuid.UUID
 	return avg, nil
 }
 
-// Nullable scan helpers — pgx does not auto-scan NULL into *float64 without these.
-func nilFloat64(dest *float64, flag *bool) any {
-	return pgx.ScanArgFunc(func(src any) error {
-		if src == nil {
-			if flag != nil {
-				*flag = false
-			}
-			return nil
-		}
-		if flag != nil {
-			*flag = true
-		}
-		switch v := src.(type) {
-		case float64:
-			*dest = v
-		case float32:
-			*dest = float64(v)
-		}
-		return nil
-	})
+// Nullable scan helpers — implement database/sql.Scanner so pgx v5 routes them correctly.
+
+type nullFloat64Scanner struct {
+	dest *float64
+	flag *bool
 }
 
-func nilFloat32(dest *float32) any {
-	return pgx.ScanArgFunc(func(src any) error {
-		if src == nil {
-			return nil
-		}
-		switch v := src.(type) {
-		case float64:
-			*dest = float32(v)
-		case float32:
-			*dest = v
+func (s nullFloat64Scanner) Scan(src any) error {
+	if src == nil {
+		if s.flag != nil {
+			*s.flag = false
 		}
 		return nil
-	})
+	}
+	if s.flag != nil {
+		*s.flag = true
+	}
+	switch v := src.(type) {
+	case float64:
+		*s.dest = v
+	case float32:
+		*s.dest = float64(v)
+	}
+	return nil
 }
 
-func nilTime(dest *time.Time) any {
-	return pgx.ScanArgFunc(func(src any) error {
-		if src == nil {
-			return nil
-		}
-		if t, ok := src.(time.Time); ok {
-			*dest = t
-		}
+func nilFloat64(dest *float64, flag *bool) any { return nullFloat64Scanner{dest, flag} }
+
+type nullFloat32Scanner struct{ dest *float32 }
+
+func (s nullFloat32Scanner) Scan(src any) error {
+	if src == nil {
 		return nil
-	})
+	}
+	switch v := src.(type) {
+	case float64:
+		*s.dest = float32(v)
+	case float32:
+		*s.dest = v
+	}
+	return nil
 }
+
+func nilFloat32(dest *float32) any { return nullFloat32Scanner{dest} }
+
+type nullTimeScanner struct{ dest *time.Time }
+
+func (s nullTimeScanner) Scan(src any) error {
+	if src == nil {
+		return nil
+	}
+	if t, ok := src.(time.Time); ok {
+		*s.dest = t
+	}
+	return nil
+}
+
+func nilTime(dest *time.Time) any { return nullTimeScanner{dest} }

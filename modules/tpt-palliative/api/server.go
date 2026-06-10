@@ -90,12 +90,12 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	pain := &PainHandler{pool: s.pool, auditTrail: s.auditTrail, logger: s.logger}
 
 	chain := func(h http.Handler) http.Handler {
-		h = middleware.AuditWrap(h, s.auditTrail)
-		h = middleware.Auth(h, s.auth)
-		h = middleware.Tenant(h, s.cfg.TenantHeader)
-		h = middleware.CORS(h)
-		h = middleware.RateLimit(h)
-		h = middleware.Recovery(h, s.logger)
+		h = middleware.AuditWrap(s.auditTrail)(h)
+		h = auth.RequireAuth(s.auth)(h)
+		h = middleware.TenantExtraction()(h)
+		h = middleware.CORS([]string{"*"})(h)
+		h = middleware.RateLimit(10, 30)(h)
+		h = middleware.RecoveryMiddleware()(h)
 		return h
 	}
 

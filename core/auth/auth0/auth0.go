@@ -57,6 +57,12 @@ func New(ctx context.Context, cfg Config) (*Provider, error) {
 	}, nil
 }
 
+// NewProvider is a compatibility constructor that accepts domain and audience strings.
+// Preserved for module compatibility; prefer New with a full Config.
+func NewProvider(domain, audience string) (*Provider, error) {
+	return New(context.Background(), Config{Domain: domain, Audience: audience})
+}
+
 // NewFromEnv reads AUTH0_DOMAIN, AUTH0_AUDIENCE, and AUTH0_CLIENT_ID from the
 // environment and delegates to New.
 func NewFromEnv(ctx context.Context) (*Provider, error) {

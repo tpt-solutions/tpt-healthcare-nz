@@ -258,9 +258,9 @@ func billingLinesToXero(lines []billing.BillingLine) []map[string]any {
 	result := make([]map[string]any, len(lines))
 	for i, l := range lines {
 		result[i] = map[string]any{
-			"Description":  l.Service.Description,
+			"Description":  l.ServiceCode.Description,
 			"Quantity":     l.Quantity,
-			"UnitAmount":   float64(l.Service.UnitFee) / 100,
+			"UnitAmount":   float64(l.ServiceCode.UnitFee) / 100,
 			"AccountCode":  "200", // default income account; configurable via viper
 		}
 	}
