@@ -126,7 +126,7 @@ func (h *InfectionControlHandler) ListAlerts(w http.ResponseWriter, r *http.Requ
 	activeOnly := r.URL.Query().Get("active") != "false"
 	wardFilter := r.URL.Query().Get("ward")
 
-	alerts, err := h.listAlerts(ctx, tenantID, activeOnly, wardFilter)
+	alerts, err := h.listAlerts(ctx, tenantID.String(), activeOnly, wardFilter)
 	if err != nil {
 		h.logger.Error("list IC alerts", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list alerts"})
@@ -159,17 +159,18 @@ func (h *InfectionControlHandler) CreateAlert(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	alert, err := h.insertAlert(ctx, req, tenantID)
+	alert, err := h.insertAlert(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("create IC alert", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create alert"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "ICAlert",
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "ICAlert",
 		ResourceID: alert.ID, TenantID: tenantID,
-		Metadata: map[string]string{"alertType": string(req.AlertType), "severity": string(req.Severity)},
+		Details:    map[string]any{"alert_type": string(req.AlertType), "severity": string(req.Severity)},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, alert)
 }
@@ -184,7 +185,7 @@ func (h *InfectionControlHandler) GetAlert(w http.ResponseWriter, r *http.Reques
 	}
 
 	id := r.PathValue("id")
-	alert, err := h.getAlertByID(ctx, id, tenantID)
+	alert, err := h.getAlertByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "alert not found"})
