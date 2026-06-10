@@ -140,7 +140,7 @@ func (h *ICUHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	statusFilter := r.URL.Query().Get("status")
-	admissions, err := h.listICUAdmissions(ctx, tenantID, statusFilter)
+	admissions, err := h.listICUAdmissions(ctx, tenantID.String(), statusFilter)
 	if err != nil {
 		h.logger.Error("list ICU admissions", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list ICU admissions"})
@@ -192,16 +192,16 @@ func (h *ICUHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	adm, err := h.insertICUAdmission(ctx, req, tenantID)
+	adm, err := h.insertICUAdmission(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert ICU admission", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create ICU admission"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "ICUAdmission",
-		ResourceID: adm.ID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "ICUAdmission",
+		ResourceID: adm.ID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, adm)
 }

@@ -404,7 +404,7 @@ func (h *EDHandler) Queue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	queue, err := h.listPresentations(ctx, tenantID, string(EDStatusArrived), "")
+	queue, err := h.listPresentations(ctx, tenantID.String(), string(EDStatusArrived), "")
 	if err != nil {
 		h.logger.Error("ed queue", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "QUEUE_ERROR", Message: "failed to retrieve ED queue"})
@@ -422,7 +422,7 @@ func (h *EDHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats, err := h.queueStats(ctx, tenantID)
+	stats, err := h.queueStats(ctx, tenantID.String())
 	if err != nil {
 		h.logger.Error("ed stats", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "STATS_ERROR", Message: "failed to retrieve ED stats"})
