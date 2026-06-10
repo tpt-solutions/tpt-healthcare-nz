@@ -217,16 +217,16 @@ func (h *AdmissionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	adm, err := h.insertAdmission(ctx, req, tenantID)
+	adm, err := h.insertAdmission(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert admission", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create admission"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "Admission",
-		ResourceID: adm.ID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "Admission",
+		ResourceID: adm.ID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, adm)
 }
@@ -246,7 +246,7 @@ func (h *AdmissionsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	adm, err := h.getAdmissionByID(ctx, id, tenantID)
+	adm, err := h.getAdmissionByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "admission not found"})
@@ -257,9 +257,9 @@ func (h *AdmissionsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "Admission",
-		ResourceID: id, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "Admission",
+		ResourceID: id, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, adm)
 }
@@ -279,7 +279,7 @@ func (h *AdmissionsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getAdmissionByID(ctx, id, tenantID)
+	existing, err := h.getAdmissionByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "admission not found"})
@@ -323,9 +323,9 @@ func (h *AdmissionsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "Admission",
-		ResourceID: id, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "Admission",
+		ResourceID: id, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, updated)
 }
@@ -345,7 +345,7 @@ func (h *AdmissionsHandler) Discharge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getAdmissionByID(ctx, id, tenantID)
+	existing, err := h.getAdmissionByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "admission not found"})
@@ -383,10 +383,11 @@ func (h *AdmissionsHandler) Discharge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "Admission",
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "Admission",
 		ResourceID: id, TenantID: tenantID,
-		Metadata: map[string]string{"action": "discharge", "destination": string(req.Destination)},
+		Details:    map[string]any{"action": "discharge", "destination": string(req.Destination)},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, discharged)
 }
@@ -406,7 +407,7 @@ func (h *AdmissionsHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getAdmissionByID(ctx, id, tenantID)
+	existing, err := h.getAdmissionByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "admission not found"})
