@@ -443,10 +443,11 @@ func (h *AdmissionsHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "Admission",
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "Admission",
 		ResourceID: id, TenantID: tenantID,
-		Metadata: map[string]string{"action": "transfer", "toWard": req.ToWardID},
+		Details:    map[string]any{"action": "transfer", "to_ward": req.ToWardID},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, transferred)
 }
@@ -466,7 +467,7 @@ func (h *AdmissionsHandler) GetDischargeSummary(w http.ResponseWriter, r *http.R
 	}
 
 	admissionID := r.PathValue("admissionId")
-	summary, err := h.getDischargeSummary(ctx, admissionID, tenantID)
+	summary, err := h.getDischargeSummary(ctx, admissionID, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "discharge summary not found"})
@@ -477,9 +478,9 @@ func (h *AdmissionsHandler) GetDischargeSummary(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "DischargeSummary",
-		ResourceID: admissionID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "DischargeSummary",
+		ResourceID: admissionID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, summary)
 }
@@ -499,7 +500,7 @@ func (h *AdmissionsHandler) CreateDischargeSummary(w http.ResponseWriter, r *htt
 	}
 
 	admissionID := r.PathValue("admissionId")
-	adm, err := h.getAdmissionByID(ctx, admissionID, tenantID)
+	adm, err := h.getAdmissionByID(ctx, admissionID, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "admission not found"})
@@ -524,16 +525,16 @@ func (h *AdmissionsHandler) CreateDischargeSummary(w http.ResponseWriter, r *htt
 		return
 	}
 
-	summary, err := h.insertDischargeSummary(ctx, admissionID, adm, req, tenantID)
+	summary, err := h.insertDischargeSummary(ctx, admissionID, adm, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert discharge summary", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create discharge summary"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "DischargeSummary",
-		ResourceID: summary.ID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "DischargeSummary",
+		ResourceID: summary.ID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, summary)
 }
