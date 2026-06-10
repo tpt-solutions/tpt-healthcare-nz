@@ -132,7 +132,7 @@ func (h *EDHandler) List(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	catFilter := r.URL.Query().Get("category")
 
-	presentations, err := h.listPresentations(ctx, tenantID, statusFilter, catFilter)
+	presentations, err := h.listPresentations(ctx, tenantID.String(), statusFilter, catFilter)
 	if err != nil {
 		h.logger.Error("list ED presentations", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list presentations"})
@@ -169,16 +169,16 @@ func (h *EDHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pres, err := h.insertPresentation(ctx, req, tenantID)
+	pres, err := h.insertPresentation(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert ED presentation", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create ED presentation"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "EDPresentation",
-		ResourceID: pres.ID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "EDPresentation",
+		ResourceID: pres.ID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, pres)
 }
@@ -198,7 +198,7 @@ func (h *EDHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	pres, err := h.getPresentationByID(ctx, id, tenantID)
+	pres, err := h.getPresentationByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "presentation not found"})
@@ -209,9 +209,9 @@ func (h *EDHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "EDPresentation",
-		ResourceID: id, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "EDPresentation",
+		ResourceID: id, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, pres)
 }
@@ -231,7 +231,7 @@ func (h *EDHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getPresentationByID(ctx, id, tenantID)
+	existing, err := h.getPresentationByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "presentation not found"})
