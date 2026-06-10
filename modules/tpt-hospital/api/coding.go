@@ -93,16 +93,16 @@ func (h *CodingHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	admissionID := r.PathValue("admissionId")
-	codes, err := h.listCodes(ctx, admissionID, tenantID)
+	codes, err := h.listCodes(ctx, admissionID, tenantID.String())
 	if err != nil {
 		h.logger.Error("list clinical codes", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list clinical codes"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "ClinicalCoding",
-		ResourceID: admissionID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "ClinicalCoding",
+		ResourceID: admissionID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"codes": codes, "total": len(codes)})
 }
@@ -141,17 +141,18 @@ func (h *CodingHandler) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code, err := h.insertCode(ctx, admissionID, req, tenantID)
+	code, err := h.insertCode(ctx, admissionID, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert clinical code", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to add clinical code"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "ClinicalCoding",
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "ClinicalCoding",
 		ResourceID: admissionID, TenantID: tenantID,
-		Metadata: map[string]string{"code": req.Code, "system": string(req.System)},
+		Details:    map[string]any{"code": req.Code, "system": string(req.System)},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, code)
 }
@@ -173,7 +174,7 @@ func (h *CodingHandler) Remove(w http.ResponseWriter, r *http.Request) {
 	admissionID := r.PathValue("admissionId")
 	codeID := r.PathValue("codeId")
 
-	if err := h.deleteCode(ctx, codeID, admissionID, tenantID); err != nil {
+	if err := h.deleteCode(ctx, codeID, admissionID, tenantID.String()); err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "code not found"})
 			return
@@ -183,10 +184,11 @@ func (h *CodingHandler) Remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "ClinicalCoding",
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "delete", ResourceType: "ClinicalCoding",
 		ResourceID: admissionID, TenantID: tenantID,
-		Metadata: map[string]string{"action": "remove", "codeId": codeID},
+		Details:    map[string]any{"action": "remove", "code_id": codeID},
+		OccurredAt: time.Now().UTC(),
 	})
 	w.WriteHeader(http.StatusNoContent)
 }
