@@ -274,16 +274,16 @@ func (h *ICUHandler) AddChart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entry, err := h.insertChartEntry(ctx, id, req, tenantID)
+	entry, err := h.insertChartEntry(ctx, id, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert ICU chart entry", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to add chart entry"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "ICUChart",
-		ResourceID: entry.ID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "ICUChart",
+		ResourceID: entry.ID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, entry)
 }
@@ -303,16 +303,16 @@ func (h *ICUHandler) ListChart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	entries, err := h.listChartEntries(ctx, id, tenantID)
+	entries, err := h.listChartEntries(ctx, id, tenantID.String())
 	if err != nil {
 		h.logger.Error("list ICU chart entries", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list chart entries"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "ICUChart",
-		ResourceID: id, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "ICUChart",
+		ResourceID: id, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"entries": entries, "total": len(entries)})
 }
@@ -332,7 +332,7 @@ func (h *ICUHandler) Discharge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getICUAdmissionByID(ctx, id, tenantID)
+	existing, err := h.getICUAdmissionByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "ICU admission not found"})
@@ -368,10 +368,11 @@ func (h *ICUHandler) Discharge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "ICUAdmission",
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "ICUAdmission",
 		ResourceID: id, TenantID: tenantID,
-		Metadata: map[string]string{"action": "discharge", "stepDown": fmt.Sprintf("%v", req.StepDown)},
+		Details:    map[string]any{"action": "discharge", "step_down": req.StepDown},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, discharged)
 }
