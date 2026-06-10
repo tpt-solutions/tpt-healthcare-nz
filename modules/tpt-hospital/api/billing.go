@@ -106,7 +106,7 @@ func (h *BillingHandler) GetDRG(w http.ResponseWriter, r *http.Request) {
 
 	admissionID := r.PathValue("admissionId")
 
-	drg, err := h.deriveDRG(ctx, admissionID, tenantID)
+	drg, err := h.deriveDRG(ctx, admissionID, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "no coded diagnoses found for this admission"})
@@ -117,9 +117,9 @@ func (h *BillingHandler) GetDRG(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "DRGAssignment",
-		ResourceID: admissionID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "DRGAssignment",
+		ResourceID: admissionID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, drg)
 }
@@ -139,7 +139,7 @@ func (h *BillingHandler) GetInvoice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	admissionID := r.PathValue("admissionId")
-	invoice, err := h.getInvoiceByAdmission(ctx, admissionID, tenantID)
+	invoice, err := h.getInvoiceByAdmission(ctx, admissionID, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "no invoice found for this admission"})
@@ -150,9 +150,9 @@ func (h *BillingHandler) GetInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "HospitalInvoice",
-		ResourceID: admissionID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "HospitalInvoice",
+		ResourceID: admissionID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, invoice)
 }
