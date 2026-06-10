@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 // ClaimStatus represents the lifecycle state of an ACC claim.
@@ -89,6 +90,7 @@ type Client struct {
 	httpClient *http.Client
 	baseURL    string
 	tokenFunc  func(ctx context.Context) (string, error)
+	rdb        *redis.Client // optional; nil disables caching
 }
 
 // New constructs a Client targeting baseURL. tokenFunc is called per request
@@ -144,8 +146,12 @@ func (c *Client) Lodge(ctx context.Context, claim Claim) (*Claim, error) {
 }
 
 // GetStatus retrieves the current status of an ACC claim by its claim number.
-// It looks up the corresponding FHIR ClaimResponse resource.
+// Results are cached in Redis for 1 hour when a cache client is configured.
 func (c *Client) GetStatus(ctx context.Context, claimNumber string) (*Claim, error) {
+	if cached, ok := c.cacheGetClaim(ctx, claimNumber); ok {
+		return cached, nil
+	}
+
 	token, err := c.tokenFunc(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("acc: obtaining access token: %w", err)
@@ -172,7 +178,12 @@ func (c *Client) GetStatus(ctx context.Context, claimNumber string) (*Claim, err
 		return nil, parseErrorResponse(resp, claimNumber)
 	}
 
-	return decodeClaimResponseBundle(resp.Body, claimNumber)
+	claim, err := decodeClaimResponseBundle(resp.Body, claimNumber)
+	if err != nil {
+		return nil, err
+	}
+	c.cacheSetClaim(ctx, claimNumber, claim)
+	return claim, nil
 }
 
 // Poll repeatedly calls GetStatus until the claim reaches a terminal status

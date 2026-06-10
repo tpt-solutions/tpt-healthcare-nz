@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { formatNZD } from '../utils/format';
 
@@ -45,6 +46,86 @@ function statusBadge(status: string) {
     <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${map[status] ?? 'bg-gray-100 text-gray-600'}`}>
       {labels[status] ?? status}
     </span>
+  );
+}
+
+interface BackupRun {
+  id: string;
+  label: string;
+  started_at: string;
+  completed_at?: string;
+  status: 'running' | 'success' | 'failed' | 'verified';
+  size_bytes: number;
+  error_text?: string;
+}
+
+function BackupStatusWidget() {
+  const [runs, setRuns] = useState<BackupRun[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/v1/practice/system/backup')
+      .then(r => r.json())
+      .then(data => setRuns(Array.isArray(data) ? data : []))
+      .catch(() => setRuns([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const latest = runs[0];
+  const statusColor: Record<string, string> = {
+    success:  'bg-green-100 text-green-700',
+    verified: 'bg-green-100 text-green-700',
+    running:  'bg-blue-100 text-blue-700',
+    failed:   'bg-red-100 text-red-700',
+  };
+
+  function formatBytes(b: number) {
+    if (b === 0) return '—';
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+    if (b < 1024 * 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(b / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 animate-pulse">
+        <div className="h-3 w-24 bg-gray-200 rounded mb-3" />
+        <div className="h-5 w-16 bg-gray-100 rounded" />
+      </div>
+    );
+  }
+
+  if (!latest) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Database Backup</p>
+        <p className="text-sm text-gray-400">No backups recorded yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`rounded-xl border shadow-sm p-5 ${latest.status === 'failed' ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Database Backup</p>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColor[latest.status] ?? 'bg-gray-100 text-gray-600'}`}>
+          {latest.status}
+        </span>
+      </div>
+      <p className="text-sm font-semibold text-gray-900 truncate">{latest.label}</p>
+      <p className="text-xs text-gray-500 mt-0.5">
+        {latest.completed_at
+          ? new Date(latest.completed_at).toLocaleString('en-NZ')
+          : `Started ${new Date(latest.started_at).toLocaleString('en-NZ')}`}
+        {latest.size_bytes > 0 && ` — ${formatBytes(latest.size_bytes)}`}
+      </p>
+      {latest.status === 'failed' && latest.error_text && (
+        <p className="mt-2 text-xs text-red-600 truncate">{latest.error_text}</p>
+      )}
+      {runs.length > 1 && (
+        <p className="mt-2 text-xs text-gray-400">{runs.length - 1} earlier run{runs.length > 2 ? 's' : ''} available</p>
+      )}
+    </div>
   );
 }
 
@@ -122,6 +203,23 @@ export function DashboardPage() {
         <a href="/reports" className="text-xs font-medium text-brand-700 hover:underline flex-shrink-0 ml-4">
           View capitation report
         </a>
+      </div>
+
+      {/* Backup status + low-stock alert row */}
+      <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="col-span-1">
+          <BackupStatusWidget />
+        </div>
+        {/* Two quick-stat slots reserved for future M12 widgets */}
+        <div className="col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex items-center gap-4">
+          <svg className="h-8 w-8 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
+          </svg>
+          <div>
+            <p className="text-sm font-medium text-gray-700">Storage &amp; Integrations</p>
+            <p className="text-xs text-gray-400 mt-0.5">Connect accounting, payroll, and cloud storage providers in <a href="/integrations" className="text-brand-600 hover:underline">Integrations</a>.</p>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-6">

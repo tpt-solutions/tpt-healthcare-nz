@@ -13,6 +13,7 @@ import (
 type ProviderType string
 
 const (
+	// Business integration provider types
 	ProviderTypeAccounting ProviderType = "accounting"
 	ProviderTypePayroll    ProviderType = "payroll"
 	ProviderTypeSMS        ProviderType = "sms"
@@ -21,6 +22,18 @@ const (
 	ProviderTypePayment    ProviderType = "payment"
 	ProviderTypeFax        ProviderType = "fax"
 	ProviderTypeVideo      ProviderType = "video"
+
+	// NZ health system provider types
+	ProviderTypeNHI       ProviderType = "nhi"
+	ProviderTypeHPI       ProviderType = "hpi"
+	ProviderTypeNES       ProviderType = "nes"
+	ProviderTypeACC       ProviderType = "acc"
+	ProviderTypePHARMAC   ProviderType = "pharmac"
+	ProviderTypePRIMHD    ProviderType = "primhd"
+	ProviderTypeWorkSafe  ProviderType = "worksafe"
+	ProviderTypeMedsafe   ProviderType = "medsafe"
+	ProviderTypeEpiSurv   ProviderType = "episurv"
+	ProviderTypeERMS      ProviderType = "erms"
 )
 
 // Status is a cached health-check result for a single provider.

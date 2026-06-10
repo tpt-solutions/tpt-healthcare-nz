@@ -25,19 +25,37 @@ const (
 type Topic string
 
 const (
-	TopicAccountingInvoice  Topic = "accounting.invoice.sync"
-	TopicAccountingPayment  Topic = "accounting.payment.record"
-	TopicAccountingContact  Topic = "accounting.contact.sync"
-	TopicAccountingJournal  Topic = "accounting.journal.post"
-	TopicPayrollEmployee    Topic = "payroll.employee.sync"
-	TopicPayrollTimesheets  Topic = "payroll.timesheets.push"
-	TopicPayrollLeave       Topic = "payroll.leave.submit"
-	TopicSMSSend            Topic = "sms.send"
-	TopicEmailSend          Topic = "email.send"
-	TopicFaxSend            Topic = "fax.send"
-	TopicVideoRoomCreate    Topic = "video.room.create"
-	TopicStorageUpload      Topic = "storage.upload"
-	TopicBackupTrigger      Topic = "backup.trigger"
+	// Business integrations
+	TopicAccountingInvoice Topic = "accounting.invoice.sync"
+	TopicAccountingPayment Topic = "accounting.payment.record"
+	TopicAccountingContact Topic = "accounting.contact.sync"
+	TopicAccountingJournal Topic = "accounting.journal.post"
+	TopicPayrollEmployee   Topic = "payroll.employee.sync"
+	TopicPayrollTimesheets Topic = "payroll.timesheets.push"
+	TopicPayrollLeave      Topic = "payroll.leave.submit"
+	TopicSMSSend           Topic = "sms.send"
+	TopicEmailSend         Topic = "email.send"
+	TopicFaxSend           Topic = "fax.send"
+	TopicVideoRoomCreate   Topic = "video.room.create"
+	TopicStorageUpload     Topic = "storage.upload"
+	TopicBackupTrigger     Topic = "backup.trigger"
+
+	// NZ health system integrations — queued when live API calls fail so
+	// that critical submissions are never silently dropped.
+	TopicACCClaimLodge        Topic = "acc.claim.lodge"
+	TopicACCPORequest         Topic = "acc.purchase-order.request"
+	TopicACCPOConsume         Topic = "acc.purchase-order.consume"
+	TopicWorkSafeClaimLodge   Topic = "worksafe.claim.lodge"
+	TopicNHILookup            Topic = "nhi.patient.lookup"
+	TopicNESEnrol             Topic = "nes.enrolment.submit"
+	TopicPRIMHDReferral       Topic = "primhd.referral.open"
+	TopicPRIMHDActivity       Topic = "primhd.activity.submit"
+	TopicPRIMHDOutcome        Topic = "primhd.outcome.submit"
+	TopicPRIMHDDischarge      Topic = "primhd.referral.close"
+	TopicMedsafeADE           Topic = "medsafe.ade.report"
+	TopicEpiSurvNotify        Topic = "episurv.notification.submit"
+	TopicPharmacyDispatch     Topic = "pharmacy.prescription.dispatch"
+	TopicERMSReferral         Topic = "erms.referral.submit"
 )
 
 // Message is a durable record of a pending external integration call.

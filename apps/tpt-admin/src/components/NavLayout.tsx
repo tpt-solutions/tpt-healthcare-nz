@@ -23,6 +23,7 @@ const navGroups = [
       { to: '/inventory', label: 'Inventory', icon: BoxIcon },
       { to: '/budget', label: 'Budget', icon: ChartIcon },
       { to: '/departments', label: 'Departments', icon: UsersIcon },
+      { to: '/roles', label: 'Roles', icon: ShieldIcon },
     ],
   },
   {

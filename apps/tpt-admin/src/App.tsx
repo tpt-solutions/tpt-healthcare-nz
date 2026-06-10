@@ -21,6 +21,7 @@ import { InvoicesPage } from './pages/InvoicesPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { BudgetPage } from './pages/BudgetPage';
 import { DepartmentsPage } from './pages/DepartmentsPage';
+import { RolesPage } from './pages/RolesPage';
 import { IntegrationsPage } from './pages/IntegrationsPage';
 
 export default function App() {
@@ -56,6 +57,7 @@ export default function App() {
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/budget" element={<BudgetPage />} />
             <Route path="/departments" element={<DepartmentsPage />} />
+            <Route path="/roles" element={<RolesPage />} />
             {/* Milestone 11 — Integrations */}
             <Route path="/integrations" element={<IntegrationsPage />} />
           </Route>

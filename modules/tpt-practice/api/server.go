@@ -11,6 +11,7 @@ import (
 
 	"github.com/PhillipC05/tpt-healthcare/core/accounts"
 	"github.com/PhillipC05/tpt-healthcare/core/auth"
+	"github.com/PhillipC05/tpt-healthcare/core/events"
 	"github.com/PhillipC05/tpt-healthcare/core/inventory"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 	"github.com/PhillipC05/tpt-healthcare/core/rbac"
@@ -26,20 +27,25 @@ type Config struct {
 
 // Server is the HTTP multiplexer for tpt-practice.
 type Server struct {
-	mux    *http.ServeMux
-	cfg    Config
+	mux          *http.ServeMux
+	cfg          Config
 	rbacRepo     rbac.Repository
 	inventoryRepo inventory.Repository
+	inventorySvc  *inventory.Service
 	accountsRepo  accounts.Repository
 }
 
 // NewServer constructs and configures the API server.
 func NewServer(cfg Config) *Server {
+	invRepo := inventory.NewPostgresRepository(cfg.Pool)
+	invBus := events.New()
+	invSvc := inventory.NewService(invRepo, invBus, cfg.Logger)
 	s := &Server{
 		mux:          http.NewServeMux(),
 		cfg:          cfg,
 		rbacRepo:     rbac.NewPostgresRepository(cfg.Pool),
-		inventoryRepo: nil, // inventory postgres repo wired here when implemented
+		inventoryRepo: invRepo,
+		inventorySvc:  invSvc,
 		accountsRepo:  accounts.NewPostgresRepository(cfg.Pool),
 	}
 	s.routes()
@@ -124,6 +130,9 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/v1/practice/cost-centres/{id}/budget/{year}", chain(http.HandlerFunc(s.getBudget)))
 	s.mux.Handle("PUT /api/v1/practice/cost-centres/{id}/budget/{year}/lines", chain(http.HandlerFunc(s.upsertBudgetLine)))
 	s.mux.Handle("GET /api/v1/practice/cost-centres/{id}/variance/{year}", chain(http.HandlerFunc(s.getVarianceReport)))
+
+	// System / backup status
+	s.mux.Handle("GET /api/v1/practice/system/backup", chain(http.HandlerFunc(s.backupStatus)))
 
 	// Accounting & payroll sync status
 	s.mux.Handle("GET /api/v1/practice/accounting/status", chain(http.HandlerFunc(s.accountingStatus)))

@@ -30,4 +30,10 @@ use (
 	./modules/tpt-cardiology
 	./modules/tpt-rehabilitation
 	./modules/tpt-community-health
+	./modules/tpt-disability
+	./modules/tpt-screening
+	./modules/tpt-epidemiology
+	./modules/tpt-telehealth
+	./modules/tpt-clinical-trials
+	./modules/tpt-health-billing
 )
