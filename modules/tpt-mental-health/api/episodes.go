@@ -226,13 +226,13 @@ func (h *EpisodesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apcValid, err := h.hpiClient.ValidateAPC(ctx, req.ResponsibleHPI)
+	apcStatus, err := h.hpiClient.ValidateAPC(ctx, req.ResponsibleHPI)
 	if err != nil {
 		h.logger.Error("HPI APC check for RC", slog.Any("error", err))
 		writeJSON(w, http.StatusBadGateway, apiError{Code: "HPI_ERROR", Message: "could not verify responsible clinician APC"})
 		return
 	}
-	if !apcValid {
+	if !apcStatus.Valid {
 		writeJSON(w, http.StatusForbidden, apiError{Code: "INVALID_APC", Message: "responsible clinician does not hold a current APC"})
 		return
 	}

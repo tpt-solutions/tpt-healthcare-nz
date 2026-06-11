@@ -285,13 +285,13 @@ func (h *NASCHandler) CreateReferral(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apcValid, err := h.hpiClient.ValidateAPC(ctx, req.ReferrerHPI)
+	apcStatus, err := h.hpiClient.ValidateAPC(ctx, req.ReferrerHPI)
 	if err != nil {
 		h.logger.Error("HPI APC check", slog.Any("error", err))
 		writeJSON(w, http.StatusBadGateway, apiError{Code: "HPI_ERROR", Message: "could not verify practitioner APC"})
 		return
 	}
-	if !apcValid {
+	if !apcStatus.Valid {
 		writeJSON(w, http.StatusForbidden, apiError{Code: "INVALID_APC", Message: "referrer does not hold a current Annual Practising Certificate"})
 		return
 	}

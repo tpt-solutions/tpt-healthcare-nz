@@ -294,26 +294,26 @@ func (h *TreatmentOrdersHandler) Create(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Validate APC for the Responsible Clinician.
-	apcValid, err := h.hpiClient.ValidateAPC(ctx, req.ResponsibleHPI)
+	apcStatus, err := h.hpiClient.ValidateAPC(ctx, req.ResponsibleHPI)
 	if err != nil {
 		h.logger.Error("HPI APC check (RC)", slog.Any("error", err))
 		writeJSON(w, http.StatusBadGateway, apiError{Code: "HPI_ERROR", Message: "could not verify responsible clinician APC"})
 		return
 	}
-	if !apcValid {
+	if !apcStatus.Valid {
 		writeJSON(w, http.StatusForbidden, apiError{Code: "INVALID_RC_APC", Message: "responsible clinician does not hold a current APC"})
 		return
 	}
 
 	// Validate APC for the second opinion practitioner when required.
 	if req.SecondOpinionHPI != "" {
-		soValid, err := h.hpiClient.ValidateAPC(ctx, req.SecondOpinionHPI)
+		soStatus, err := h.hpiClient.ValidateAPC(ctx, req.SecondOpinionHPI)
 		if err != nil {
 			h.logger.Error("HPI APC check (second opinion)", slog.Any("error", err))
 			writeJSON(w, http.StatusBadGateway, apiError{Code: "HPI_ERROR", Message: "could not verify second opinion practitioner APC"})
 			return
 		}
-		if !soValid {
+		if !soStatus.Valid {
 			writeJSON(w, http.StatusForbidden, apiError{Code: "INVALID_SO_APC", Message: "second opinion practitioner does not hold a current APC"})
 			return
 		}

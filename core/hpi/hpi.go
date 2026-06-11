@@ -105,20 +105,28 @@ func (c *Client) GetPractitioner(ctx context.Context, cpn string) (*Practitioner
 	return p, nil
 }
 
+// APCStatus is the result of an APC validation check.
+type APCStatus struct {
+	Valid  bool       `json:"valid"`
+	CPN    string     `json:"cpn,omitempty"`
+	Expiry *time.Time `json:"expiry,omitempty"`
+	Scope  string     `json:"scope,omitempty"`
+}
+
 // ValidateAPC reports whether the practitioner identified by cpn holds a
 // current (non-expired) Annual Practising Certificate.
-func (c *Client) ValidateAPC(ctx context.Context, cpn string) (bool, error) {
+func (c *Client) ValidateAPC(ctx context.Context, cpn string) (APCStatus, error) {
 	p, err := c.GetPractitioner(ctx, cpn)
 	if err != nil {
-		return false, fmt.Errorf("hpi: ValidateAPC for CPN %s: %w", cpn, err)
+		return APCStatus{}, fmt.Errorf("hpi: ValidateAPC for CPN %s: %w", cpn, err)
 	}
 	if !p.APC {
-		return false, nil
+		return APCStatus{CPN: cpn, Scope: p.Scope}, nil
 	}
 	if p.APCExpiry != nil && time.Now().After(*p.APCExpiry) {
-		return false, nil
+		return APCStatus{CPN: cpn, Expiry: p.APCExpiry, Scope: p.Scope}, nil
 	}
-	return true, nil
+	return APCStatus{Valid: true, CPN: cpn, Expiry: p.APCExpiry, Scope: p.Scope}, nil
 }
 
 // GetFacility fetches the FHIR Organization resource for the given HPI facility

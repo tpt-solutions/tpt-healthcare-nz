@@ -56,13 +56,13 @@ func (s *Server) checkAPC(w http.ResponseWriter, r *http.Request, principal *aut
 		writeJSON(w, http.StatusForbidden, apiError{Code: "NOT_PRACTITIONER", Message: "clinical actions require a registered practitioner identity"})
 		return false
 	}
-	valid, err := s.hpiClient.ValidateAPC(r.Context(), principal.PractitionerID)
+	apcStatus, err := s.hpiClient.ValidateAPC(r.Context(), principal.PractitionerID)
 	if err != nil {
 		s.logger.Error("HPI APC validation failed", slog.String("cpn", principal.PractitionerID), slog.Any("error", err))
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Code: "HPI_UNAVAILABLE", Message: "unable to verify practitioner APC"})
 		return false
 	}
-	if !valid {
+	if !apcStatus.Valid {
 		writeJSON(w, http.StatusForbidden, apiError{Code: "APC_INVALID", Message: "practitioner does not hold a current Annual Practising Certificate"})
 		return false
 	}

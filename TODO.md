@@ -156,8 +156,8 @@
 - [x] `vite-plugin-pwa` + custom service worker added to `apps/tpt-portal`
 - [x] `vite-plugin-pwa` + custom service worker added to `apps/tpt-clinic`
 - [x] `vite-plugin-pwa` + custom service worker added to `apps/tpt-admin`
-- [ ] Generate brand icons (192×192, 512×512, 180×180, 72×72, 32×32 PNG) — `tools/gen-icons/`
-- [ ] Add `workbox-precaching`, `workbox-routing`, `workbox-strategies`, `workbox-expiration` to each app (SW dependencies)
+- [x] Generate brand icons (192×192, 512×512, 180×180, 72×72, 32×32 PNG) — `tools/gen-icons/`
+- [x] Add `workbox-precaching`, `workbox-routing`, `workbox-strategies`, `workbox-expiration` to each app (SW dependencies)
 
 ### VAPID Push Notifications
 - [x] `core/push/` — VAPID Web Push sender (`github.com/SherClockHolmes/webpush-go`)
@@ -324,24 +324,24 @@
 - [x] Replace `core/queue/reminders.go` `time.Ticker` with River job (at-least-once, retryable)
 - [x] `core/backup/` — WAL archiving orchestration, retention policy enforcement, nightly verify River job
 - [x] DB migration `008_resilience.sql` — outbox_messages, river schema, provider_health_status, backup_runs, retention_policy
-- [ ] pg_cron jobs: audit partition rotation (monthly), retention enforcement (nightly), stats refresh (6h)
-- [ ] Enable pg_cron extension in `deploy/docker-compose.dev.yml` + `deploy/docker-compose.yml`
+- [x] pg_cron jobs: audit partition rotation (monthly), retention enforcement (nightly), stats refresh (6h)
+- [x] Enable pg_cron extension in `deploy/docker-compose.dev.yml` + `deploy/docker-compose.yml`
 
 ### Provider Interfaces
 - [x] `core/accounting/` — Provider interface + Xero / QBO / FreshBooks backends
 - [x] `core/payroll/` — Provider interface + PayHero / iPayroll / FlexiTime / Datacom backends
 - [x] `core/sms/` — Provider interface + MessageBird / BurstSMS / Vonage / Twilio / ClickSend / Notifyre backends
-  - [ ] Wire SMS into appointment reminders + queue "called" + cold-chain breach alerts
+  - [x] Wire SMS into appointment reminders + queue "called" + cold-chain breach alerts
 - [x] `core/email/` — Provider interface + SendGrid / Postmark / AWS SES / Mailgun backends
-  - [ ] Wire email into subscription engine `dispatchEmail`, breach notifications, appointment confirmations
+  - [x] Wire email into subscription engine `dispatchEmail`, breach notifications, appointment confirmations
 - [x] `core/storage/` — Provider interface + S3 (ap-southeast-2) / Azure Blob / MinIO backends (AES-256-GCM pre-upload)
-  - [ ] Wire storage into consent evidence, radiology attachments, medical cert PDFs, WAL backup uploads
+  - [x] Wire storage into consent evidence, radiology attachments, medical cert PDFs, WAL backup uploads
 - [x] `core/payment/` — Provider interface + Windcave / Stripe / Paymark backends + webhook handler
-  - [ ] Wire payments into patient portal invoice payment + reception EFTPOS
+  - [x] Wire payments into patient portal invoice payment + reception EFTPOS
 - [x] `core/fax/` — Provider interface + Healthlink EDI / eFax backends
-  - [ ] Wire fax into tpt-doctor referral dispatch + tpt-pathology result delivery
+  - [x] Wire fax into tpt-doctor referral dispatch + tpt-pathology result delivery
 - [x] `core/video/` — Provider interface + Jitsi (self-hosted) / Zoom / Teams backends
-  - [ ] Wire video into appointment booking (room created on confirmation)
+  - [x] Wire video into appointment booking (room created on confirmation)
 
 ### RBAC & Departments
 - [x] `core/rbac/` — Department, RoleAssignment, checker, `RequirePermission` middleware
@@ -388,12 +388,12 @@
 ### ACC Extensions
 - [x] `core/acc/schedule.go` — per-discipline treatment codes and session caps (acupuncture, chiropractic, massage, physio schedules differ under the ACC treatment provider schedule)
 - [x] `core/acc/purchase_order.go` — PO lifecycle: request approval, session consumption tracking, reconciliation report
-- [ ] Wire PO management into tpt-acupuncture, tpt-chiropractic, tpt-massage claim submit handlers
-- [ ] ACC provider registration flow in tpt-admin (verify practice ACC Provider status, store provider number)
+- [x] Wire PO management into tpt-acupuncture, tpt-chiropractic, tpt-massage claim submit handlers
+- [x] ACC provider registration flow in tpt-admin (verify practice ACC Provider status, store provider number)
 
 ### WorkSafe NZ
 - [x] `core/worksafe/` — workplace injury claim client (mirrors core/acc/ API shape against api.worksafe.govt.nz)
-- [ ] Wire into tpt-doctor ACC claims handler as an alternative claim destination for work-related injuries
+- [x] Wire into tpt-doctor ACC claims handler as an alternative claim destination for work-related injuries
 
 ### Mandatory Regulatory Reporting
 - [x] `core/primhd/` — PRIMHD outcomes reporting client (required for all DHB-funded mental health/addiction services)

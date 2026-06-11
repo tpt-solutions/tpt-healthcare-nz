@@ -488,7 +488,7 @@ func (h *PatientsHandler) CreateEnrolment(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	rec, err := h.getPatientByID(ctx, id, tenantID)
+	rec, err := h.getPatientByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "patient not found"})
@@ -507,7 +507,7 @@ func (h *PatientsHandler) CreateEnrolment(w http.ResponseWriter, r *http.Request
 	}
 
 	// HIPC Rule 11: verify disclosure consent before submitting enrolment data.
-	hasConsent, err := h.checkDisclosureConsent(ctx, tenantID, string(nhiPlain))
+	hasConsent, err := h.checkDisclosureConsent(ctx, tenantID.String(), string(nhiPlain))
 	if err != nil {
 		h.logger.Error("check disclosure consent for enrolment create", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "CONSENT_ERROR", Message: "failed to verify disclosure consent"})
@@ -530,15 +530,14 @@ func (h *PatientsHandler) CreateEnrolment(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "Coverage",
 		ResourceID:   id,
 		TenantID:     tenantID,
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusCreated, enrolment)
 }
@@ -574,7 +573,7 @@ func (h *PatientsHandler) UpdateEnrolment(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	rec, err := h.getPatientByID(ctx, id, tenantID)
+	rec, err := h.getPatientByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "patient not found"})
@@ -593,7 +592,7 @@ func (h *PatientsHandler) UpdateEnrolment(w http.ResponseWriter, r *http.Request
 	}
 
 	// HIPC Rule 11: verify disclosure consent before transmitting enrolment data.
-	hasConsent, err := h.checkDisclosureConsent(ctx, tenantID, string(nhiPlain))
+	hasConsent, err := h.checkDisclosureConsent(ctx, tenantID.String(), string(nhiPlain))
 	if err != nil {
 		h.logger.Error("check disclosure consent for enrolment update", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "CONSENT_ERROR", Message: "failed to verify disclosure consent"})
@@ -621,16 +620,15 @@ func (h *PatientsHandler) UpdateEnrolment(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "Coverage",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "update-enrolment"},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"action": "update-enrolment"},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, enrolment)
 }
@@ -678,7 +676,7 @@ func (h *PatientsHandler) TransferEnrolment(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	rec, err := h.getPatientByID(ctx, id, tenantID)
+	rec, err := h.getPatientByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "patient not found"})
@@ -697,7 +695,7 @@ func (h *PatientsHandler) TransferEnrolment(w http.ResponseWriter, r *http.Reque
 	}
 
 	// HIPC Rule 11: verify disclosure consent before transferring enrolment data.
-	hasConsent, err := h.checkDisclosureConsent(ctx, tenantID, string(nhiPlain))
+	hasConsent, err := h.checkDisclosureConsent(ctx, tenantID.String(), string(nhiPlain))
 	if err != nil {
 		h.logger.Error("check disclosure consent for enrolment transfer", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "CONSENT_ERROR", Message: "failed to verify disclosure consent"})
@@ -724,16 +722,15 @@ func (h *PatientsHandler) TransferEnrolment(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "Coverage",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "transfer", "to_hpi": req.ToPractitionerHPI},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"action": "transfer", "to_hpi": req.ToPractitionerHPI},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"patientId":        id,

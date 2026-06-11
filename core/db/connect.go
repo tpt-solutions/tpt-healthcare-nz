@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -88,3 +89,8 @@ type Pool = *pgxpool.Pool
 
 // NamedArgs is a type alias for pgx.NamedArgs, preserved for module compatibility.
 type NamedArgs = pgx.NamedArgs
+
+// IsNoRows reports whether err is a pgx "no rows" error.
+func IsNoRows(err error) bool {
+	return errors.Is(err, pgx.ErrNoRows)
+}

@@ -8,23 +8,38 @@ import (
 	"time"
 
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
+	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	"github.com/PhillipC05/tpt-healthcare/core/events"
 	"github.com/PhillipC05/tpt-healthcare/core/push"
+	"github.com/PhillipC05/tpt-healthcare/core/sms"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Service orchestrates queue operations, publishing domain events and push notifications.
 type Service struct {
-	repo     Repository
-	bus      *events.Bus
-	notifier *push.Notifier
-	audit    *audit.Trail
-	logger   *slog.Logger
+	repo        Repository
+	bus         *events.Bus
+	notifier    *push.Notifier
+	audit       *audit.Trail
+	smsProvider sms.Provider
+	pool        *pgxpool.Pool
+	enc         *encryption.Cipher
+	logger      *slog.Logger
 }
 
 // NewService creates a queue Service.
 func NewService(repo Repository, bus *events.Bus, notifier *push.Notifier, audit *audit.Trail, logger *slog.Logger) *Service {
 	return &Service{repo: repo, bus: bus, notifier: notifier, audit: audit, logger: logger}
+}
+
+// WithSMS attaches an SMS provider for fallback delivery of "called" notifications
+// when push is unavailable. pool and enc are used to look up the patient's mobile.
+func (s *Service) WithSMS(provider sms.Provider, pool *pgxpool.Pool, enc *encryption.Cipher) *Service {
+	s.smsProvider = provider
+	s.pool = pool
+	s.enc = enc
+	return s
 }
 
 // CheckIn adds a patient to the queue identified by queueID. patientNHI must
@@ -92,14 +107,15 @@ func (s *Service) CallNext(ctx context.Context, queueID uuid.UUID, roomHint stri
 		OccurredAt:    time.Now().UTC(),
 	})
 
-	// Push notification so the patient is alerted even if their phone screen is off.
+	// Notify the patient they have been called. Push is primary; SMS is fallback.
 	if entry.PatientID != nil {
 		body := "Please come to reception"
 		if roomHint != "" {
 			body = "Please head to " + roomHint
 		}
-		go func() {
-			if err := s.notifier.Send(context.Background(), *entry.PatientID, push.Notification{
+		go func(patientID uuid.UUID, body string) {
+			bgCtx := context.Background()
+			if err := s.notifier.Send(bgCtx, patientID, push.Notification{
 				Title:           "Your turn!",
 				Body:            body,
 				Tag:             "queue-called",
@@ -110,8 +126,23 @@ func (s *Service) CallNext(ctx context.Context, queueID uuid.UUID, roomHint stri
 					slog.String("entryID", entry.ID.String()),
 					slog.String("error", err.Error()),
 				)
+				// Fall back to SMS when configured.
+				if s.smsProvider != nil && s.pool != nil && s.enc != nil {
+					if mobile, mobErr := fetchPatientMobile(bgCtx, s.pool, s.enc, patientID); mobErr == nil {
+						if _, smsErr := s.smsProvider.Send(bgCtx, sms.Message{
+							To:        mobile,
+							Body:      "TPT Health: " + body,
+							Reference: "queue-called-" + entry.ID.String(),
+						}); smsErr != nil {
+							s.logger.Warn("SMS fallback failed for called patient",
+								slog.String("entryID", entry.ID.String()),
+								slog.String("error", smsErr.Error()),
+							)
+						}
+					}
+				}
 			}
-		}()
+		}(*entry.PatientID, body)
 	}
 
 	return entry, nil

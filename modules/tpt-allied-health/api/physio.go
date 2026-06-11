@@ -59,12 +59,12 @@ func requireAPC(w http.ResponseWriter, r *http.Request, hpiClient *hpi.Client) b
 		http.Error(w, "forbidden: authenticated principal is not a registered practitioner", http.StatusForbidden)
 		return false
 	}
-	valid, err := hpiClient.ValidateAPC(r.Context(), principal.PractitionerID)
+	apcStatus, err := hpiClient.ValidateAPC(r.Context(), principal.PractitionerID)
 	if err != nil {
 		http.Error(w, "forbidden: APC validation failed: "+err.Error(), http.StatusForbidden)
 		return false
 	}
-	if !valid {
+	if !apcStatus.Valid {
 		http.Error(w, "forbidden: clinician does not hold a current Annual Practising Certificate", http.StatusForbidden)
 		return false
 	}

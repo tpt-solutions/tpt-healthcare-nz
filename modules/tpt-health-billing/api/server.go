@@ -81,6 +81,10 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("POST /api/v1/invoices/{id}/cancel", invoiceHandler.Cancel)
 	s.mux.HandleFunc("POST /api/v1/invoices/{id}/payments", invoiceHandler.RecordPayment)
 	s.mux.HandleFunc("GET /api/v1/invoices/{id}/payments", invoiceHandler.ListPayments)
+	// Online patient payment (Windcave/Stripe redirect) + EFTPOS terminal.
+	s.mux.HandleFunc("POST /api/v1/invoices/{id}/initiate-payment", invoiceHandler.InitiatePayment)
+	// Payment provider webhook — receives payment.succeeded / refund.completed events.
+	s.mux.HandleFunc("POST /api/v1/billing/webhooks/payment", invoiceHandler.HandlePaymentWebhook)
 
 	// Reconciliation
 	s.mux.HandleFunc("GET /api/v1/reconciliation/summary", reconciliationHandler.Summary)

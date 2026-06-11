@@ -2,9 +2,13 @@ package api
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"time"
+
+	"github.com/PhillipC05/tpt-healthcare/core/payment"
 )
 
 // --- Domain types ---
@@ -125,7 +129,15 @@ type RecordPaymentRequest struct {
 
 // InvoiceHandler handles all /api/v1/invoices/* routes.
 type InvoiceHandler struct {
-	logger *slog.Logger
+	logger          *slog.Logger
+	paymentProvider payment.Provider
+}
+
+// WithPayment attaches a payment provider for online invoice payments (patient
+// portal redirect) and EFTPOS terminal transactions.
+func (h *InvoiceHandler) WithPayment(provider payment.Provider) *InvoiceHandler {
+	h.paymentProvider = provider
+	return h
 }
 
 // List handles GET /api/v1/invoices — list invoices with optional filters.
@@ -371,4 +383,125 @@ func (h *InvoiceHandler) ListPayments(w http.ResponseWriter, r *http.Request) {
 		"payments": []Payment{},
 		"total":    0,
 	})
+}
+
+// InitiatePayment handles POST /api/v1/invoices/{id}/initiate-payment.
+// Creates a payment intent via the configured payment provider (e.g. Windcave,
+// Stripe). For redirect-based providers (Windcave, Paymark), the response
+// includes a RedirectURL which the patient portal opens in the browser.
+// For server-side providers (Stripe PI), only ExternalID is returned.
+//
+// Query parameter: return_url — the URL the provider should redirect to after
+// the patient completes payment.
+func (h *InvoiceHandler) InitiatePayment(w http.ResponseWriter, r *http.Request) {
+	if h.paymentProvider == nil {
+		writeError(w, http.StatusServiceUnavailable, "payment provider not configured")
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "id path parameter is required")
+		return
+	}
+
+	returnURL := r.URL.Query().Get("return_url")
+
+	// In production: load the invoice from the database to get the real amount.
+	// Using a placeholder 1000 cents (NZD $10.00) for the scaffold.
+	amountCents := int64(1000)
+
+	intent, err := h.paymentProvider.CreatePaymentRequest(r.Context(), payment.PaymentRequest{
+		AmountCents: amountCents,
+		Currency:    "NZD",
+		InvoiceID:   id,
+		Description: fmt.Sprintf("Invoice %s — TPT Health", id),
+		ReturnURL:   returnURL,
+	})
+	if err != nil {
+		h.logger.Error("initiate payment: create request",
+			"invoice_id", id,
+			"error", err,
+			"request_id", r.Context().Value(requestIDKey),
+		)
+		writeError(w, http.StatusBadGateway, "payment provider error: "+err.Error())
+		return
+	}
+
+	h.logger.Info("payment intent created",
+		"invoice_id", id,
+		"external_id", intent.ExternalID,
+		"has_redirect", intent.RedirectURL != "",
+		"request_id", r.Context().Value(requestIDKey),
+	)
+
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"invoiceId":   id,
+		"externalId":  intent.ExternalID,
+		"redirectUrl": intent.RedirectURL,
+	})
+}
+
+// HandlePaymentWebhook handles POST /api/v1/billing/webhooks/payment.
+// Receives and verifies an inbound webhook event from the payment provider.
+// On success it records the payment and transitions the invoice to "paid".
+func (h *InvoiceHandler) HandlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
+	if h.paymentProvider == nil {
+		writeError(w, http.StatusServiceUnavailable, "payment provider not configured")
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "could not read webhook body")
+		return
+	}
+	defer r.Body.Close()
+
+	signature := r.Header.Get("X-Payment-Signature")
+
+	event, err := h.paymentProvider.HandleWebhook(r.Context(), body, signature)
+	if err != nil {
+		h.logger.Warn("payment webhook: invalid signature or payload",
+			"error", err,
+			"request_id", r.Context().Value(requestIDKey),
+		)
+		writeError(w, http.StatusBadRequest, "invalid webhook: "+err.Error())
+		return
+	}
+
+	h.logger.Info("payment webhook received",
+		"type", event.Type,
+		"external_id", event.ExternalID,
+		"amount_cents", event.AmountCents,
+		"reference", event.Reference,
+		"request_id", r.Context().Value(requestIDKey),
+	)
+
+	switch event.Type {
+	case payment.WebhookPaymentSucceeded:
+		// In production:
+		//   1. Look up billing_payment_intents by external_id to get invoice_id.
+		//   2. Insert billing_payments record.
+		//   3. Transition invoice to "paid" if fully settled.
+		//   4. Write AuditEvent.
+		h.logger.Info("payment succeeded",
+			"external_id", event.ExternalID,
+			"amount_nzd", math.Round(float64(event.AmountCents)/100*100)/100,
+		)
+
+	case payment.WebhookPaymentFailed:
+		h.logger.Warn("payment failed",
+			"external_id", event.ExternalID,
+			"reference", event.Reference,
+		)
+
+	case payment.WebhookRefundCompleted:
+		h.logger.Info("refund completed",
+			"external_id", event.ExternalID,
+			"amount_cents", event.AmountCents,
+		)
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

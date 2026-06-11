@@ -134,27 +134,26 @@ func (h *ClaimsHandler) List(w http.ResponseWriter, r *http.Request) {
 	fromDate := q.Get("from")
 	toDate := q.Get("to")
 
-	claims, err := h.listClaims(ctx, tenantID, patientFilter, statusFilter, providerFilter, fromDate, toDate)
+	claims, err := h.listClaims(ctx, tenantID.String(), patientFilter, statusFilter, providerFilter, fromDate, toDate)
 	if err != nil {
-		h.logger.Error("list claims", slog.Any("error", err), slog.String("tenant", tenantID))
+		h.logger.Error("list claims", slog.Any("error", err), slog.String("tenant", tenantID.String()))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list claims"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "Claim",
 		ResourceID:   "list",
 		TenantID:     tenantID,
-		Metadata: map[string]string{
+		Details: map[string]any{
 			"patient":  patientFilter,
 			"status":   statusFilter,
 			"provider": providerFilter,
 		},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt: time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"claims": claims,
@@ -308,7 +307,7 @@ func (h *ClaimsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	// Atomically transition the claim from draft → submitted before touching the external API.
 	// This prevents concurrent retries from lodging the same claim twice (TOCTOU prevention).
 	// If the claim is not in draft status the UPDATE returns no rows → errNotFound.
-	reserved, err := h.reserveClaimForSubmit(ctx, id, tenantID)
+	reserved, err := h.reserveClaimForSubmit(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusConflict, apiError{
@@ -326,9 +325,9 @@ func (h *ClaimsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	var auditDest string
 
 	if reserved.Destination == DestinationWorkSafe {
-		refNumber, auditDest, err = h.lodgeWorkSafe(ctx, id, tenantID, &reserved)
+		refNumber, auditDest, err = h.lodgeWorkSafe(ctx, id, tenantID.String(), &reserved)
 	} else {
-		refNumber, auditDest, err = h.lodgeACC(ctx, id, tenantID, &reserved)
+		refNumber, auditDest, err = h.lodgeACC(ctx, id, tenantID.String(), &reserved)
 	}
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, apiError{Code: "LODGE_ERROR", Message: err.Error()})
@@ -351,20 +350,19 @@ func (h *ClaimsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "Claim",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata: map[string]string{
+		Details: map[string]any{
 			"action":      "submit",
 			"destination": auditDest,
 			"ref_number":  refNumber,
 		},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt: time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, submitted)
 }
@@ -455,7 +453,7 @@ func (h *ClaimsHandler) Status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claim, err := h.getClaimByID(ctx, id, tenantID)
+	claim, err := h.getClaimByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "claim not found"})
@@ -487,16 +485,15 @@ func (h *ClaimsHandler) Status(w http.ResponseWriter, r *http.Request) {
 		auditDest = "acc"
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "Claim",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "status-poll", "destination": auditDest},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"action": "status-poll", "destination": auditDest},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, resp)
 }

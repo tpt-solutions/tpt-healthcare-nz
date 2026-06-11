@@ -1,11 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
@@ -13,6 +15,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
+	"github.com/PhillipC05/tpt-healthcare/core/storage"
 )
 
 // CertificateType enumerates the medical certificates a GP can issue.
@@ -60,11 +63,20 @@ type certificateCreateRequest struct {
 
 // CertificatesHandler handles all /api/v1/certificates routes.
 type CertificatesHandler struct {
-	pool       db.Pool
-	enc        *encryption.Cipher
-	hpiClient  *hpi.Client
-	auditTrail *audit.Trail
-	logger     *slog.Logger
+	pool            db.Pool
+	enc             *encryption.Cipher
+	hpiClient       *hpi.Client
+	auditTrail      *audit.Trail
+	storageProvider storage.Provider
+	logger          *slog.Logger
+}
+
+// WithStorage attaches an object storage provider. When set, issued certificates
+// are serialised to a plain-text document, encrypted, and uploaded to storage.
+// The resulting storage key is persisted in the certificates.storage_key column.
+func (h *CertificatesHandler) WithStorage(provider storage.Provider) *CertificatesHandler {
+	h.storageProvider = provider
+	return h
 }
 
 // List handles GET /api/v1/certificates.
@@ -167,6 +179,27 @@ func (h *CertificatesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		OccurredAt:   time.Now().UTC(),
 	})
 
+	// Upload a serialised certificate document to object storage when wired.
+	if h.storageProvider != nil {
+		go func() {
+			doc := formatCertificateDocument(cert)
+			key := fmt.Sprintf("certificates/%s/%s/%s.txt", tenantID.String(), cert.PatientID, cert.ID)
+			if _, uploadErr := h.storageProvider.Upload(context.Background(), key,
+				bytes.NewReader(doc),
+				storage.UploadOptions{
+					ContentType: "text/plain",
+					Metadata:    map[string]string{"cert_type": string(cert.Type), "tenant_id": tenantID.String()},
+					Encrypted:   true,
+				},
+			); uploadErr != nil {
+				h.logger.WarnContext(ctx, "certificate storage upload failed",
+					slog.String("certID", cert.ID),
+					slog.String("error", uploadErr.Error()),
+				)
+			}
+		}()
+	}
+
 	writeJSON(w, http.StatusCreated, cert)
 }
 
@@ -211,6 +244,36 @@ func (h *CertificatesHandler) Get(w http.ResponseWriter, r *http.Request) {
 	})
 
 	writeJSON(w, http.StatusOK, cert)
+}
+
+// ---------------------------------------------------------------------------
+// Document formatting
+// ---------------------------------------------------------------------------
+
+// formatCertificateDocument serialises a Certificate to a plain-text representation
+// suitable for archival in object storage.
+func formatCertificateDocument(c Certificate) []byte {
+	var b strings.Builder
+	b.WriteString("MEDICAL CERTIFICATE\n")
+	b.WriteString(strings.Repeat("=", 60) + "\n\n")
+	fmt.Fprintf(&b, "Certificate ID:  %s\n", c.ID)
+	fmt.Fprintf(&b, "Type:            %s\n", c.Type)
+	fmt.Fprintf(&b, "Issued:          %s\n", c.IssuedAt.Format("02 January 2006"))
+	fmt.Fprintf(&b, "Issuing HPI CPN: %s\n\n", c.IssuingHPI)
+	fmt.Fprintf(&b, "PATIENT\n")
+	fmt.Fprintf(&b, "Patient ID:      %s\n", c.PatientID)
+	fmt.Fprintf(&b, "NHI:             %s\n\n", c.PatientNHI)
+	if c.FromDate != "" {
+		fmt.Fprintf(&b, "Period:          %s to %s\n\n", c.FromDate, c.ToDate)
+	}
+	if c.Diagnosis != "" {
+		fmt.Fprintf(&b, "Diagnosis:       %s\n\n", c.Diagnosis)
+	}
+	if c.Notes != "" {
+		fmt.Fprintf(&b, "Notes:\n%s\n\n", c.Notes)
+	}
+	b.WriteString("--- END OF CERTIFICATE ---\n")
+	return []byte(b.String())
 }
 
 // ---------------------------------------------------------------------------

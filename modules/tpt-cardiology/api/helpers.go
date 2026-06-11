@@ -31,12 +31,12 @@ func (h *handlerDeps) validateHPI(w http.ResponseWriter, r *http.Request, cpn st
 	if cpn == "" {
 		return true
 	}
-	valid, err := h.hpiClient.ValidateAPC(r.Context(), cpn)
+	apcStatus, err := h.hpiClient.ValidateAPC(r.Context(), cpn)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "HPI_ERROR", Message: "HPI validation unavailable"})
 		return false
 	}
-	if !valid {
+	if !apcStatus.Valid {
 		writeJSON(w, http.StatusForbidden, apiError{Code: "APC_INVALID", Message: "practitioner APC is invalid or expired"})
 		return false
 	}

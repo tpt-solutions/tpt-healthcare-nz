@@ -36,6 +36,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/PhillipC05/tpt-healthcare/core/email"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -118,12 +119,25 @@ type Breach struct {
 
 // Notifier manages breach records and notification workflows.
 type Notifier struct {
-	pool *pgxpool.Pool
+	pool                *pgxpool.Pool
+	emailProvider       email.Provider
+	privacyOfficerEmail string
+	fromEmail           string
 }
 
 // New creates a Notifier backed by the provided connection pool.
 func New(pool *pgxpool.Pool) *Notifier {
 	return &Notifier{pool: pool}
+}
+
+// WithEmail attaches an email provider for immediate notification to the privacy
+// officer when a breach is recorded. privacyOfficerEmail is the recipient;
+// fromEmail is the "From:" address.
+func (n *Notifier) WithEmail(provider email.Provider, privacyOfficerEmail, fromEmail string) *Notifier {
+	n.emailProvider = provider
+	n.privacyOfficerEmail = privacyOfficerEmail
+	n.fromEmail = fromEmail
+	return n
 }
 
 // Record persists a new breach. It sets NotificationDeadline = DiscoveredAt + 72h
@@ -183,6 +197,38 @@ func (n *Notifier) Record(ctx context.Context, b Breach) (*Breach, error) {
 
 	if _, err := n.pool.Exec(ctx, q, args); err != nil {
 		return nil, fmt.Errorf("breach.Record: insert: %w", err)
+	}
+
+	// Notify the privacy officer immediately by email when configured.
+	if n.emailProvider != nil && n.privacyOfficerEmail != "" {
+		subject := fmt.Sprintf("[ACTION REQUIRED] Privacy breach reported — %s severity (%s)", b.Severity, b.Type)
+		body := fmt.Sprintf(
+			"A privacy breach has been recorded in the TPT Health system.\n\n"+
+				"Breach ID:         %s\n"+
+				"Severity:          %s\n"+
+				"Type:              %s\n"+
+				"Description:       %s\n"+
+				"Affected patients: %d\n"+
+				"Discovered:        %s\n"+
+				"Reporting deadline (Privacy Act 2020 s 113): %s\n\n"+
+				"Responsible officer: %s\n\n"+
+				"Log in to tpt-admin to manage this breach and record notification actions.",
+			b.ID, b.Severity, b.Type, b.Description,
+			b.AffectedPatientCount,
+			b.DiscoveredAt.Format(time.RFC3339),
+			b.NotificationDeadline.Format(time.RFC3339),
+			b.ResponsibleOfficer,
+		)
+		if _, emailErr := n.emailProvider.Send(ctx, email.Message{
+			To:       []string{n.privacyOfficerEmail},
+			From:     n.fromEmail,
+			Subject:  subject,
+			TextBody: body,
+			Tags:     []string{"breach", "privacy", string(b.Severity)},
+		}); emailErr != nil {
+			// Non-fatal: breach is already persisted; log and continue.
+			_ = emailErr
+		}
 	}
 
 	return &b, nil

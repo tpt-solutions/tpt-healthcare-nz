@@ -287,13 +287,13 @@ func (h *InterRAIHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apcValid, err := h.hpiClient.ValidateAPC(ctx, req.PractitionerHPI)
+	apcStatus, err := h.hpiClient.ValidateAPC(ctx, req.PractitionerHPI)
 	if err != nil {
 		h.logger.Error("HPI APC check", slog.Any("error", err))
 		writeJSON(w, http.StatusBadGateway, apiError{Code: "HPI_ERROR", Message: "could not verify practitioner APC"})
 		return
 	}
-	if !apcValid {
+	if !apcStatus.Valid {
 		writeJSON(w, http.StatusForbidden, apiError{Code: "INVALID_APC", Message: "practitioner does not hold a current Annual Practising Certificate"})
 		return
 	}

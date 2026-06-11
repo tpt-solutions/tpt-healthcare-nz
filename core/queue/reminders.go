@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	"github.com/PhillipC05/tpt-healthcare/core/push"
+	"github.com/PhillipC05/tpt-healthcare/core/sms"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -30,19 +32,29 @@ type ReminderArgs struct{}
 
 func (ReminderArgs) Kind() string { return "queue.appointment_reminders" }
 
-// ReminderWorker is a River worker that dispatches push (and SMS, when
-// core/sms is wired) reminders for upcoming appointments.
+// ReminderWorker is a River worker that dispatches push (and SMS fallback)
+// reminders for upcoming appointments.
 // River handles scheduling, retries, and at-least-once delivery.
 type ReminderWorker struct {
 	river.WorkerDefaults[ReminderArgs]
-	pool     *pgxpool.Pool
-	notifier *push.Notifier
-	logger   *slog.Logger
+	pool        *pgxpool.Pool
+	notifier    *push.Notifier
+	smsProvider sms.Provider
+	enc         *encryption.Cipher
+	logger      *slog.Logger
 }
 
 // NewReminderWorker creates a ReminderWorker.
 func NewReminderWorker(pool *pgxpool.Pool, notifier *push.Notifier, logger *slog.Logger) *ReminderWorker {
 	return &ReminderWorker{pool: pool, notifier: notifier, logger: logger}
+}
+
+// WithSMS attaches an SMS provider for fallback delivery when push notifications
+// are unavailable. enc must be the same cipher used to encrypt patient records.
+func (w *ReminderWorker) WithSMS(provider sms.Provider, enc *encryption.Cipher) *ReminderWorker {
+	w.smsProvider = provider
+	w.enc = enc
+	return w
 }
 
 // Work is invoked by the River scheduler every minute. It fetches appointments
@@ -134,7 +146,21 @@ func (w *ReminderWorker) dispatch(ctx context.Context, appt upcomingAppt, now ti
 			slog.String("apptID", appt.ID.String()),
 			slog.String("error", err.Error()),
 		)
-		// TODO: when core/sms is wired, fall back to SMS here.
+		// Fall back to SMS when a provider is configured.
+		if w.smsProvider != nil && w.enc != nil {
+			if mobile, mobErr := fetchPatientMobile(ctx, w.pool, w.enc, appt.PatientID); mobErr == nil {
+				if _, smsErr := w.smsProvider.Send(ctx, sms.Message{
+					To:        mobile,
+					Body:      notif.Body,
+					Reference: "appt-reminder-" + appt.ID.String(),
+				}); smsErr != nil {
+					w.logger.WarnContext(ctx, "appointment reminder SMS fallback failed",
+						slog.String("apptID", appt.ID.String()),
+						slog.String("error", smsErr.Error()),
+					)
+				}
+			}
+		}
 		return
 	}
 

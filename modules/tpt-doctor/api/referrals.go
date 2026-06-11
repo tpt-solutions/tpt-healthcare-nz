@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
+	"github.com/PhillipC05/tpt-healthcare/core/fax"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 )
@@ -77,11 +79,20 @@ type referralUpdateRequest struct {
 
 // ReferralsHandler handles all /api/v1/referrals routes.
 type ReferralsHandler struct {
-	pool       db.Pool
-	enc        *encryption.Cipher
-	hpiClient  *hpi.Client
-	auditTrail *audit.Trail
-	logger     *slog.Logger
+	pool        db.Pool
+	enc         *encryption.Cipher
+	hpiClient   *hpi.Client
+	auditTrail  *audit.Trail
+	faxProvider fax.Provider
+	logger      *slog.Logger
+}
+
+// WithFax attaches a fax/EDI provider for dispatching referrals to receiving
+// providers. When wired, Send() transmits the referral document via fax/EDI
+// immediately after marking it as sent.
+func (h *ReferralsHandler) WithFax(provider fax.Provider) *ReferralsHandler {
+	h.faxProvider = provider
+	return h
 }
 
 // List handles GET /api/v1/referrals.
@@ -361,12 +372,57 @@ func (h *ReferralsHandler) Send(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("audit write", slog.Any("error", err))
 	}
 
+	// Dispatch the referral via fax/EDI when a provider is wired.
+	// The receiving provider's fax number is used as the "to" address; in
+	// Healthlink EDI this maps to the EDI address of the specialist service.
+	if h.faxProvider != nil && referral.SpecialtyCode != "" {
+		go func() {
+			doc := formatReferralDocument(sent)
+			subject := fmt.Sprintf("Referral — %s — Priority: %s", referral.SpecialtyCode, referral.Priority)
+			// The fax "to" address is the specialty code; Healthlink EDI uses this as
+			// the routing key. For eFax this would be a PSTN number.
+			if _, faxErr := h.faxProvider.Send(context.Background(),
+				referral.SpecialtyCode, subject, doc, "text/plain",
+			); faxErr != nil {
+				h.logger.WarnContext(ctx, "referral fax dispatch failed",
+					slog.String("referralID", id),
+					slog.String("specialty", referral.SpecialtyCode),
+					slog.String("error", faxErr.Error()),
+				)
+			}
+		}()
+	}
+
 	writeJSON(w, http.StatusOK, sent)
 }
 
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
+
+// formatReferralDocument produces a plain-text representation of the referral
+// for dispatch via fax or Healthlink EDI.
+func formatReferralDocument(r Referral) []byte {
+	var b strings.Builder
+	b.WriteString("SPECIALIST REFERRAL\n")
+	b.WriteString(strings.Repeat("=", 60) + "\n\n")
+	fmt.Fprintf(&b, "Referral ID:    %s\n", r.ID)
+	fmt.Fprintf(&b, "Date sent:      %s\n", r.SentAt.Format("02 January 2006"))
+	fmt.Fprintf(&b, "Priority:       %s\n", r.Priority)
+	fmt.Fprintf(&b, "Specialty:      %s\n", r.SpecialtyCode)
+	fmt.Fprintf(&b, "Service type:   %s\n\n", r.ServiceType)
+	fmt.Fprintf(&b, "PATIENT\n")
+	fmt.Fprintf(&b, "Patient ID:     %s\n", r.PatientID)
+	fmt.Fprintf(&b, "NHI:            %s\n\n", r.PatientNHI)
+	fmt.Fprintf(&b, "REFERRING PRACTITIONER\n")
+	fmt.Fprintf(&b, "HPI CPN:        %s\n\n", r.ReferringHPI)
+	fmt.Fprintf(&b, "REASON FOR REFERRAL\n%s\n\n", r.Reason)
+	if r.ClinicalNotes != "" {
+		fmt.Fprintf(&b, "CLINICAL NOTES\n%s\n\n", r.ClinicalNotes)
+	}
+	b.WriteString("--- END OF REFERRAL ---\n")
+	return []byte(b.String())
+}
 
 func validateReferralCreate(req *referralCreateRequest) error {
 	if req.PatientID == "" && req.PatientNHI == "" {

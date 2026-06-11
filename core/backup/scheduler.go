@@ -1,11 +1,15 @@
 package backup
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"os/exec"
 	"time"
 
+	"github.com/PhillipC05/tpt-healthcare/core/storage"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
@@ -25,23 +29,21 @@ func (TriggerArgs) Kind() string { return "backup.trigger" }
 //
 //	backups/<label>/<backup_id>.tar.gz.enc
 //
-// All data is encrypted with AES-256-GCM via core/encryption before upload.
+// All data is streamed directly from pg_basebackup into object storage.
 type TriggerWorker struct {
 	river.WorkerDefaults[TriggerArgs]
-	pool   *pgxpool.Pool
-	logger *slog.Logger
-	// uploader is injected at runtime once core/storage is wired.
-	// Declared as any here to avoid a circular import; cast to storage.Provider at call site.
-	uploader any
+	pool     *pgxpool.Pool
+	uploader storage.Provider
+	logger   *slog.Logger
 }
 
 // NewTriggerWorker constructs a TriggerWorker.
-func NewTriggerWorker(pool *pgxpool.Pool, uploader any, logger *slog.Logger) *TriggerWorker {
+func NewTriggerWorker(pool *pgxpool.Pool, uploader storage.Provider, logger *slog.Logger) *TriggerWorker {
 	return &TriggerWorker{pool: pool, uploader: uploader, logger: logger}
 }
 
-// Work records the backup run and delegates to pg_basebackup via the
-// PostgreSQL server. The actual file is streamed directly to object storage.
+// Work records the backup run, invokes pg_basebackup, and streams the output
+// to the configured object storage provider.
 func (w *TriggerWorker) Work(ctx context.Context, job *river.Job[TriggerArgs]) error {
 	runID := job.Args.BackupID
 	if runID == "" {
@@ -53,15 +55,40 @@ func (w *TriggerWorker) Work(ctx context.Context, job *river.Job[TriggerArgs]) e
 		return fmt.Errorf("backup trigger: %w", err)
 	}
 
-	// pg_basebackup streams to stdout; in a real deployment this would pipe
-	// through core/encryption and into core/storage. The command is executed
-	// via exec.CommandContext in production.
-	storageKey := fmt.Sprintf("backups/%s/%s.tar.gz.enc", job.Args.Label, runID)
+	storageKey := fmt.Sprintf("backups/%s/%s.tar.gz", job.Args.Label, runID)
 
-	// Placeholder: the real implementation executes pg_basebackup and streams
-	// the encrypted output to the configured object storage provider.
-	// Kept as a placeholder so the River job and DB record wiring is in place.
-	w.logger.Info("backup: upload complete", "key", storageKey)
+	if w.uploader != nil {
+		// Stream pg_basebackup stdout directly to object storage.
+		cmd := exec.CommandContext(ctx, "pg_basebackup", "--format=tar", "--compress=gzip", "--pgdata=-")
+		pr, pw := io.Pipe()
+		cmd.Stdout = pw
+
+		var cmdErr error
+		go func() {
+			cmdErr = cmd.Run()
+			pw.CloseWithErr(cmdErr)
+		}()
+
+		result, uploadErr := w.uploader.Upload(ctx, storageKey, pr, storage.UploadOptions{
+			ContentType: "application/octet-stream",
+			Metadata:    map[string]string{"label": job.Args.Label, "backup_id": runID},
+			Encrypted:   true,
+		})
+		if uploadErr != nil {
+			_ = w.recordFailure(ctx, runID, uploadErr.Error())
+			return fmt.Errorf("backup trigger: upload: %w", uploadErr)
+		}
+		if cmdErr != nil {
+			_ = w.recordFailure(ctx, runID, cmdErr.Error())
+			return fmt.Errorf("backup trigger: pg_basebackup: %w", cmdErr)
+		}
+		w.logger.Info("backup: upload complete", "key", storageKey, "size", result.SizeBytes)
+		return w.recordSuccess(ctx, runID, storageKey, result.SizeBytes)
+	}
+
+	// No storage provider: record a zero-byte placeholder for test/dev environments.
+	_, _ = bytes.NewReader([]byte{}), storageKey
+	w.logger.Warn("backup: no storage provider configured; skipping upload", "id", runID)
 	return w.recordSuccess(ctx, runID, storageKey, 0)
 }
 
@@ -79,6 +106,15 @@ func (w *TriggerWorker) recordSuccess(ctx context.Context, id, key string, size 
 		SET status = 'success', completed_at = NOW(), storage_key = @key, size_bytes = @size
 		WHERE id = @id`
 	_, err := w.pool.Exec(ctx, q, map[string]any{"id": id, "key": key, "size": size})
+	return err
+}
+
+func (w *TriggerWorker) recordFailure(ctx context.Context, id, reason string) error {
+	const q = `
+		UPDATE backup_runs
+		SET status = 'failed', completed_at = NOW(), failure_reason = @reason
+		WHERE id = @id`
+	_, err := w.pool.Exec(ctx, q, map[string]any{"id": id, "reason": reason})
 	return err
 }
 

@@ -10,18 +10,29 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/PhillipC05/tpt-healthcare/core/events"
+	"github.com/PhillipC05/tpt-healthcare/core/sms"
 )
 
 // Service provides business logic for inventory management.
 type Service struct {
-	repo   Repository
-	bus    *events.Bus
-	logger *slog.Logger
+	repo           Repository
+	bus            *events.Bus
+	smsProvider    sms.Provider
+	smsAlertPhone  string // E.164 phone for cold-chain breach alerts (practice admin)
+	logger         *slog.Logger
 }
 
 // NewService constructs a Service.
 func NewService(repo Repository, bus *events.Bus, logger *slog.Logger) *Service {
 	return &Service{repo: repo, bus: bus, logger: logger}
+}
+
+// WithSMS attaches an SMS provider for cold-chain breach alerts.
+// alertPhone is the E.164 number of the responsible pharmacy/practice manager.
+func (s *Service) WithSMS(provider sms.Provider, alertPhone string) *Service {
+	s.smsProvider = provider
+	s.smsAlertPhone = alertPhone
+	return s
 }
 
 // Receive records a stock receipt and fires a domain event.
@@ -103,6 +114,20 @@ func (s *Service) RecordTemp(ctx context.Context, stockItemID, tenantID uuid.UUI
 				"item_name":     item.Name,
 			},
 		})
+		// Send an immediate SMS to the configured alert phone if available.
+		if s.smsProvider != nil && s.smsAlertPhone != "" {
+			msg := fmt.Sprintf("COLD CHAIN BREACH: %s recorded %.1f°C — check storage immediately.", item.Name, tempC)
+			if _, smsErr := s.smsProvider.Send(ctx, sms.Message{
+				To:        s.smsAlertPhone,
+				Body:      msg,
+				Reference: "cold-chain-" + item.ID.String(),
+			}); smsErr != nil {
+				s.logger.WarnContext(ctx, "cold-chain breach SMS alert failed",
+					slog.String("item", item.Name),
+					slog.String("error", smsErr.Error()),
+				)
+			}
+		}
 	}
 	return rec, nil
 }

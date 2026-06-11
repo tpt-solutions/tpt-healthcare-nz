@@ -22,10 +22,12 @@
 package consent
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
 
+	"github.com/PhillipC05/tpt-healthcare/core/storage"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -85,12 +87,46 @@ type Consent struct {
 
 // Store persists and retrieves Consent records backed by a PostgreSQL connection pool.
 type Store struct {
-	pool *pgxpool.Pool
+	pool            *pgxpool.Pool
+	storageProvider storage.Provider
 }
 
 // NewStore returns a Store using the provided pgxpool.Pool.
 func NewStore(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool}
+}
+
+// WithStorage attaches an object storage provider for uploading signed consent
+// form documents. When set, GrantWithEvidence uploads the bytes to storage and
+// records the storage key as the Evidence reference.
+func (s *Store) WithStorage(provider storage.Provider) *Store {
+	s.storageProvider = provider
+	return s
+}
+
+// GrantWithEvidence uploads evidenceData to object storage (when a provider is
+// wired) and then persists the Consent record with the resulting storage key
+// recorded in Evidence. If no storage provider is attached the bytes are
+// discarded and Evidence is set to the empty string.
+func (s *Store) GrantWithEvidence(ctx context.Context, c Consent, evidenceData []byte, contentType string) error {
+	if s.storageProvider != nil && len(evidenceData) > 0 {
+		key := fmt.Sprintf("consent/%s/%s/%s.pdf",
+			c.TenantID, c.PatientNHI, c.ID)
+		result, err := s.storageProvider.Upload(ctx, key, bytes.NewReader(evidenceData), storage.UploadOptions{
+			ContentType: contentType,
+			Metadata: map[string]string{
+				"tenant_id":    c.TenantID.String(),
+				"patient_nhi":  c.PatientNHI,
+				"consent_type": string(c.ConsentType),
+			},
+			Encrypted: true,
+		})
+		if err != nil {
+			return fmt.Errorf("consent: upload evidence: %w", err)
+		}
+		c.Evidence = result.Key
+	}
+	return s.Grant(ctx, c)
 }
 
 // Grant persists a new Consent record. If c.ID is the zero UUID a new one is generated.
