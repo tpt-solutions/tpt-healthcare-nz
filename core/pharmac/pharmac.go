@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // Subsidy describes the level of PHARMAC funding applicable to a medicine.
@@ -82,6 +84,7 @@ type Client struct {
 	httpClient *http.Client
 	baseURL    string
 	tokenFunc  func(ctx context.Context) (string, error)
+	rdb        *redis.Client // optional; nil disables caching
 }
 
 // New constructs a Client targeting baseURL. tokenFunc is called per request
@@ -96,10 +99,18 @@ func New(baseURL string, tokenFunc func(ctx context.Context) (string, error)) *C
 }
 
 // Search returns medicines matching the supplied query string, which may be a
-// brand name, generic name, or NZULM identifier prefix.
+// brand name, generic name, or NZULM identifier prefix. Results are cached in
+// Redis for 24 hours when a cache client is configured.
 func (c *Client) Search(ctx context.Context, query string) ([]Medicine, error) {
 	if strings.TrimSpace(query) == "" {
 		return nil, fmt.Errorf("pharmac: search query must not be empty")
+	}
+
+	// Cache check.
+	cacheKey := cacheKeyForSearch(query)
+	var cached []Medicine
+	if c.cacheGet(ctx, cacheKey, &cached) {
+		return cached, nil
 	}
 
 	token, err := c.tokenFunc(ctx)
@@ -130,13 +141,23 @@ func (c *Client) Search(ctx context.Context, query string) ([]Medicine, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("pharmac: decoding Search response: %w", err)
 	}
+
+	c.cacheSet(ctx, cacheKey, result.Medicines, scheduleSearchCacheTTL)
 	return result.Medicines, nil
 }
 
 // GetByNZULM fetches a single medicine by its exact NZULM identifier.
+// Results are cached in Redis for 24 hours when a cache client is configured.
 func (c *Client) GetByNZULM(ctx context.Context, nzulm string) (*Medicine, error) {
 	if strings.TrimSpace(nzulm) == "" {
 		return nil, fmt.Errorf("pharmac: NZULM identifier must not be empty")
+	}
+
+	// Cache check.
+	cacheKey := cacheKeyForMedicine(nzulm)
+	var cached Medicine
+	if c.cacheGet(ctx, cacheKey, &cached) {
+		return &cached, nil
 	}
 
 	token, err := c.tokenFunc(ctx)
@@ -168,6 +189,8 @@ func (c *Client) GetByNZULM(ctx context.Context, nzulm string) (*Medicine, error
 	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
 		return nil, fmt.Errorf("pharmac: decoding medicine response: %w", err)
 	}
+
+	c.cacheSet(ctx, cacheKey, &m, medicineCacheTTL)
 	return &m, nil
 }
 

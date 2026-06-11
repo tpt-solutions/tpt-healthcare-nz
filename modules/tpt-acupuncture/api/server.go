@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	coreAcc "github.com/PhillipC05/tpt-healthcare/core/acc"
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/auth"
 	"github.com/PhillipC05/tpt-healthcare/core/auth/auth0"
@@ -21,17 +22,18 @@ import (
 
 // Config holds all configuration for the tpt-acupuncture server.
 type Config struct {
-	Host          string
-	Port          int
-	DatabaseURL   string
-	RedisURL      string
-	EncryptionKey string
-	Auth0Domain   string
-	Auth0Audience string
-	TenantHeader  string
-	ACCBaseURL    string
-	HPIBaseURL    string
-	Logger        *slog.Logger
+	Host              string
+	Port              int
+	DatabaseURL       string
+	RedisURL          string
+	EncryptionKey     string
+	Auth0Domain       string
+	Auth0Audience     string
+	TenantHeader      string
+	ACCBaseURL        string
+	ACCProviderNumber string // Practice ACC provider registration number
+	HPIBaseURL        string
+	Logger            *slog.Logger
 }
 
 // Server is the tpt-acupuncture HTTP server.
@@ -44,6 +46,7 @@ type Server struct {
 	hpiClient    *hpi.Client
 	consentStore *consent.Store
 	auditTrail   *audit.Trail
+	accClient    *coreAcc.Client
 	logger       *slog.Logger
 }
 
@@ -73,6 +76,11 @@ func NewServer(cfg Config) (*Server, error) {
 		auditTrail:   trail,
 		logger:       cfg.Logger,
 	}
+	if cfg.ACCBaseURL != "" {
+		s.accClient = coreAcc.New(cfg.ACCBaseURL, func(_ context.Context) (string, error) {
+			return "", fmt.Errorf("ACC SMART on FHIR token acquisition not yet implemented")
+		})
+	}
 	s.mux = s.buildRoutes()
 	return s, nil
 }
@@ -101,6 +109,8 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.Handle("GET /api/v1/acc/claims/{claimId}", chain(http.HandlerFunc(s.handleAccGetClaim)))
 	mux.Handle("PUT /api/v1/acc/claims/{claimId}", chain(http.HandlerFunc(s.handleAccUpdateClaim)))
 	mux.Handle("POST /api/v1/acc/claims/{claimId}/submit", chain(http.HandlerFunc(s.handleAccSubmitClaim)))
+	mux.Handle("GET /api/v1/acc/claims/{claimId}/po", chain(http.HandlerFunc(s.handleAccGetClaimPO)))
+	mux.Handle("POST /api/v1/acc/claims/{claimId}/po/request", chain(http.HandlerFunc(s.handleAccRequestPOExtension)))
 
 	// Needle site documentation
 	mux.Handle("GET /api/v1/needle-sites/{patientNhi}", chain(http.HandlerFunc(s.handleListNeedleSites)))

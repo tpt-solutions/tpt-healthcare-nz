@@ -2,47 +2,49 @@
 package api
 
 import (
-	"log/slog"
 	"net/http"
 	"time"
 
-	"github.com/PhillipC05/tpt-healthcare/core/audit"
-	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-palliative/internal/pain"
 )
 
-// PainHandler handles pain assessment and protocol routes.
-type PainHandler struct {
-	pool       db.Pool
-	auditTrail *audit.Trail
-	logger     *slog.Logger
+type painHandler struct {
+	handlerDeps
 }
 
 // ListAssessments GET /api/v1/palliative/pain-assessments
-func (h *PainHandler) ListAssessments(w http.ResponseWriter, r *http.Request) {
+func (h *painHandler) ListAssessments(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, []pain.Assessment{})
 }
 
 // CreateAssessment POST /api/v1/palliative/pain-assessments
-func (h *PainHandler) CreateAssessment(w http.ResponseWriter, r *http.Request) {
+func (h *painHandler) CreateAssessment(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		PatientNHI       string  `json:"patientNhi"`
-		AssessmentDate   string  `json:"assessmentDate"`
-		AssessorID       string  `json:"assessorId"`
-		PainScore        int     `json:"painScore"`
-		PainType         string  `json:"painType"`
-		Location         string  `json:"location,omitempty"`
-		Quality          string  `json:"quality,omitempty"`
-		Exacerbating     string  `json:"exacerbating,omitempty"`
-		Relieving        string  `json:"relieving,omitempty"`
-		ImpactSleep      int     `json:"impactSleep"`
-		ImpactMobility   int     `json:"impactMobility"`
-		ImpactMood       int     `json:"impactMood"`
-		BreakthroughEpisodes int `json:"breakthroughEpisodes"`
-		Notes            string  `json:"notes,omitempty"`
+		PatientNHI           string `json:"patientNhi"`
+		AssessmentDate       string `json:"assessmentDate"`
+		AssessorID           string `json:"assessorId"`
+		PainScore            int    `json:"painScore"`
+		PainType             string `json:"painType"`
+		Location             string `json:"location,omitempty"`
+		Quality              string `json:"quality,omitempty"`
+		Exacerbating         string `json:"exacerbating,omitempty"`
+		Relieving            string `json:"relieving,omitempty"`
+		ImpactSleep          int    `json:"impactSleep"`
+		ImpactMobility       int    `json:"impactMobility"`
+		ImpactMood           int    `json:"impactMood"`
+		BreakthroughEpisodes int    `json:"breakthroughEpisodes"`
+		Notes                string `json:"notes,omitempty"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "bad_request", Message: err.Error()})
+		return
+	}
+	if !h.validateHPI(w, r, req.AssessorID) {
+		return
+	}
+	nhiEnc, err := h.encryptNHI(req.PatientNHI)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "encryption_error", Message: "failed to encrypt patient NHI"})
 		return
 	}
 	sev := pain.SeverityMild
@@ -75,30 +77,39 @@ func (h *PainHandler) CreateAssessment(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetAssessment GET /api/v1/palliative/pain-assessments/{assessmentId}
-func (h *PainHandler) GetAssessment(w http.ResponseWriter, r *http.Request) {
+func (h *painHandler) GetAssessment(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("assessmentId")
+	h.recordAudit(r, "read", "pain_assessment", id, "")
 	writeJSON(w, http.StatusOK, pain.Assessment{ID: id, PatientNHI: "ABC1234", PainScore: 5, Severity: pain.SeverityModerate, PainType: pain.TypeNociceptive})
 }
 
 // ListProtocols GET /api/v1/palliative/pain-protocols
-func (h *PainHandler) ListProtocols(w http.ResponseWriter, r *http.Request) {
+func (h *painHandler) ListProtocols(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, []pain.ProtocolRecord{})
 }
 
 // CreateProtocol POST /api/v1/palliative/pain-protocols
-func (h *PainHandler) CreateProtocol(w http.ResponseWriter, r *http.Request) {
+func (h *painHandler) CreateProtocol(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		PatientNHI           string              `json:"patientNhi"`
 		Step                 string              `json:"step"`
 		CurrentRegimen       []pain.Medication   `json:"currentRegimen,omitempty"`
 		Adjuvants            []pain.Medication   `json:"adjuvants,omitempty"`
 		BreakthroughPlan     pain.BreakthroughPlan `json:"breakthroughPlan,omitempty"`
-		ReviewFrequencyDays    int                 `json:"reviewFrequencyDays"`
+		ReviewFrequencyDays  int                 `json:"reviewFrequencyDays"`
 		PrescribedBy         string              `json:"prescribedBy"`
 		Goals                []string            `json:"goals,omitempty"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "bad_request", Message: err.Error()})
+		return
+	}
+	if !h.validateHPI(w, r, req.PrescribedBy) {
+		return
+	}
+	nhiEnc, err := h.encryptNHI(req.PatientNHI)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "encryption_error", Message: "failed to encrypt patient NHI"})
 		return
 	}
 	p := pain.ProtocolRecord{
@@ -121,20 +132,21 @@ func (h *PainHandler) CreateProtocol(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetProtocol GET /api/v1/palliative/pain-protocols/{protocolId}
-func (h *PainHandler) GetProtocol(w http.ResponseWriter, r *http.Request) {
+func (h *painHandler) GetProtocol(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("protocolId")
+	h.recordAudit(r, "read", "pain_protocol", id, "")
 	writeJSON(w, http.StatusOK, pain.ProtocolRecord{ID: id, PatientNHI: "ABC1234", Step: pain.StepThreeStrong})
 }
 
 // UpdateProtocol PUT /api/v1/palliative/pain-protocols/{protocolId}
-func (h *PainHandler) UpdateProtocol(w http.ResponseWriter, r *http.Request) {
+func (h *painHandler) UpdateProtocol(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("protocolId")
 	var req struct {
-		Step              string            `json:"step,omitempty"`
-		CurrentRegimen    []pain.Medication `json:"currentRegimen,omitempty"`
-		Adjuvants         []pain.Medication `json:"adjuvants,omitempty"`
-		BreakthroughPlan  *pain.BreakthroughPlan `json:"breakthroughPlan,omitempty"`
-		ReviewFrequencyDays int               `json:"reviewFrequencyDays,omitempty"`
+		Step                string                `json:"step,omitempty"`
+		CurrentRegimen      []pain.Medication     `json:"currentRegimen,omitempty"`
+		Adjuvants           []pain.Medication     `json:"adjuvants,omitempty"`
+		BreakthroughPlan    *pain.BreakthroughPlan `json:"breakthroughPlan,omitempty"`
+		ReviewFrequencyDays int                   `json:"reviewFrequencyDays,omitempty"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "bad_request", Message: err.Error()})
@@ -146,7 +158,7 @@ func (h *PainHandler) UpdateProtocol(w http.ResponseWriter, r *http.Request) {
 }
 
 // RecordOutcome POST /api/v1/palliative/pain-protocols/{protocolId}/outcome
-func (h *PainHandler) RecordOutcome(w http.ResponseWriter, r *http.Request) {
+func (h *painHandler) RecordOutcome(w http.ResponseWriter, r *http.Request) {
 	protocolID := r.PathValue("protocolId")
 	var req struct {
 		OutcomeScore int    `json:"outcomeScore"`

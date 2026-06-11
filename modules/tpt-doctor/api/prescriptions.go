@@ -12,7 +12,9 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
+	"github.com/PhillipC05/tpt-healthcare/core/medsafe"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
+	pharmacygateway "github.com/PhillipC05/tpt-healthcare/core/pharmacy-gateway"
 	"github.com/PhillipC05/tpt-healthcare/core/pharmac"
 )
 
@@ -105,12 +107,14 @@ type printablePrescription struct {
 
 // PrescriptionsHandler handles all /api/v1/prescriptions routes.
 type PrescriptionsHandler struct {
-	pool       db.Pool
-	enc        *encryption.Cipher
-	hpiClient  *hpi.Client
-	pharmac    *pharmac.Client
-	auditTrail *audit.Trail
-	logger     *slog.Logger
+	pool            db.Pool
+	enc             *encryption.Cipher
+	hpiClient       *hpi.Client
+	pharmac         *pharmac.Client
+	medsafeClient   *medsafe.Client
+	pharmacyGateway *pharmacygateway.Gateway
+	auditTrail      *audit.Trail
+	logger          *slog.Logger
 }
 
 // List handles GET /api/v1/prescriptions.
@@ -666,6 +670,232 @@ func (h *PrescriptionsHandler) updatePrescription(ctx context.Context, rx Prescr
 		return Prescription{}, fmt.Errorf("update prescription: %w", err)
 	}
 	return updated, nil
+}
+
+// prescriptionADERequest is the body for POST /api/v1/prescriptions/{id}/ade.
+// The prescriber fills this in when they suspect the prescribed medicine caused
+// an adverse event in the patient. Medicines Act 1981 s45 obliges reporters
+// to notify Medsafe via the CARM system.
+type prescriptionADERequest struct {
+	EventDate        time.Time            `json:"eventDate"`
+	EventDescription string               `json:"eventDescription"`
+	Seriousness      medsafe.Seriousness  `json:"seriousness"`
+	Outcome          string               `json:"outcome,omitempty"`
+	PatientAge       int                  `json:"patientAge,omitempty"`
+	PatientSex       string               `json:"patientSex,omitempty"`
+	RelevantHistory  string               `json:"relevantHistory,omitempty"`
+}
+
+// ReportADE handles POST /api/v1/prescriptions/{id}/ade.
+// Allows a prescriber to report a suspected adverse drug event to Medsafe/CARM
+// for a medicine they have prescribed.
+func (h *PrescriptionsHandler) ReportADE(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	if h.medsafeClient == nil {
+		writeJSON(w, http.StatusServiceUnavailable, apiError{Code: "MEDSAFE_DISABLED", Message: "Medsafe ADE reporting is not configured"})
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_ID", Message: "prescription ID is required"})
+		return
+	}
+
+	var req prescriptionADERequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_BODY", Message: err.Error()})
+		return
+	}
+	if req.EventDescription == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_DESCRIPTION", Message: "eventDescription is required"})
+		return
+	}
+	if req.Seriousness == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_SERIOUSNESS", Message: "seriousness is required"})
+		return
+	}
+
+	rx, err := h.getPrescriptionByID(ctx, id, tenantID)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "prescription not found"})
+			return
+		}
+		h.logger.Error("get prescription for ADE", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "GET_ERROR", Message: "failed to retrieve prescription"})
+		return
+	}
+
+	report := medsafe.ADEReport{
+		PatientNHI:       rx.PatientNHI,
+		PatientAge:       req.PatientAge,
+		PatientSex:       req.PatientSex,
+		ReporterHPI:      rx.PractitionerHPI,
+		ReporterType:     "prescriber",
+		EventDate:        req.EventDate,
+		EventDescription: req.EventDescription,
+		Seriousness:      req.Seriousness,
+		Outcome:          req.Outcome,
+		RelevantHistory:  req.RelevantHistory,
+		SuspectDrugs: []medsafe.SuspectDrug{
+			{
+				NZULM:       rx.NZULMCode,
+				GenericName: rx.MedicationName,
+				Dose:        fmt.Sprintf("%.4g %s", rx.Dosage.DoseValue, rx.Dosage.DoseUnit),
+				Route:       rx.Dosage.Route,
+				StartDate:   &rx.IssuedAt,
+				Causality:   medsafe.CausalityPossible,
+			},
+		},
+	}
+
+	submitted, err := h.medsafeClient.SubmitADE(ctx, report)
+	if err != nil {
+		h.logger.Error("medsafe ADE submission failed",
+			slog.String("prescription", id),
+			slog.Any("error", err),
+		)
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "MEDSAFE_ERROR", Message: "ADE report submission failed"})
+		return
+	}
+
+	if err := h.auditTrail.Write(ctx, audit.Event{
+		Actor:        principal,
+		Action:       audit.ActionWrite,
+		ResourceType: "ADEReport",
+		ResourceID:   submitted.ID.String(),
+		TenantID:     tenantID,
+		Metadata:     map[string]string{"prescription": id, "nzulm": rx.NZULMCode},
+	}); err != nil {
+		h.logger.Error("audit write", slog.Any("error", err))
+	}
+
+	writeJSON(w, http.StatusCreated, submitted)
+}
+
+// prescriptionDispatchRequest is the body for POST /api/v1/prescriptions/{id}/dispatch.
+type prescriptionDispatchRequest struct {
+	PharmacyHPI string `json:"pharmacyHpi"`
+	Quantity    int    `json:"quantity,omitempty"` // defaults to 1 when zero or absent
+	IsUrgent    bool   `json:"isUrgent,omitempty"`
+}
+
+// Dispatch handles POST /api/v1/prescriptions/{id}/dispatch.
+// Electronically routes the prescription to the named community pharmacy via the
+// pharmacy gateway, replacing print/fax for in-network pharmacies. Returns 503
+// when the gateway is not configured.
+func (h *PrescriptionsHandler) Dispatch(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	if h.pharmacyGateway == nil {
+		writeJSON(w, http.StatusServiceUnavailable, apiError{Code: "GATEWAY_DISABLED", Message: "pharmacy gateway is not configured"})
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_ID", Message: "prescription ID is required"})
+		return
+	}
+
+	var req prescriptionDispatchRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_BODY", Message: err.Error()})
+		return
+	}
+	if req.PharmacyHPI == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_PHARMACY_HPI", Message: "pharmacyHpi is required"})
+		return
+	}
+	if req.Quantity <= 0 {
+		req.Quantity = 1
+	}
+
+	rx, err := h.getPrescriptionByID(ctx, id, tenantID)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "prescription not found"})
+			return
+		}
+		h.logger.Error("get prescription for dispatch", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "GET_ERROR", Message: "failed to retrieve prescription"})
+		return
+	}
+
+	if rx.Status == PrescriptionStatusCancelled || rx.Status == PrescriptionStatusStopped {
+		writeJSON(w, http.StatusConflict, apiError{
+			Code:    "CANNOT_DISPATCH",
+			Message: fmt.Sprintf("prescription is %s and cannot be dispatched", rx.Status),
+		})
+		return
+	}
+
+	dispatchReq := pharmacygateway.DispatchRequest{
+		MedicationRequestID: rx.ID,
+		PatientNHI:          rx.PatientNHI,
+		PrescriberHPI:       rx.PractitionerHPI,
+		PharmacyHPI:         req.PharmacyHPI,
+		NZULM:               rx.NZULMCode,
+		BrandName:           rx.MedicationName,
+		Dose:                fmt.Sprintf("%.4g %s", rx.Dosage.DoseValue, rx.Dosage.DoseUnit),
+		Route:               rx.Dosage.Route,
+		Frequency:           rx.Dosage.Frequency,
+		Quantity:            req.Quantity,
+		Repeats:             rx.RepeatsRemaining,
+		Instructions:        rx.Dosage.Text,
+		IsUrgent:            req.IsUrgent,
+	}
+
+	result, err := h.pharmacyGateway.Dispatch(ctx, dispatchReq)
+	if err != nil {
+		h.logger.Error("pharmacy gateway dispatch failed",
+			slog.String("prescription", id),
+			slog.String("pharmacyHpi", req.PharmacyHPI),
+			slog.Any("error", err),
+		)
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "DISPATCH_ERROR", Message: "electronic prescription dispatch failed"})
+		return
+	}
+
+	if err := h.auditTrail.Write(ctx, audit.Event{
+		Actor:        principal,
+		Action:       audit.ActionWrite,
+		ResourceType: "MedicationRequest",
+		ResourceID:   id,
+		TenantID:     tenantID,
+		Metadata: map[string]string{
+			"action":      "dispatch",
+			"pharmacyHpi": req.PharmacyHPI,
+			"connector":   string(result.Connector),
+			"externalId":  result.ExternalID,
+		},
+	}); err != nil {
+		h.logger.Error("audit write", slog.Any("error", err))
+	}
+
+	writeJSON(w, http.StatusOK, result)
 }
 
 // scanPrescription scans a single Prescription from a row (pgx.Row or pgx.Rows).

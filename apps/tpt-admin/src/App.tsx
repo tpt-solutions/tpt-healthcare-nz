@@ -21,7 +21,9 @@ import { InvoicesPage } from './pages/InvoicesPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { BudgetPage } from './pages/BudgetPage';
 import { DepartmentsPage } from './pages/DepartmentsPage';
+import { RolesPage } from './pages/RolesPage';
 import { IntegrationsPage } from './pages/IntegrationsPage';
+import { ACCProviderPage } from './pages/ACCProviderPage';
 
 export default function App() {
   return (
@@ -56,8 +58,11 @@ export default function App() {
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/budget" element={<BudgetPage />} />
             <Route path="/departments" element={<DepartmentsPage />} />
+            <Route path="/roles" element={<RolesPage />} />
             {/* Milestone 11 — Integrations */}
             <Route path="/integrations" element={<IntegrationsPage />} />
+            {/* Milestone 12 — ACC provider registration */}
+            <Route path="/acc-provider" element={<ACCProviderPage />} />
           </Route>
 
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

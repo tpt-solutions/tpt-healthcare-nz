@@ -1,4 +1,4 @@
--- 001_hospice.sql
+-- 001_hospice.up.sql
 -- Palliative care patient enrolment, visit tracking, and goals-of-care tables.
 -- All palliative data is marked extra_sensitive for enhanced HIPC protection.
 
@@ -27,15 +27,14 @@ CREATE TABLE IF NOT EXISTS palliative_patients (
     updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_palliative_patients_patient ON palliative_patients(tenant_id, patient_nhi);
-CREATE INDEX idx_palliative_patients_clinician ON palliative_patients(tenant_id, responsible_clinician_id);
-CREATE INDEX idx_palliative_patients_discharged ON palliative_patients(tenant_id, discharge_date) WHERE discharge_date IS NULL;
+CREATE INDEX IF NOT EXISTS idx_palliative_patients_patient ON palliative_patients(tenant_id, patient_nhi);
+CREATE INDEX IF NOT EXISTS idx_palliative_patients_clinician ON palliative_patients(tenant_id, responsible_clinician_id);
+CREATE INDEX IF NOT EXISTS idx_palliative_patients_discharged ON palliative_patients(tenant_id, discharge_date) WHERE discharge_date IS NULL;
 
 ALTER TABLE palliative_patients ENABLE ROW LEVEL SECURITY;
 CREATE POLICY palliative_patients_tenant_only ON palliative_patients
     USING (tenant_id = current_setting('app.current_tenant_id')::UUID);
 
--- Goals of care agreed with patient / whānau
 CREATE TABLE IF NOT EXISTS goals_of_care (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id    UUID NOT NULL,
@@ -48,13 +47,12 @@ CREATE TABLE IF NOT EXISTS goals_of_care (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_goals_patient ON goals_of_care(tenant_id, patient_id, achieved);
+CREATE INDEX IF NOT EXISTS idx_goals_patient ON goals_of_care(tenant_id, patient_id, achieved);
 
 ALTER TABLE goals_of_care ENABLE ROW LEVEL SECURITY;
 CREATE POLICY goals_of_care_tenant_only ON goals_of_care
     USING (tenant_id = current_setting('app.current_tenant_id')::UUID);
 
--- Family contacts / next-of-kin
 CREATE TABLE IF NOT EXISTS palliative_family_contacts (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id       UUID NOT NULL,
@@ -68,13 +66,12 @@ CREATE TABLE IF NOT EXISTS palliative_family_contacts (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_family_contacts_patient ON palliative_family_contacts(tenant_id, patient_id);
+CREATE INDEX IF NOT EXISTS idx_family_contacts_patient ON palliative_family_contacts(tenant_id, patient_id);
 
 ALTER TABLE palliative_family_contacts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY family_contacts_tenant_only ON palliative_family_contacts
     USING (tenant_id = current_setting('app.current_tenant_id')::UUID);
 
--- Palliative team visits (home, inpatient, virtual, bereavement)
 CREATE TABLE IF NOT EXISTS palliative_visits (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id       UUID NOT NULL,
@@ -89,8 +86,8 @@ CREATE TABLE IF NOT EXISTS palliative_visits (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_palliative_visits_patient ON palliative_visits(tenant_id, patient_id, visit_date DESC);
-CREATE INDEX idx_palliative_visits_date ON palliative_visits(tenant_id, visit_date DESC);
+CREATE INDEX IF NOT EXISTS idx_palliative_visits_patient ON palliative_visits(tenant_id, patient_id, visit_date DESC);
+CREATE INDEX IF NOT EXISTS idx_palliative_visits_date ON palliative_visits(tenant_id, visit_date DESC);
 
 ALTER TABLE palliative_visits ENABLE ROW LEVEL SECURITY;
 CREATE POLICY palliative_visits_tenant_only ON palliative_visits

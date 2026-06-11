@@ -58,6 +58,12 @@ type Subscription struct {
 	Active bool
 }
 
+// EmailSender is satisfied by any transactional email provider that can send
+// a plain-text or HTML email. Implementations live in core/email/*/
+type EmailSender interface {
+	SendEmail(ctx context.Context, to, subject, body string) error
+}
+
 // Engine is the FHIR R5 subscription dispatcher. It registers subscriptions,
 // receives resource change events via Redis pub/sub, matches them against
 // registered subscriptions, and dispatches notifications to the appropriate
@@ -67,8 +73,8 @@ type Engine struct {
 	mu            sync.RWMutex
 	subscriptions map[uuid.UUID]Subscription
 	httpClient    *http.Client
-	// wsHub would hold WebSocket hub state; placeholder for future expansion.
-	wsHub interface{}
+	wsHub         *Hub         // WebSocket notification hub (set via SetWSHub)
+	emailSender   EmailSender  // email dispatch backend (set via SetEmailSender)
 }
 
 // New creates a new subscription Engine backed by the provided Redis client.
@@ -80,6 +86,17 @@ func New(rdb *redis.Client) *Engine {
 			Timeout: 30 * time.Second,
 		},
 	}
+}
+
+// SetWSHub attaches a WebSocket Hub to the engine for ChannelWebSocket delivery.
+// The Hub's Run() goroutine must be started separately by the caller.
+func (e *Engine) SetWSHub(hub *Hub) {
+	e.wsHub = hub
+}
+
+// SetEmailSender attaches an email provider to the engine for ChannelEmail delivery.
+func (e *Engine) SetEmailSender(sender EmailSender) {
+	e.emailSender = sender
 }
 
 // Register adds or replaces a Subscription in the engine.
@@ -228,7 +245,7 @@ func (e *Engine) handleRedisMessage(ctx context.Context, raw string) {
 			case ChannelEmail:
 				dispErr = e.dispatchEmail(ctx, s, bundle)
 			case ChannelWebSocket:
-				log.Printf("subscription: websocket dispatch for %s not yet implemented", s.ID)
+				dispErr = e.dispatchWebSocket(s, bundle)
 			default:
 				log.Printf("subscription: unknown channel type %q for subscription %s", s.Channel, s.ID)
 			}
@@ -266,13 +283,40 @@ func (e *Engine) dispatchRestHook(ctx context.Context, sub Subscription, bundle 
 	return nil
 }
 
-// dispatchEmail logs an email notification placeholder.
-// TODO: integrate with an NZ-compliant transactional email provider
-// (e.g. AWS SES, SendGrid) once security and data-residency requirements
-// have been reviewed.
+// dispatchEmail delivers a FHIR notification bundle as an email to sub.Endpoint.
+// The bundle is serialised as a JSON attachment in the email body.
+// Requires an EmailSender to be configured via SetEmailSender.
 func (e *Engine) dispatchEmail(ctx context.Context, sub Subscription, bundle json.RawMessage) error {
-	log.Printf("subscription: [TODO] email dispatch to %s for subscription %s — "+
-		"email provider integration not yet implemented", sub.Endpoint, sub.ID)
+	if e.emailSender == nil {
+		log.Printf("subscription: email dispatch skipped for %s — no email sender configured", sub.ID)
+		return nil
+	}
+
+	subject := fmt.Sprintf("FHIR Subscription Notification — %s", sub.Topic)
+	body := fmt.Sprintf(
+		"A FHIR resource change has been published for subscription %s.\n\n"+
+			"Topic: %s\n"+
+			"Notification bundle:\n\n%s",
+		sub.ID, sub.Topic, string(bundle),
+	)
+
+	if err := e.emailSender.SendEmail(ctx, sub.Endpoint, subject, body); err != nil {
+		return fmt.Errorf("subscription: email dispatch to %s: %w", sub.Endpoint, err)
+	}
+
+	log.Printf("subscription: email dispatched to %s for subscription %s", sub.Endpoint, sub.ID)
+	return nil
+}
+
+// dispatchWebSocket delivers a FHIR notification bundle to all WebSocket clients
+// that are listening to sub.ID. Requires a Hub to be configured via SetWSHub.
+func (e *Engine) dispatchWebSocket(sub Subscription, bundle json.RawMessage) error {
+	if e.wsHub == nil {
+		log.Printf("subscription: websocket dispatch skipped for %s — no hub configured", sub.ID)
+		return nil
+	}
+	e.wsHub.Dispatch([]uuid.UUID{sub.ID}, bundle)
+	log.Printf("subscription: websocket notification dispatched for subscription %s", sub.ID)
 	return nil
 }
 

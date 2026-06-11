@@ -247,37 +247,6 @@ func (s *Server) revokeRole(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ============================================================
-// Roster (stubs — full implementation in roster.go)
-// ============================================================
-
-func (s *Server) listShifts(w http.ResponseWriter, r *http.Request)  { writeJSON(w, http.StatusOK, []any{}) }
-func (s *Server) createShift(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusCreated, map[string]string{"status": "created"}) }
-func (s *Server) deleteShift(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }
-
-// Rooms
-func (s *Server) listRooms(w http.ResponseWriter, r *http.Request)   { writeJSON(w, http.StatusOK, []any{}) }
-func (s *Server) createRoom(w http.ResponseWriter, r *http.Request)  { writeJSON(w, http.StatusCreated, map[string]string{"status": "created"}) }
-func (s *Server) listBookings(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, []any{}) }
-func (s *Server) createBooking(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusCreated, map[string]string{"status": "created"}) }
-func (s *Server) deleteBooking(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }
-
-// Leave
-func (s *Server) listLeaveRequests(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, []any{}) }
-func (s *Server) createLeaveRequest(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusCreated, map[string]string{"status": "created"}) }
-func (s *Server) approveLeave(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, map[string]string{"status": "approved"}) }
-func (s *Server) declineLeave(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, map[string]string{"status": "declined"}) }
-
-// Inventory
-func (s *Server) listStockItems(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, []any{}) }
-func (s *Server) createStockItem(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusCreated, map[string]string{"status": "created"}) }
-func (s *Server) getStockItem(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, map[string]string{}) }
-func (s *Server) receiveStock(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, map[string]string{"status": "received"}) }
-func (s *Server) consumeStock(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, map[string]string{"status": "consumed"}) }
-func (s *Server) listPurchaseOrders(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, []any{}) }
-func (s *Server) createPurchaseOrder(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusCreated, map[string]string{"status": "created"}) }
-func (s *Server) listColdChainBreaches(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, []any{}) }
-
 // Budget
 func (s *Server) listCostCentres(w http.ResponseWriter, r *http.Request) {
 	tid, ok := tenantID(r)
@@ -361,10 +330,210 @@ func (s *Server) getVarianceReport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, report)
 }
 
-// Accounting & payroll sync
-func (s *Server) accountingStatus(w http.ResponseWriter, r *http.Request)   { writeJSON(w, http.StatusOK, map[string]string{"status": "ok"}) }
-func (s *Server) triggerAccountingSync(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued"}) }
-func (s *Server) payrollStatus(w http.ResponseWriter, r *http.Request)      { writeJSON(w, http.StatusOK, map[string]string{"status": "ok"}) }
-func (s *Server) triggerPayrollSync(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued"}) }
-func (s *Server) listPayslips(w http.ResponseWriter, r *http.Request)       { writeJSON(w, http.StatusOK, []any{}) }
-func (s *Server) leaveBalance(w http.ResponseWriter, r *http.Request)       { writeJSON(w, http.StatusOK, map[string]any{}) }
+// ============================================================
+// Accounting & payroll sync status
+// ============================================================
+
+func (s *Server) accountingStatus(w http.ResponseWriter, r *http.Request) {
+	tid, ok := tenantID(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var result struct {
+		LastSyncAt   *string `json:"last_sync_at"`
+		LastStatus   string  `json:"last_status"`
+		LastError    string  `json:"last_error,omitempty"`
+		PendingCount int     `json:"pending_count"`
+	}
+	_ = s.cfg.Pool.QueryRow(r.Context(), `
+		SELECT synced_at::text, status, COALESCE(error_text, '')
+		FROM accounting_sync_log
+		WHERE tenant_id = @tid
+		ORDER BY synced_at DESC LIMIT 1`,
+		map[string]any{"tid": tid},
+	).Scan(&result.LastSyncAt, &result.LastStatus, &result.LastError)
+	// Count invoices not yet synced.
+	_ = s.cfg.Pool.QueryRow(r.Context(), `
+		SELECT COUNT(*) FROM patient_invoices
+		WHERE tenant_id = @tid AND accounting_synced_at IS NULL AND status != 'draft'`,
+		map[string]any{"tid": tid},
+	).Scan(&result.PendingCount)
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) triggerAccountingSync(w http.ResponseWriter, r *http.Request) {
+	tid, ok := tenantID(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	// Enqueue a sync job via the outbox (River picks it up asynchronously).
+	_, err := s.cfg.Pool.Exec(r.Context(), `
+		INSERT INTO outbox_messages (id, tenant_id, topic, payload)
+		VALUES (gen_random_uuid(), @tid, 'accounting.sync', '{}')`,
+		map[string]any{"tid": tid})
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued"})
+}
+
+func (s *Server) payrollStatus(w http.ResponseWriter, r *http.Request) {
+	tid, ok := tenantID(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var result struct {
+		LastSyncAt *string `json:"last_sync_at"`
+		LastStatus string  `json:"last_status"`
+		LastError  string  `json:"last_error,omitempty"`
+	}
+	_ = s.cfg.Pool.QueryRow(r.Context(), `
+		SELECT synced_at::text, status, COALESCE(error_text, '')
+		FROM payroll_sync_log
+		WHERE tenant_id = @tid
+		ORDER BY synced_at DESC LIMIT 1`,
+		map[string]any{"tid": tid},
+	).Scan(&result.LastSyncAt, &result.LastStatus, &result.LastError)
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) triggerPayrollSync(w http.ResponseWriter, r *http.Request) {
+	tid, ok := tenantID(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	_, err := s.cfg.Pool.Exec(r.Context(), `
+		INSERT INTO outbox_messages (id, tenant_id, topic, payload)
+		VALUES (gen_random_uuid(), @tid, 'payroll.sync', '{}')`,
+		map[string]any{"tid": tid})
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "queued"})
+}
+
+func (s *Server) listPayslips(w http.ResponseWriter, r *http.Request) {
+	// Payslips are proxied from the connected payroll provider. Since no provider
+	// session is bootstrapped here yet we return the sync log so the frontend
+	// can show "last sync" context while the payroll OAuth flow is wired up.
+	tid, ok := tenantID(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	rows, err := s.cfg.Pool.Query(r.Context(), `
+		SELECT id::text, entity_ref, external_id, status, synced_at::text
+		FROM payroll_sync_log
+		WHERE tenant_id = @tid AND entity_type = 'timesheet'
+		ORDER BY synced_at DESC LIMIT 50`,
+		map[string]any{"tid": tid})
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	type payslipEntry struct {
+		ID         string `json:"id"`
+		EntityRef  string `json:"entity_ref"`
+		ExternalID string `json:"external_id,omitempty"`
+		Status     string `json:"status"`
+		SyncedAt   string `json:"synced_at"`
+	}
+	var result []payslipEntry
+	for rows.Next() {
+		var p payslipEntry
+		if err := rows.Scan(&p.ID, &p.EntityRef, &p.ExternalID, &p.Status, &p.SyncedAt); err == nil {
+			result = append(result, p)
+		}
+	}
+	if result == nil {
+		result = []payslipEntry{}
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+// ============================================================
+// System — backup status
+// ============================================================
+
+func (s *Server) backupStatus(w http.ResponseWriter, r *http.Request) {
+	// backup_runs is not tenant-scoped (it's a system-level concern).
+	// Return the last 5 runs so the dashboard widget can show recent history.
+	type backupRun struct {
+		ID          string  `json:"id"`
+		Label       string  `json:"label"`
+		StartedAt   string  `json:"started_at"`
+		CompletedAt *string `json:"completed_at,omitempty"`
+		Status      string  `json:"status"`
+		SizeBytes   int64   `json:"size_bytes"`
+		ErrorText   string  `json:"error_text,omitempty"`
+	}
+	rows, err := s.cfg.Pool.Query(r.Context(), `
+		SELECT id, label, started_at::text,
+		       completed_at::text, status, size_bytes,
+		       COALESCE(error_text, '')
+		FROM backup_runs
+		ORDER BY started_at DESC LIMIT 5`)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	var result []backupRun
+	for rows.Next() {
+		var b backupRun
+		if err := rows.Scan(&b.ID, &b.Label, &b.StartedAt, &b.CompletedAt,
+			&b.Status, &b.SizeBytes, &b.ErrorText); err == nil {
+			result = append(result, b)
+		}
+	}
+	if result == nil {
+		result = []backupRun{}
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) leaveBalance(w http.ResponseWriter, r *http.Request) {
+	tid, ok := tenantID(r)
+	pid, pok := principalID(r)
+	if !ok || !pok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	// Return leave summary from approved leave_requests as a lightweight proxy
+	// until the payroll provider OAuth is wired.
+	type leaveTypeSummary struct {
+		LeaveType    string `json:"leave_type"`
+		TotalDays    int    `json:"total_days_approved"`
+	}
+	rows, err := s.cfg.Pool.Query(r.Context(), `
+		SELECT leave_type,
+		       SUM((end_date - start_date + 1))::int AS days
+		FROM leave_requests
+		WHERE tenant_id = @tid AND principal_id = @pid AND status = 'approved'
+		  AND start_date >= date_trunc('year', CURRENT_DATE)
+		GROUP BY leave_type`,
+		map[string]any{"tid": tid, "pid": pid})
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	var result []leaveTypeSummary
+	for rows.Next() {
+		var ls leaveTypeSummary
+		if err := rows.Scan(&ls.LeaveType, &ls.TotalDays); err == nil {
+			result = append(result, ls)
+		}
+	}
+	if result == nil {
+		result = []leaveTypeSummary{}
+	}
+	writeJSON(w, http.StatusOK, result)
+}

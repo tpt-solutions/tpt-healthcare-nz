@@ -91,7 +91,10 @@ const NaturopathyPage    = React.lazy(() => import('@/pages/NaturopathyPage'));
 const TcmPage            = React.lazy(() => import('@/pages/TcmPage'));
 const NutritionPage      = React.lazy(() => import('@/pages/NutritionPage'));
 const VisionPage         = React.lazy(() => import('@/pages/VisionPage'));
-const AddictionPage      = React.lazy(() => import('@/pages/AddictionPage'));
+const AddictionPage           = React.lazy(() => import('@/pages/AddictionPage'));
+const MaternalChildHealthPage = React.lazy(() => import('@/pages/MaternalChildHealthPage'));
+const CardiologyPage          = React.lazy(() => import('@/pages/CardiologyPage'));
+const RehabilitationPage      = React.lazy(() => import('@/pages/RehabilitationPage'));
 
 // Allied Health pages.
 const AlliedHealthPage   = React.lazy(() => import('@/pages/AlliedHealthPage'));
@@ -347,7 +350,10 @@ function AppRoutes() {
         <Route path="/tcm/*"          element={<ProtectedRoute><TcmPage /></ProtectedRoute>} />
         <Route path="/nutrition/*"    element={<ProtectedRoute><NutritionPage /></ProtectedRoute>} />
         <Route path="/vision"         element={<ProtectedRoute><VisionPage /></ProtectedRoute>} />
-        <Route path="/addiction/*"    element={<ProtectedRoute><AddictionPage /></ProtectedRoute>} />
+        <Route path="/addiction/*"             element={<ProtectedRoute><AddictionPage /></ProtectedRoute>} />
+        <Route path="/maternal-child-health/*" element={<ProtectedRoute><MaternalChildHealthPage /></ProtectedRoute>} />
+        <Route path="/cardiology/*"            element={<ProtectedRoute><CardiologyPage /></ProtectedRoute>} />
+        <Route path="/rehabilitation/*"        element={<ProtectedRoute><RehabilitationPage /></ProtectedRoute>} />
         <Route path="/allied-health"  element={<ProtectedRoute><AlliedHealthPage /></ProtectedRoute>} />
         <Route path="/community-health" element={<ProtectedRoute><CommunityHealthPage /></ProtectedRoute>} />
         <Route path="/palliative/*"    element={<ProtectedRoute><PalliativePage /></ProtectedRoute>} />

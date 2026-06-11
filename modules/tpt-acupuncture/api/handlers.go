@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -230,31 +229,123 @@ func (s *Server) handleAccSubmitClaim(w http.ResponseWriter, r *http.Request) {
 		DiagnosisCodes:    []string{internalClaim.Diagnosis},
 	}
 
-	if s.cfg.ACCBaseURL == "" {
+	if s.accClient == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiError{Code: "ACC_NOT_CONFIGURED", Message: "ACC integration is not configured"})
 		return
 	}
-
-	// tokenFunc returns a SMART on FHIR bearer token for the ACC API.
-	// A full implementation would perform a client_credentials OAuth2 flow here.
-	accTokenFunc := func(_ context.Context) (string, error) {
-		return "", fmt.Errorf("ACC SMART on FHIR token acquisition not yet implemented")
-	}
-	accClient := coreAcc.New(s.cfg.ACCBaseURL, accTokenFunc)
-	lodged, err := accClient.Lodge(r.Context(), coreClaim)
+	lodged, err := s.accClient.Lodge(r.Context(), coreClaim)
 	if err != nil {
 		s.logger.Error("ACC claim lodge failed", slog.String("claim_id", claimID), slog.Any("error", err))
 		writeJSON(w, http.StatusBadGateway, apiError{Code: "ACC_LODGE_FAILED", Message: fmt.Sprintf("ACC lodgement failed: %v", err)})
 		return
 	}
-
 	s.recordEvent(r, principal, "create", "ACCSubmission", claimID, internalClaim.PatientNHI)
-	writeJSON(w, http.StatusOK, map[string]any{
+
+	// Request the initial funded PO allocation for acupuncture sessions.
+	resp := map[string]any{
 		"status":      "submitted",
 		"claimId":     claimID,
 		"accClaimRef": lodged.ClaimNumber,
 		"accStatus":   string(lodged.Status),
+	}
+	cap, capErr := coreAcc.SessionCapFor(coreAcc.DisciplineAcupuncture)
+	if capErr == nil {
+		sessionsToRequest := cap.InitialGranted
+		if sessionsToRequest == 0 {
+			sessionsToRequest = cap.MaxWithExtension
+		}
+		po, poErr := s.accClient.RequestPO(r.Context(), coreAcc.PORequest{
+			ClaimNumber:       lodged.ClaimNumber,
+			PatientNHI:        strings.ToUpper(internalClaim.PatientNHI),
+			ProviderHPI:       principal.PractitionerID,
+			Discipline:        coreAcc.DisciplineAcupuncture,
+			SessionsRequested: sessionsToRequest,
+		})
+		if poErr != nil {
+			s.logger.Warn("ACC PO request failed after claim lodge", slog.String("claim_id", claimID), slog.Any("error", poErr))
+		} else {
+			resp["poNumber"] = po.PONumber
+			resp["poStatus"] = string(po.Status)
+			resp["sessionsApproved"] = po.SessionsApproved
+			// Consume the first session immediately on claim lodgement.
+			if po.Status == coreAcc.POApproved {
+				consumed, consumeErr := s.accClient.ConsumeSession(r.Context(), po)
+				if consumeErr != nil {
+					s.logger.Warn("ACC session consume failed", slog.String("po_number", po.PONumber), slog.Any("error", consumeErr))
+				} else {
+					resp["sessionsRemaining"] = consumed.SessionsRemaining()
+				}
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (s *Server) handleAccGetClaimPO(w http.ResponseWriter, r *http.Request) {
+	_, ok := requirePrincipal(w, r)
+	if !ok {
+		return
+	}
+	claimID := r.PathValue("claimId")
+	if claimID == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_CLAIM_ID", Message: "claim ID is required"})
+		return
+	}
+	// PO lookup requires persistence layer (not yet implemented).
+	writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("no purchase order found for claim %s", claimID)})
+}
+
+func (s *Server) handleAccRequestPOExtension(w http.ResponseWriter, r *http.Request) {
+	principal, ok := requirePrincipal(w, r)
+	if !ok {
+		return
+	}
+	if !s.checkAPC(w, r, principal) {
+		return
+	}
+	claimID := r.PathValue("claimId")
+	if claimID == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_CLAIM_ID", Message: "claim ID is required"})
+		return
+	}
+	if s.accClient == nil {
+		writeJSON(w, http.StatusServiceUnavailable, apiError{Code: "ACC_NOT_CONFIGURED", Message: "ACC integration is not configured"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	var req struct {
+		AccClaimRef           string `json:"accClaimRef"`
+		PatientNHI            string `json:"patientNhi"`
+		SessionsRequested     int    `json:"sessionsRequested"`
+		ClinicalJustification string `json:"clinicalJustification"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_JSON", Message: err.Error()})
+		return
+	}
+	if !nhi.ValidateNHI(req.PatientNHI) {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_NHI", Message: "patientNhi format is invalid"})
+		return
+	}
+	cap, _ := coreAcc.SessionCapFor(coreAcc.DisciplineAcupuncture)
+	if req.SessionsRequested <= 0 {
+		req.SessionsRequested = cap.MaxWithExtension
+	}
+	po, err := s.accClient.RequestPO(r.Context(), coreAcc.PORequest{
+		ClaimNumber:           req.AccClaimRef,
+		PatientNHI:            strings.ToUpper(req.PatientNHI),
+		ProviderHPI:           principal.PractitionerID,
+		Discipline:            coreAcc.DisciplineAcupuncture,
+		SessionsRequested:     req.SessionsRequested,
+		ClinicalJustification: req.ClinicalJustification,
 	})
+	if err != nil {
+		s.logger.Error("ACC PO extension request failed", slog.String("claim_id", claimID), slog.Any("error", err))
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "PO_REQUEST_FAILED", Message: fmt.Sprintf("PO extension request failed: %v", err)})
+		return
+	}
+	s.recordEvent(r, principal, "create", "ACCPurchaseOrder", po.ID.String(), req.PatientNHI)
+	writeJSON(w, http.StatusCreated, po)
 }
 
 // ---- Needle Site Handlers ----

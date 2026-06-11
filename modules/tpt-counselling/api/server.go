@@ -17,6 +17,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
+	"github.com/PhillipC05/tpt-healthcare/core/primhd"
 )
 
 // Config holds all configuration for the tpt-counselling server.
@@ -30,7 +31,12 @@ type Config struct {
 	Auth0Audience string
 	TenantHeader  string
 	HPIBaseURL    string
-	Logger        *slog.Logger
+	// PRIMHDBaseURL is the root URL for the PRIMHD outcomes reporting API.
+	// Leave empty to disable PRIMHD activity reporting.
+	PRIMHDBaseURL string
+	// PRIMHDToken is the bearer token for PRIMHD API requests.
+	PRIMHDToken string
+	Logger      *slog.Logger
 }
 
 // Server is the tpt-counselling HTTP server.
@@ -41,6 +47,7 @@ type Server struct {
 	enc          *encryption.Cipher
 	auth         auth.Provider
 	hpiClient    *hpi.Client
+	primhdClient *primhd.Client
 	consentStore *consent.Store
 	auditTrail   *audit.Trail
 	logger       *slog.Logger
@@ -70,12 +77,21 @@ func NewServer(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("init auth0 provider: %w", err)
 	}
 
+	var primhdClient *primhd.Client
+	if cfg.PRIMHDBaseURL != "" {
+		token := cfg.PRIMHDToken
+		primhdClient = primhd.New(cfg.PRIMHDBaseURL, func(_ context.Context) (string, error) {
+			return token, nil
+		})
+	}
+
 	s := &Server{
 		cfg:          cfg,
 		pool:         pool,
 		enc:          enc,
 		auth:         authProvider,
 		hpiClient:    hpi.NewClient(cfg.RedisURL, cfg.Logger),
+		primhdClient: primhdClient,
 		consentStore: consent.NewStore(pool),
 		auditTrail:   audit.NewTrail(pool),
 		logger:       cfg.Logger,

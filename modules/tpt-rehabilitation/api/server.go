@@ -1,6 +1,7 @@
 // Package api implements the tpt-rehabilitation HTTP server.
-// Covers inpatient rehabilitation admissions, FIM scoring, therapy goal setting,
-// community rehabilitation episodes, ACC rehabilitation plans, and NASC referrals.
+// Covers inpatient rehabilitation admissions, therapy goal setting (STG/LTG),
+// FIM scoring, community rehabilitation episodes, ACC rehabilitation plans,
+// and NASC referrals for discharge planning.
 package api
 
 import (
@@ -16,12 +17,16 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/auth"
 	"github.com/PhillipC05/tpt-healthcare/core/auth/auth0"
-	"github.com/PhillipC05/tpt-healthcare/core/db"
+	coredb "github.com/PhillipC05/tpt-healthcare/core/db"
+	"github.com/PhillipC05/tpt-healthcare/core/db/migrate"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
+	rehabdb "github.com/PhillipC05/tpt-healthcare/modules/tpt-rehabilitation/db"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Config holds all runtime configuration for the rehabilitation server.
 type Config struct {
 	Host          string
 	Port          int
@@ -34,10 +39,11 @@ type Config struct {
 	Logger        *slog.Logger
 }
 
+// Server is the tpt-rehabilitation HTTP server.
 type Server struct {
 	cfg        Config
 	mux        *http.ServeMux
-	pool       db.Pool
+	pool       *pgxpool.Pool
 	enc        *encryption.Cipher
 	auth       auth.Provider
 	hpiClient  *hpi.Client
@@ -45,6 +51,7 @@ type Server struct {
 	logger     *slog.Logger
 }
 
+// NewServer creates and wires the rehabilitation server.
 func NewServer(cfg Config) (*Server, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
@@ -52,7 +59,7 @@ func NewServer(cfg Config) (*Server, error) {
 	if cfg.TenantHeader == "" {
 		cfg.TenantHeader = "X-Tenant-ID"
 	}
-	pool, err := db.Connect(context.Background(), cfg.DatabaseURL)
+	pool, err := coredb.Connect(context.Background(), cfg.DatabaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("connect to database: %w", err)
 	}
@@ -65,15 +72,19 @@ func NewServer(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("init auth0 provider: %w", err)
 	}
 	s := &Server{
-		cfg: cfg, pool: pool, enc: enc, auth: authProvider,
+		cfg:        cfg,
+		pool:       pool,
+		enc:        enc,
+		auth:       authProvider,
 		hpiClient:  hpi.NewClient(cfg.RedisURL, cfg.Logger),
-		auditTrail: audit.NewTrail(pool),
+		auditTrail: audit.New(pool),
 		logger:     cfg.Logger,
 	}
 	s.mux = s.buildRoutes()
 	return s, nil
 }
 
+// Handler returns the root HTTP handler.
 func (s *Server) Handler() http.Handler { return s.mux }
 
 func (s *Server) buildRoutes() *http.ServeMux {
@@ -86,28 +97,76 @@ func (s *Server) buildRoutes() *http.ServeMux {
 		h = middleware.RecoveryMiddleware()(h)
 		return h
 	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/ready", s.handleReady)
 
-	// TODO (Milestone 10b): implement rehabilitation handlers
-	mux.Handle("GET /api/v1/rehab/admissions", chain(http.HandlerFunc(notImplemented)))
-	mux.Handle("POST /api/v1/rehab/admissions", chain(http.HandlerFunc(notImplemented)))
-	mux.Handle("GET /api/v1/rehab/admissions/{id}", chain(http.HandlerFunc(notImplemented)))
-	mux.Handle("PUT /api/v1/rehab/admissions/{id}", chain(http.HandlerFunc(notImplemented)))
-	mux.Handle("GET /api/v1/rehab/admissions/{id}/goals", chain(http.HandlerFunc(notImplemented)))
-	mux.Handle("POST /api/v1/rehab/admissions/{id}/goals", chain(http.HandlerFunc(notImplemented)))
-	mux.Handle("PUT /api/v1/rehab/admissions/{id}/goals/{goalId}", chain(http.HandlerFunc(notImplemented)))
-	mux.Handle("GET /api/v1/rehab/admissions/{id}/assessments", chain(http.HandlerFunc(notImplemented)))
-	mux.Handle("POST /api/v1/rehab/admissions/{id}/assessments", chain(http.HandlerFunc(notImplemented)))
-	mux.Handle("POST /api/v1/rehab/admissions/{id}/discharge", chain(http.HandlerFunc(notImplemented)))
+	deps := handlerDeps{
+		pool:       s.pool,
+		enc:        s.enc,
+		hpiClient:  s.hpiClient,
+		auditTrail: s.auditTrail,
+		logger:     s.logger,
+	}
+
+	// Inpatient rehabilitation admissions and functional assessment
+	adm := &admissionHandler{handlerDeps: deps}
+	mux.Handle("GET /api/v1/rehab/admissions", chain(http.HandlerFunc(adm.List)))
+	mux.Handle("POST /api/v1/rehab/admissions", chain(http.HandlerFunc(adm.Create)))
+	mux.Handle("GET /api/v1/rehab/admissions/{id}", chain(http.HandlerFunc(adm.Get)))
+	mux.Handle("PUT /api/v1/rehab/admissions/{id}", chain(http.HandlerFunc(adm.Update)))
+	mux.Handle("POST /api/v1/rehab/admissions/{id}/discharge", chain(http.HandlerFunc(adm.Discharge)))
+
+	// Therapy goal setting — STG/LTG with discipline tracking
+	goals := &goalsHandler{handlerDeps: deps}
+	mux.Handle("GET /api/v1/rehab/admissions/{id}/goals", chain(http.HandlerFunc(goals.List)))
+	mux.Handle("POST /api/v1/rehab/admissions/{id}/goals", chain(http.HandlerFunc(goals.Create)))
+	mux.Handle("GET /api/v1/rehab/admissions/{id}/goals/{goalId}", chain(http.HandlerFunc(goals.Get)))
+	mux.Handle("PUT /api/v1/rehab/admissions/{id}/goals/{goalId}", chain(http.HandlerFunc(goals.Update)))
+
+	// FIM (Functional Independence Measure) scoring
+	fim := &fimHandler{handlerDeps: deps}
+	mux.Handle("GET /api/v1/rehab/admissions/{id}/fim", chain(http.HandlerFunc(fim.List)))
+	mux.Handle("POST /api/v1/rehab/admissions/{id}/fim", chain(http.HandlerFunc(fim.Create)))
+	mux.Handle("GET /api/v1/rehab/admissions/{id}/fim/{assessmentId}", chain(http.HandlerFunc(fim.Get)))
+
+	// Community rehabilitation episodes (post-discharge follow-up)
+	com := &communityHandler{handlerDeps: deps}
+	mux.Handle("GET /api/v1/rehab/community", chain(http.HandlerFunc(com.List)))
+	mux.Handle("POST /api/v1/rehab/community", chain(http.HandlerFunc(com.Create)))
+	mux.Handle("GET /api/v1/rehab/community/{id}", chain(http.HandlerFunc(com.Get)))
+	mux.Handle("PUT /api/v1/rehab/community/{id}", chain(http.HandlerFunc(com.Update)))
+	mux.Handle("POST /api/v1/rehab/community/{id}/complete", chain(http.HandlerFunc(com.Complete)))
+
+	// ACC rehabilitation plan management
+	acc := &accHandler{handlerDeps: deps}
+	mux.Handle("GET /api/v1/rehab/acc-plans", chain(http.HandlerFunc(acc.List)))
+	mux.Handle("POST /api/v1/rehab/acc-plans", chain(http.HandlerFunc(acc.Create)))
+	mux.Handle("GET /api/v1/rehab/acc-plans/{id}", chain(http.HandlerFunc(acc.Get)))
+	mux.Handle("PUT /api/v1/rehab/acc-plans/{id}", chain(http.HandlerFunc(acc.Update)))
+	mux.Handle("POST /api/v1/rehab/acc-plans/{id}/submit", chain(http.HandlerFunc(acc.Submit)))
+	mux.Handle("POST /api/v1/rehab/acc-plans/{id}/approve", chain(http.HandlerFunc(acc.Approve)))
+
+	// Discharge planning and NASC referrals
+	nasc := &nascHandler{handlerDeps: deps}
+	mux.Handle("GET /api/v1/rehab/nasc", chain(http.HandlerFunc(nasc.List)))
+	mux.Handle("POST /api/v1/rehab/nasc", chain(http.HandlerFunc(nasc.Create)))
+	mux.Handle("GET /api/v1/rehab/nasc/{id}", chain(http.HandlerFunc(nasc.Get)))
+	mux.Handle("PUT /api/v1/rehab/nasc/{id}", chain(http.HandlerFunc(nasc.Update)))
+	mux.Handle("POST /api/v1/rehab/nasc/{id}/submit", chain(http.HandlerFunc(nasc.Submit)))
 
 	return mux
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "tpt-rehabilitation", "time": time.Now().UTC().Format(time.RFC3339)})
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"service": "tpt-rehabilitation",
+		"time":    time.Now().UTC().Format(time.RFC3339),
+	})
 }
+
 func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	if err := s.pool.Ping(r.Context()); err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable"})
@@ -116,22 +175,34 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ready", "service": "tpt-rehabilitation"})
 }
 
+// RunMigrations runs the module's embedded SQL migrations.
 func RunMigrations(ctx context.Context, databaseURL string, logger *slog.Logger) error {
-	pool, err := db.Connect(ctx, databaseURL)
+	pool, err := coredb.Connect(ctx, databaseURL)
 	if err != nil {
 		return fmt.Errorf("connect for migrations: %w", err)
 	}
 	defer pool.Close()
-	return db.Migrate(ctx, pool, logger)
+	r := migrate.New(rehabdb.Migrations, pool)
+	return r.Up(ctx)
 }
 
+// ValidateConnectivity checks that the database is reachable.
 func ValidateConnectivity(ctx context.Context, cfg Config) error {
-	pool, err := db.Connect(ctx, cfg.DatabaseURL)
+	pool, err := coredb.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("database connection failed: %w", err)
 	}
 	defer pool.Close()
 	return pool.Ping(ctx)
+}
+
+// handlerDeps is a shared dependency bundle injected into all domain handlers.
+type handlerDeps struct {
+	pool       *pgxpool.Pool
+	enc        *encryption.Cipher
+	hpiClient  *hpi.Client
+	auditTrail *audit.Trail
+	logger     *slog.Logger
 }
 
 type apiError struct {
@@ -140,10 +211,6 @@ type apiError struct {
 }
 
 var errNotFound = errors.New("record not found")
-
-func notImplemented(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusNotImplemented, apiError{Code: "NOT_IMPLEMENTED", Message: "this endpoint is not yet implemented"})
-}
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")

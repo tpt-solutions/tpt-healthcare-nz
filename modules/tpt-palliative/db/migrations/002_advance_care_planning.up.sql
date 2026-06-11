@@ -1,4 +1,4 @@
--- 002_advance_care_planning.sql
+-- 002_advance_care_planning.up.sql
 -- Advance Care Plan (ACP) tables: plan document, legal proxies, and care decisions.
 
 CREATE TABLE IF NOT EXISTS acp_plans (
@@ -31,14 +31,13 @@ CREATE TABLE IF NOT EXISTS acp_plans (
     updated_at                      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_acp_plans_patient ON acp_plans(tenant_id, patient_nhi);
-CREATE INDEX idx_acp_plans_status ON acp_plans(tenant_id, status) WHERE status IN ('draft','proposed','active');
+CREATE INDEX IF NOT EXISTS idx_acp_plans_patient ON acp_plans(tenant_id, patient_nhi);
+CREATE INDEX IF NOT EXISTS idx_acp_plans_status ON acp_plans(tenant_id, status) WHERE status IN ('draft','proposed','active');
 
 ALTER TABLE acp_plans ENABLE ROW LEVEL SECURITY;
 CREATE POLICY acp_plans_tenant_only ON acp_plans
     USING (tenant_id = current_setting('app.current_tenant_id')::UUID);
 
--- Individual care decisions within a plan
 CREATE TABLE IF NOT EXISTS acp_decisions (
     id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id                UUID NOT NULL,
@@ -52,7 +51,7 @@ CREATE TABLE IF NOT EXISTS acp_decisions (
     created_at               TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_acp_decisions_plan ON acp_decisions(tenant_id, plan_id, treatment);
+CREATE INDEX IF NOT EXISTS idx_acp_decisions_plan ON acp_decisions(tenant_id, plan_id, treatment);
 
 ALTER TABLE acp_decisions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY acp_decisions_tenant_only ON acp_decisions

@@ -81,7 +81,7 @@ func NewServer(cfg Config) (*Server, error) {
 		enc:        enc,
 		auth:       authProvider,
 		hpiClient:  hpi.NewClient(cfg.RedisURL, cfg.Logger),
-		auditTrail: audit.NewTrail(pool),
+		auditTrail: audit.New(pool),
 		logger:     cfg.Logger,
 	}
 	s.mux = s.buildRoutes()
@@ -225,6 +225,16 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.Handle("PUT /api/v1/well-child/{id}", chain(http.HandlerFunc(wc.Update)))
 	mux.Handle("GET /api/v1/well-child/{id}/growth", chain(http.HandlerFunc(wc.ListGrowthPoints)))
 	mux.Handle("POST /api/v1/well-child/{id}/growth", chain(http.HandlerFunc(wc.RecordGrowthPoint)))
+
+	// Consent and assent documentation (parent/guardian proxy consent, child assent)
+	// Applies across maternity, neonatal, and paediatric records.
+	// Filter by resourceType and resourceId query params to scope to a specific record.
+	con := &consentHandler{handlerDeps: deps}
+	mux.Handle("GET /api/v1/consent", chain(http.HandlerFunc(con.List)))
+	mux.Handle("POST /api/v1/consent", chain(http.HandlerFunc(con.Create)))
+	mux.Handle("GET /api/v1/consent/{id}", chain(http.HandlerFunc(con.Get)))
+	mux.Handle("PUT /api/v1/consent/{id}", chain(http.HandlerFunc(con.Update)))
+	mux.Handle("POST /api/v1/consent/{id}/withdraw", chain(http.HandlerFunc(con.Withdraw)))
 
 	return mux
 }

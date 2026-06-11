@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/PhillipC05/tpt-healthcare/core/medsafe"
 )
 
 // Config holds all runtime configuration for the tpt-pharmacy service.
@@ -16,28 +18,43 @@ type Config struct {
 	DatabaseURL   string
 	RedisURL      string
 	EncryptionKey string
+	// MedsafeBaseURL is the root URL for the Medsafe/CARM ADE reporting API.
+	// Leave empty to disable ADE reporting endpoints.
+	MedsafeBaseURL string
+	// MedsafeToken is the bearer token for Medsafe CARM API requests.
+	MedsafeToken string
 }
 
 // Server is the tpt-pharmacy HTTP server.
 type Server struct {
-	cfg    Config
-	mux    *http.ServeMux
-	logger *slog.Logger
+	cfg           Config
+	mux           *http.ServeMux
+	medsafeClient *medsafe.Client
+	logger        *slog.Logger
 }
 
 // NewServer constructs and wires up a Server with all routes and middleware.
 func NewServer(cfg Config, logger *slog.Logger) *Server {
+	var msClient *medsafe.Client
+	if cfg.MedsafeBaseURL != "" {
+		token := cfg.MedsafeToken
+		msClient = medsafe.New(cfg.MedsafeBaseURL, func(_ context.Context) (string, error) {
+			return token, nil
+		})
+	}
+
 	s := &Server{
-		cfg:    cfg,
-		mux:    http.NewServeMux(),
-		logger: logger,
+		cfg:           cfg,
+		mux:           http.NewServeMux(),
+		medsafeClient: msClient,
+		logger:        logger,
 	}
 	s.registerRoutes()
 	return s
 }
 
 func (s *Server) registerRoutes() {
-	dispensingHandler := &DispensingHandler{logger: s.logger}
+	dispensingHandler := &DispensingHandler{medsafeClient: s.medsafeClient, logger: s.logger}
 	claimsHandler := &ClaimsHandler{logger: s.logger}
 
 	// Dispensing routes
@@ -46,6 +63,7 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("GET /api/v1/dispensing/{id}", dispensingHandler.Get)
 	s.mux.HandleFunc("POST /api/v1/dispensing/{id}/dispense", dispensingHandler.Dispense)
 	s.mux.HandleFunc("POST /api/v1/dispensing/{id}/schedule2-confirm", dispensingHandler.Schedule2Confirm)
+	s.mux.HandleFunc("POST /api/v1/dispensing/{id}/ade", dispensingHandler.ReportADE)
 
 	// Prescription pass-through (incoming from GP)
 	s.mux.HandleFunc("GET /api/v1/prescriptions", dispensingHandler.ListPrescriptions)
