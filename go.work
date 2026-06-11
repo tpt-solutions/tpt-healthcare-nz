@@ -30,13 +30,4 @@ use (
 	./modules/tpt-renal
 	./modules/tpt-tcm
 	./modules/tpt-vision
-	./modules/tpt-allied-health
-	./modules/tpt-addiction
-	./modules/tpt-hospital
-	./modules/tpt-oncology
-	./modules/tpt-renal
-	./modules/tpt-maternal-child-health
-	./modules/tpt-cardiology
-	./modules/tpt-rehabilitation
-	./modules/tpt-community-health
 )
