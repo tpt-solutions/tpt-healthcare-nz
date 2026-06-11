@@ -66,20 +66,21 @@ func (h *ReportsHandler) List(w http.ResponseWriter, r *http.Request) {
 	hpiFilter := q.Get("ordering_hpi")
 	accessionFilter := q.Get("accession")
 
-	reports, err := h.listReports(ctx, tenantID, patientFilter, statusFilter, hpiFilter, accessionFilter)
+	reports, err := h.listReports(ctx, tenantID.String(), patientFilter, statusFilter, hpiFilter, accessionFilter)
 	if err != nil {
 		h.logger.Error("list diagnostic reports", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list reports"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "DiagnosticReport",
 		ResourceID:   "list",
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"patient": patientFilter, "status": statusFilter},
+		Details:      map[string]any{"patient": patientFilter, "status": statusFilter},
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -109,7 +110,7 @@ func (h *ReportsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	report, err := h.getReport(ctx, id, tenantID)
+	report, err := h.getReport(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "report not found"})
@@ -130,12 +131,13 @@ func (h *ReportsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "DiagnosticReport",
 		ResourceID:   id,
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, report)
@@ -162,7 +164,7 @@ func (h *ReportsHandler) GetObservations(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	report, err := h.getReport(ctx, id, tenantID)
+	report, err := h.getReport(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "report not found"})
@@ -192,13 +194,14 @@ func (h *ReportsHandler) GetObservations(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "Observation",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"report_id": id},
+		Details:      map[string]any{"report_id": id},
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, map[string]any{

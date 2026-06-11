@@ -216,16 +216,16 @@ func (h *OutpatientHandler) BookAppointment(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	appt, err := h.insertAppointment(ctx, clinicID, req, tenantID)
+	appt, err := h.insertAppointment(ctx, clinicID, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("book outpatient appointment", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to book appointment"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "OutpatientAppointment",
-		ResourceID: appt.ID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "OutpatientAppointment",
+		ResourceID: appt.ID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, appt)
 }
@@ -246,7 +246,7 @@ func (h *OutpatientHandler) UpdateAppointment(w http.ResponseWriter, r *http.Req
 
 	clinicID := r.PathValue("id")
 	apptID := r.PathValue("apptId")
-	existing, err := h.getAppointmentByID(ctx, apptID, clinicID, tenantID)
+	existing, err := h.getAppointmentByID(ctx, apptID, clinicID, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "appointment not found"})
@@ -286,9 +286,9 @@ func (h *OutpatientHandler) UpdateAppointment(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "OutpatientAppointment",
-		ResourceID: apptID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "OutpatientAppointment",
+		ResourceID: apptID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, updated)
 }
@@ -309,7 +309,7 @@ func (h *OutpatientHandler) Attend(w http.ResponseWriter, r *http.Request) {
 
 	clinicID := r.PathValue("id")
 	apptID := r.PathValue("apptId")
-	existing, err := h.getAppointmentByID(ctx, apptID, clinicID, tenantID)
+	existing, err := h.getAppointmentByID(ctx, apptID, clinicID, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "appointment not found"})
@@ -335,9 +335,10 @@ func (h *OutpatientHandler) Attend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "OutpatientAppointment",
-		ResourceID: apptID, TenantID: tenantID, Metadata: map[string]string{"action": "attend"},
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "OutpatientAppointment",
+		ResourceID: apptID, TenantID: tenantID, Details: map[string]any{"action": "attend"},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, attended)
 }
@@ -353,7 +354,7 @@ func (h *OutpatientHandler) ListWaitlist(w http.ResponseWriter, r *http.Request)
 
 	clinicFilter := r.URL.Query().Get("clinic")
 	priorityFilter := r.URL.Query().Get("priority")
-	entries, err := h.listWaitlist(ctx, tenantID, clinicFilter, priorityFilter)
+	entries, err := h.listWaitlist(ctx, tenantID.String(), clinicFilter, priorityFilter)
 	if err != nil {
 		h.logger.Error("list waitlist", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list waitlist"})
@@ -394,16 +395,16 @@ func (h *OutpatientHandler) AddToWaitlist(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	entry, err := h.insertWaitlistEntry(ctx, req, tenantID)
+	entry, err := h.insertWaitlistEntry(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("add to waitlist", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to add to waitlist"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "WaitlistEntry",
-		ResourceID: entry.ID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "WaitlistEntry",
+		ResourceID: entry.ID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, entry)
 }
@@ -432,7 +433,7 @@ func (h *OutpatientHandler) UpdateWaitlistEntry(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	entry, err := h.updateWaitlistEntry(ctx, id, req.Priority, req.TargetDate, tenantID)
+	entry, err := h.updateWaitlistEntry(ctx, id, req.Priority, req.TargetDate, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "waitlist entry not found"})
@@ -443,9 +444,9 @@ func (h *OutpatientHandler) UpdateWaitlistEntry(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "WaitlistEntry",
-		ResourceID: id, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "WaitlistEntry",
+		ResourceID: id, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, entry)
 }
@@ -465,7 +466,7 @@ func (h *OutpatientHandler) RemoveFromWaitlist(w http.ResponseWriter, r *http.Re
 	}
 
 	id := r.PathValue("id")
-	if err := h.deleteWaitlistEntry(ctx, id, tenantID); err != nil {
+	if err := h.deleteWaitlistEntry(ctx, id, tenantID.String()); err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "waitlist entry not found"})
 			return
@@ -475,9 +476,10 @@ func (h *OutpatientHandler) RemoveFromWaitlist(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "WaitlistEntry",
-		ResourceID: id, TenantID: tenantID, Metadata: map[string]string{"action": "remove"},
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "delete", ResourceType: "WaitlistEntry",
+		ResourceID: id, TenantID: tenantID, Details: map[string]any{"action": "remove"},
+		OccurredAt: time.Now().UTC(),
 	})
 	w.WriteHeader(http.StatusNoContent)
 }

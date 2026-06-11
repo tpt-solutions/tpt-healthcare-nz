@@ -165,16 +165,16 @@ func (h *PharmacyHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	admissionID := r.PathValue("admissionId")
 	statusFilter := r.URL.Query().Get("status")
-	meds, err := h.listMedications(ctx, admissionID, tenantID, statusFilter)
+	meds, err := h.listMedications(ctx, admissionID, tenantID.String(), statusFilter)
 	if err != nil {
 		h.logger.Error("list inpatient medications", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list medications"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "InpatientMedication",
-		ResourceID: admissionID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "InpatientMedication",
+		ResourceID: admissionID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"medications": meds, "total": len(meds)})
 }
@@ -223,17 +223,18 @@ func (h *PharmacyHandler) Prescribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	med, err := h.insertMedication(ctx, admissionID, req, tenantID)
+	med, err := h.insertMedication(ctx, admissionID, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("prescribe medication", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to prescribe medication"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "InpatientMedication",
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "InpatientMedication",
 		ResourceID: med.ID, TenantID: tenantID,
-		Metadata: map[string]string{"drug": req.GenericName, "action": "prescribe"},
+		Details:    map[string]any{"drug": req.GenericName, "action": "prescribe"},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, med)
 }
@@ -254,7 +255,7 @@ func (h *PharmacyHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	admissionID := r.PathValue("admissionId")
 	medID := r.PathValue("medId")
-	med, err := h.getMedicationByID(ctx, medID, admissionID, tenantID)
+	med, err := h.getMedicationByID(ctx, medID, admissionID, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "medication not found"})
@@ -265,9 +266,9 @@ func (h *PharmacyHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "InpatientMedication",
-		ResourceID: medID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "InpatientMedication",
+		ResourceID: medID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, med)
 }
@@ -288,7 +289,7 @@ func (h *PharmacyHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	admissionID := r.PathValue("admissionId")
 	medID := r.PathValue("medId")
-	existing, err := h.getMedicationByID(ctx, medID, admissionID, tenantID)
+	existing, err := h.getMedicationByID(ctx, medID, admissionID, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "medication not found"})
@@ -334,9 +335,10 @@ func (h *PharmacyHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "InpatientMedication",
-		ResourceID: medID, TenantID: tenantID, Metadata: map[string]string{"action": "update"},
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "InpatientMedication",
+		ResourceID: medID, TenantID: tenantID, Details: map[string]any{"action": "update"},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, updated)
 }
@@ -357,7 +359,7 @@ func (h *PharmacyHandler) Administer(w http.ResponseWriter, r *http.Request) {
 
 	admissionID := r.PathValue("admissionId")
 	medID := r.PathValue("medId")
-	med, err := h.getMedicationByID(ctx, medID, admissionID, tenantID)
+	med, err := h.getMedicationByID(ctx, medID, admissionID, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "medication not found"})
@@ -382,17 +384,18 @@ func (h *PharmacyHandler) Administer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	record, err := h.insertAdminRecord(ctx, medID, admissionID, med, req, tenantID)
+	record, err := h.insertAdminRecord(ctx, medID, admissionID, med, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert administration record", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to record administration"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "MedAdministration",
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "MedAdministration",
 		ResourceID: record.ID, TenantID: tenantID,
-		Metadata: map[string]string{"medicationId": medID, "withheld": fmt.Sprintf("%v", req.Withheld)},
+		Details:    map[string]any{"medication_id": medID, "withheld": req.Withheld},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, record)
 }
@@ -413,7 +416,7 @@ func (h *PharmacyHandler) Cease(w http.ResponseWriter, r *http.Request) {
 
 	admissionID := r.PathValue("admissionId")
 	medID := r.PathValue("medId")
-	existing, err := h.getMedicationByID(ctx, medID, admissionID, tenantID)
+	existing, err := h.getMedicationByID(ctx, medID, admissionID, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "medication not found"})
@@ -446,10 +449,11 @@ func (h *PharmacyHandler) Cease(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "InpatientMedication",
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "InpatientMedication",
 		ResourceID: medID, TenantID: tenantID,
-		Metadata: map[string]string{"action": "cease", "reason": req.Reason},
+		Details:    map[string]any{"action": "cease", "reason": req.Reason},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, ceased)
 }
@@ -469,7 +473,7 @@ func (h *PharmacyHandler) GetReconciliation(w http.ResponseWriter, r *http.Reque
 	}
 
 	admissionID := r.PathValue("admissionId")
-	rec, err := h.getReconciliation(ctx, admissionID, tenantID)
+	rec, err := h.getReconciliation(ctx, admissionID, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "no reconciliation found for this admission"})
@@ -480,9 +484,9 @@ func (h *PharmacyHandler) GetReconciliation(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "MedReconciliation",
-		ResourceID: admissionID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "MedReconciliation",
+		ResourceID: admissionID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, rec)
 }
@@ -517,7 +521,7 @@ func (h *PharmacyHandler) ReconcileMedications(w http.ResponseWriter, r *http.Re
 	}
 
 	// Fetch current chart medications to compare.
-	chartMeds, err := h.listMedications(ctx, admissionID, tenantID, "")
+	chartMeds, err := h.listMedications(ctx, admissionID, tenantID.String(), "")
 	if err != nil {
 		h.logger.Error("get chart meds for reconciliation", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to retrieve chart medications"})
@@ -528,17 +532,18 @@ func (h *PharmacyHandler) ReconcileMedications(w http.ResponseWriter, r *http.Re
 		chartNames = append(chartNames, m.GenericName)
 	}
 
-	rec, err := h.insertReconciliation(ctx, admissionID, req, chartNames, tenantID)
+	rec, err := h.insertReconciliation(ctx, admissionID, req, chartNames, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert reconciliation", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create reconciliation record"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "MedReconciliation",
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "MedReconciliation",
 		ResourceID: rec.ID, TenantID: tenantID,
-		Metadata: map[string]string{"type": req.ReconciliationType},
+		Details:    map[string]any{"type": req.ReconciliationType},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, rec)
 }

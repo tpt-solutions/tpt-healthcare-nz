@@ -141,27 +141,26 @@ func (h *EncountersHandler) List(w http.ResponseWriter, r *http.Request) {
 	providerFilter := q.Get("provider")
 	statusFilter := q.Get("status")
 
-	encounters, err := h.listEncounters(ctx, tenantID, patientFilter, providerFilter, statusFilter)
+	encounters, err := h.listEncounters(ctx, tenantID.String(), patientFilter, providerFilter, statusFilter)
 	if err != nil {
-		h.logger.Error("list encounters", slog.Any("error", err), slog.String("tenant", tenantID))
+		h.logger.Error("list encounters", slog.Any("error", err), slog.String("tenant", tenantID.String()))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list encounters"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "Encounter",
 		ResourceID:   "list",
 		TenantID:     tenantID,
-		Metadata: map[string]string{
+		Details: map[string]any{
 			"patient":  patientFilter,
 			"provider": providerFilter,
 			"status":   statusFilter,
 		},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt: time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"encounters": encounters,
@@ -215,22 +214,21 @@ func (h *EncountersHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	enc, err := h.insertEncounter(ctx, req, tenantID)
+	enc, err := h.insertEncounter(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert encounter", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create encounter"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "Encounter",
 		ResourceID:   enc.ID,
 		TenantID:     tenantID,
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusCreated, enc)
 }
@@ -255,7 +253,7 @@ func (h *EncountersHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	enc, err := h.getEncounterByID(ctx, id, tenantID)
+	enc, err := h.getEncounterByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "encounter not found"})
@@ -266,15 +264,14 @@ func (h *EncountersHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "Encounter",
 		ResourceID:   id,
 		TenantID:     tenantID,
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, enc)
 }
@@ -307,7 +304,7 @@ func (h *EncountersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := h.getEncounterByID(ctx, id, tenantID)
+	existing, err := h.getEncounterByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "encounter not found"})
@@ -346,15 +343,14 @@ func (h *EncountersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "Encounter",
 		ResourceID:   id,
 		TenantID:     tenantID,
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, updated)
 }
@@ -381,7 +377,7 @@ func (h *EncountersHandler) Complete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := h.getEncounterByID(ctx, id, tenantID)
+	existing, err := h.getEncounterByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "encounter not found"})
@@ -428,16 +424,15 @@ func (h *EncountersHandler) Complete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "Encounter",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "complete"},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"action": "complete"},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	// Health Act 1956 s74: notify EpiSurv for any notifiable diagnoses.
 	if h.episurvClient != nil {

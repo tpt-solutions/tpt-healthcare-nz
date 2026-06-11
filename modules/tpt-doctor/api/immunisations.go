@@ -87,23 +87,22 @@ func (h *ImmunisationsHandler) List(w http.ResponseWriter, r *http.Request) {
 	patientFilter := q.Get("patient")
 	vaccineFilter := q.Get("vaccine")
 
-	records, err := h.listImmunisations(ctx, tenantID, patientFilter, vaccineFilter)
+	records, err := h.listImmunisations(ctx, tenantID.String(), patientFilter, vaccineFilter)
 	if err != nil {
-		h.logger.Error("list immunisations", slog.Any("error", err), slog.String("tenant", tenantID))
+		h.logger.Error("list immunisations", slog.Any("error", err), slog.String("tenant", tenantID.String()))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list immunisations"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "Immunization",
 		ResourceID:   "list",
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"patient": patientFilter, "vaccine": vaccineFilter},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"patient": patientFilter, "vaccine": vaccineFilter},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"immunisations": records,
@@ -153,23 +152,22 @@ func (h *ImmunisationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	record, err := h.insertImmunisation(ctx, req, tenantID)
+	record, err := h.insertImmunisation(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert immunisation", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to record immunisation"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "Immunization",
 		ResourceID:   record.ID,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"vaccine": req.VaccineCode, "dose": fmt.Sprintf("%d", req.DoseNumber)},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"vaccine": req.VaccineCode, "dose": req.DoseNumber},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusCreated, record)
 }
@@ -194,7 +192,7 @@ func (h *ImmunisationsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	record, err := h.getImmunisationByID(ctx, id, tenantID)
+	record, err := h.getImmunisationByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "immunisation not found"})
@@ -205,15 +203,14 @@ func (h *ImmunisationsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "Immunization",
 		ResourceID:   id,
 		TenantID:     tenantID,
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, record)
 }
@@ -240,7 +237,7 @@ func (h *ImmunisationsHandler) SubmitNIR(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	record, err := h.getImmunisationByID(ctx, id, tenantID)
+	record, err := h.getImmunisationByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "immunisation not found"})
@@ -263,23 +260,22 @@ func (h *ImmunisationsHandler) SubmitNIR(w http.ResponseWriter, r *http.Request)
 	nirRef := fmt.Sprintf("NIR-%s", record.ID[:8])
 	now := time.Now().UTC()
 
-	updated, err := h.markNIRSubmitted(ctx, id, nirRef, now, tenantID)
+	updated, err := h.markNIRSubmitted(ctx, id, nirRef, now, tenantID.String())
 	if err != nil {
 		h.logger.Error("mark NIR submitted", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "NIR_ERROR", Message: "failed to record NIR submission"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "Immunization",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "nir-submit", "nir_reference": nirRef},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"action": "nir-submit", "nir_reference": nirRef},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, updated)
 }

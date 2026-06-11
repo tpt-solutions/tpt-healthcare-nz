@@ -91,19 +91,20 @@ func (h *SpecimensHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := r.URL.Query()
-	specimens, err := h.listSpecimens(ctx, tenantID, q.Get("patient"), q.Get("status"), q.Get("accession"))
+	specimens, err := h.listSpecimens(ctx, tenantID.String(), q.Get("patient"), q.Get("status"), q.Get("accession"))
 	if err != nil {
 		h.logger.Error("list specimens", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list specimens"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "Specimen",
 		ResourceID:   "list",
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -132,7 +133,7 @@ func (h *SpecimensHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	spec, err := h.getSpecimen(ctx, id, tenantID)
+	spec, err := h.getSpecimen(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "specimen not found"})
@@ -143,12 +144,13 @@ func (h *SpecimensHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "Specimen",
 		ResourceID:   id,
 		TenantID:     tenantID,
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, spec)
@@ -189,20 +191,21 @@ func (h *SpecimensHandler) Create(w http.ResponseWriter, r *http.Request) {
 		collectedAt = &t
 	}
 
-	spec, err := h.insertSpecimen(ctx, req, collectedAt, tenantID)
+	spec, err := h.insertSpecimen(ctx, req, collectedAt, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert specimen", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create specimen"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "Specimen",
 		ResourceID:   spec.ID,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"accession": req.AccessionNumber},
+		Details:      map[string]any{"accession": req.AccessionNumber},
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusCreated, spec)
@@ -242,7 +245,7 @@ func (h *SpecimensHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	spec, err := h.updateSpecimenStatus(ctx, id, req.Status, tenantID)
+	spec, err := h.updateSpecimenStatus(ctx, id, req.Status, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "specimen not found"})
@@ -253,13 +256,14 @@ func (h *SpecimensHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "Specimen",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"new_status": string(req.Status)},
+		Details:      map[string]any{"new_status": string(req.Status)},
+		OccurredAt:   time.Now().UTC(),
 	})
 
 	writeJSON(w, http.StatusOK, spec)

@@ -94,23 +94,22 @@ func (h *LabsHandler) List(w http.ResponseWriter, r *http.Request) {
 	statusFilter := q.Get("status")
 	providerFilter := q.Get("provider")
 
-	orders, err := h.listOrders(ctx, tenantID, patientFilter, statusFilter, providerFilter)
+	orders, err := h.listOrders(ctx, tenantID.String(), patientFilter, statusFilter, providerFilter)
 	if err != nil {
-		h.logger.Error("list lab orders", slog.Any("error", err), slog.String("tenant", tenantID))
+		h.logger.Error("list lab orders", slog.Any("error", err), slog.String("tenant", tenantID.String()))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list lab orders"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "DiagnosticReport",
 		ResourceID:   "list",
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"patient": patientFilter, "status": statusFilter},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"patient": patientFilter, "status": statusFilter},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"labOrders": orders,
@@ -159,23 +158,22 @@ func (h *LabsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err := h.insertOrder(ctx, req, tenantID)
+	order, err := h.insertOrder(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert lab order", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create lab order"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "ServiceRequest",
 		ResourceID:   order.ID,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "lab-order"},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"action": "lab-order"},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusCreated, order)
 }
@@ -200,7 +198,7 @@ func (h *LabsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err := h.getOrderByID(ctx, id, tenantID)
+	order, err := h.getOrderByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "lab order not found"})
@@ -222,15 +220,14 @@ func (h *LabsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		order.FHIRReport = string(plain)
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "DiagnosticReport",
 		ResourceID:   id,
 		TenantID:     tenantID,
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, order)
 }
@@ -276,7 +273,7 @@ func (h *LabsHandler) Result(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC()
-	updated, err := h.storeResult(ctx, id, encReport, now, tenantID)
+	updated, err := h.storeResult(ctx, id, encReport, now, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "lab order not found"})
@@ -287,16 +284,15 @@ func (h *LabsHandler) Result(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "DiagnosticReport",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "result-received"},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"action": "result-received"},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, updated)
 }

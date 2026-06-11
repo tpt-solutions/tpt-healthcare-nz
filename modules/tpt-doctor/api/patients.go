@@ -94,9 +94,9 @@ func (h *PatientsHandler) List(w http.ResponseWriter, r *http.Request) {
 	nhiFilter := q.Get("nhi")
 	dobFilter := q.Get("dob")
 
-	records, err := h.searchPatients(ctx, tenantID, nameFilter, nhiFilter, dobFilter)
+	records, err := h.searchPatients(ctx, tenantID.String(), nameFilter, nhiFilter, dobFilter)
 	if err != nil {
-		h.logger.Error("search patients", slog.Any("error", err), slog.String("tenant", tenantID))
+		h.logger.Error("search patients", slog.Any("error", err), slog.String("tenant", tenantID.String()))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "SEARCH_ERROR", Message: "failed to search patients"})
 		return
 	}
@@ -111,20 +111,19 @@ func (h *PatientsHandler) List(w http.ResponseWriter, r *http.Request) {
 		responses = append(responses, resp)
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "Patient",
 		ResourceID:   "search",
 		TenantID:     tenantID,
-		Metadata: map[string]string{
+		Details: map[string]any{
 			"name": nameFilter,
 			"nhi":  nhiFilter,
 			"dob":  dobFilter,
 		},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt: time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"patients": responses,
@@ -152,7 +151,7 @@ func (h *PatientsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rec, err := h.getPatientByID(ctx, id, tenantID)
+	rec, err := h.getPatientByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "patient not found"})
@@ -170,15 +169,14 @@ func (h *PatientsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "Patient",
 		ResourceID:   id,
 		TenantID:     tenantID,
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -215,16 +213,15 @@ func (h *PatientsHandler) GetByNHI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "Patient",
 		ResourceID:   "nhi-lookup",
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"nhi": nhiValue},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"nhi": nhiValue},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, patient)
 }
@@ -270,7 +267,7 @@ func (h *PatientsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rec, err := h.persistPatient(ctx, req.NHI, req.Patient, tenantID)
+	rec, err := h.persistPatient(ctx, req.NHI, req.Patient, tenantID.String())
 	if err != nil {
 		h.logger.Error("persist patient", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "PERSIST_ERROR", Message: "failed to save patient"})
@@ -284,15 +281,14 @@ func (h *PatientsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "Patient",
 		ResourceID:   rec.ID,
 		TenantID:     tenantID,
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusCreated, resp)
 }
@@ -328,7 +324,7 @@ func (h *PatientsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rec, err := h.getPatientByID(ctx, id, tenantID)
+	rec, err := h.getPatientByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "patient not found"})
@@ -339,7 +335,7 @@ func (h *PatientsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated, err := h.updatePatientFHIR(ctx, rec.ID, req.Patient, tenantID)
+	updated, err := h.updatePatientFHIR(ctx, rec.ID, req.Patient, tenantID.String())
 	if err != nil {
 		h.logger.Error("update patient", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "UPDATE_ERROR", Message: "failed to update patient"})
@@ -353,15 +349,14 @@ func (h *PatientsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "Patient",
 		ResourceID:   id,
 		TenantID:     tenantID,
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -409,7 +404,7 @@ func (h *PatientsHandler) GetEnrolment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rec, err := h.getPatientByID(ctx, id, tenantID)
+	rec, err := h.getPatientByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "patient not found"})
@@ -428,7 +423,7 @@ func (h *PatientsHandler) GetEnrolment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// HIPC Rule 11: verify disclosure consent before returning enrolment data.
-	hasConsent, err := h.checkDisclosureConsent(ctx, tenantID, string(nhiPlain))
+	hasConsent, err := h.checkDisclosureConsent(ctx, tenantID.String(), string(nhiPlain))
 	if err != nil {
 		h.logger.Error("check disclosure consent", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "CONSENT_ERROR", Message: "failed to verify disclosure consent"})
@@ -450,15 +445,14 @@ func (h *PatientsHandler) GetEnrolment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "Coverage",
 		ResourceID:   id,
 		TenantID:     tenantID,
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, enrolment)
 }

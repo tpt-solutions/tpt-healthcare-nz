@@ -123,7 +123,7 @@ func (h *TheatreHandler) List(w http.ResponseWriter, r *http.Request) {
 	surgeonFilter := r.URL.Query().Get("surgeon")
 	theatreFilter := r.URL.Query().Get("theatre")
 
-	bookings, err := h.listBookings(ctx, tenantID, statusFilter, surgeonFilter, theatreFilter)
+	bookings, err := h.listBookings(ctx, tenantID.String(), statusFilter, surgeonFilter, theatreFilter)
 	if err != nil {
 		h.logger.Error("list theatre bookings", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list theatre bookings"})
@@ -179,16 +179,16 @@ func (h *TheatreHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	booking, err := h.insertBooking(ctx, req, tenantID)
+	booking, err := h.insertBooking(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert theatre booking", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create theatre booking"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "TheatreBooking",
-		ResourceID: booking.ID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "TheatreBooking",
+		ResourceID: booking.ID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, booking)
 }
@@ -208,7 +208,7 @@ func (h *TheatreHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	booking, err := h.getBookingByID(ctx, id, tenantID)
+	booking, err := h.getBookingByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "theatre booking not found"})
@@ -219,9 +219,9 @@ func (h *TheatreHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "TheatreBooking",
-		ResourceID: id, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "TheatreBooking",
+		ResourceID: id, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, booking)
 }
@@ -241,7 +241,7 @@ func (h *TheatreHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getBookingByID(ctx, id, tenantID)
+	existing, err := h.getBookingByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "theatre booking not found"})
@@ -296,9 +296,9 @@ func (h *TheatreHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "TheatreBooking",
-		ResourceID: id, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "TheatreBooking",
+		ResourceID: id, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, updated)
 }
@@ -328,7 +328,7 @@ func (h *TheatreHandler) Start(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getBookingByID(ctx, id, tenantID)
+	existing, err := h.getBookingByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "theatre booking not found"})
@@ -354,9 +354,10 @@ func (h *TheatreHandler) Start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "TheatreBooking",
-		ResourceID: id, TenantID: tenantID, Metadata: map[string]string{"action": "start"},
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "TheatreBooking",
+		ResourceID: id, TenantID: tenantID, Details: map[string]any{"action": "start"},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, updated)
 }
@@ -376,7 +377,7 @@ func (h *TheatreHandler) Complete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getBookingByID(ctx, id, tenantID)
+	existing, err := h.getBookingByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "theatre booking not found"})
@@ -414,9 +415,10 @@ func (h *TheatreHandler) Complete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "TheatreBooking",
-		ResourceID: id, TenantID: tenantID, Metadata: map[string]string{"action": "complete"},
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "TheatreBooking",
+		ResourceID: id, TenantID: tenantID, Details: map[string]any{"action": "complete"},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, completed)
 }
@@ -436,7 +438,7 @@ func (h *TheatreHandler) DaySchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	theatreFilter := r.URL.Query().Get("theatre")
 
-	bookings, err := h.listByDate(ctx, tenantID, date, theatreFilter)
+	bookings, err := h.listByDate(ctx, tenantID.String(), date, theatreFilter)
 	if err != nil {
 		h.logger.Error("theatre day schedule", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "SCHEDULE_ERROR", Message: "failed to retrieve theatre schedule"})
@@ -460,7 +462,7 @@ func (h *TheatreHandler) transitionStatus(w http.ResponseWriter, r *http.Request
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getBookingByID(ctx, id, tenantID)
+	existing, err := h.getBookingByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "theatre booking not found"})
@@ -487,9 +489,10 @@ func (h *TheatreHandler) transitionStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "TheatreBooking",
-		ResourceID: id, TenantID: tenantID, Metadata: map[string]string{"action": action},
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "TheatreBooking",
+		ResourceID: id, TenantID: tenantID, Details: map[string]any{"action": action},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, updated)
 }

@@ -116,7 +116,7 @@ func (h *PreAdmissionHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	statusFilter := r.URL.Query().Get("status")
-	assessments, err := h.listAssessments(ctx, tenantID, statusFilter)
+	assessments, err := h.listAssessments(ctx, tenantID.String(), statusFilter)
 	if err != nil {
 		h.logger.Error("list PA assessments", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list assessments"})
@@ -157,16 +157,16 @@ func (h *PreAdmissionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a, err := h.insertAssessment(ctx, req, tenantID)
+	a, err := h.insertAssessment(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert PA assessment", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create assessment"})
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "PreAdmissionAssessment",
-		ResourceID: a.ID, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "PreAdmissionAssessment",
+		ResourceID: a.ID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, a)
 }
@@ -186,7 +186,7 @@ func (h *PreAdmissionHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	a, err := h.getAssessmentByID(ctx, id, tenantID)
+	a, err := h.getAssessmentByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "assessment not found"})
@@ -197,9 +197,9 @@ func (h *PreAdmissionHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionRead, ResourceType: "PreAdmissionAssessment",
-		ResourceID: id, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "PreAdmissionAssessment",
+		ResourceID: id, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, a)
 }
@@ -219,7 +219,7 @@ func (h *PreAdmissionHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getAssessmentByID(ctx, id, tenantID)
+	existing, err := h.getAssessmentByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "assessment not found"})
@@ -279,9 +279,9 @@ func (h *PreAdmissionHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "PreAdmissionAssessment",
-		ResourceID: id, TenantID: tenantID,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "PreAdmissionAssessment",
+		ResourceID: id, TenantID: tenantID, OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, updated)
 }
@@ -301,7 +301,7 @@ func (h *PreAdmissionHandler) Complete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getAssessmentByID(ctx, id, tenantID)
+	existing, err := h.getAssessmentByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "assessment not found"})
@@ -323,9 +323,10 @@ func (h *PreAdmissionHandler) Complete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "PreAdmissionAssessment",
-		ResourceID: id, TenantID: tenantID, Metadata: map[string]string{"action": "complete"},
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "PreAdmissionAssessment",
+		ResourceID: id, TenantID: tenantID, Details: map[string]any{"action": "complete"},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, completed)
 }
@@ -345,7 +346,7 @@ func (h *PreAdmissionHandler) Approve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	existing, err := h.getAssessmentByID(ctx, id, tenantID)
+	existing, err := h.getAssessmentByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "assessment not found"})
@@ -371,9 +372,10 @@ func (h *PreAdmissionHandler) Approve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.auditTrail.Write(ctx, audit.Event{
-		Actor: principal, Action: audit.ActionWrite, ResourceType: "PreAdmissionAssessment",
-		ResourceID: id, TenantID: tenantID, Metadata: map[string]string{"action": "approve"},
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "PreAdmissionAssessment",
+		ResourceID: id, TenantID: tenantID, Details: map[string]any{"action": "approve"},
+		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusOK, approved)
 }

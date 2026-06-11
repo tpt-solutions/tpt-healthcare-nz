@@ -86,23 +86,22 @@ func (h *CertificatesHandler) List(w http.ResponseWriter, r *http.Request) {
 	patientFilter := q.Get("patient")
 	typeFilter := q.Get("type")
 
-	certs, err := h.listCertificates(ctx, tenantID, patientFilter, typeFilter)
+	certs, err := h.listCertificates(ctx, tenantID.String(), patientFilter, typeFilter)
 	if err != nil {
-		h.logger.Error("list certificates", slog.Any("error", err), slog.String("tenant", tenantID))
+		h.logger.Error("list certificates", slog.Any("error", err), slog.String("tenant", tenantID.String()))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list certificates"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "DocumentReference",
 		ResourceID:   "list",
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"patient": patientFilter, "type": typeFilter},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"patient": patientFilter, "type": typeFilter},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"certificates": certs,
@@ -151,23 +150,22 @@ func (h *CertificatesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cert, err := h.insertCertificate(ctx, req, tenantID)
+	cert, err := h.insertCertificate(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert certificate", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to issue certificate"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "DocumentReference",
 		ResourceID:   cert.ID,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"cert_type": string(req.Type)},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"cert_type": string(req.Type)},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusCreated, cert)
 }
@@ -192,7 +190,7 @@ func (h *CertificatesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cert, err := h.getCertByID(ctx, id, tenantID)
+	cert, err := h.getCertByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "certificate not found"})
@@ -203,15 +201,14 @@ func (h *CertificatesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "DocumentReference",
 		ResourceID:   id,
 		TenantID:     tenantID,
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, cert)
 }
