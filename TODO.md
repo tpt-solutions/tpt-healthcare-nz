@@ -240,6 +240,15 @@
 - [x] Infection control (HAI surveillance, isolation precautions)
 - [x] Hospital outpatient specialist clinics and waitlists
 - [x] Hospital in the Home (HITH / virtual ward)
+- [x] Emergency & Disaster Management (HERP / CDEM Act 2002 / CIMS)
+  - [x] `modules/tpt-hospital/db/migrate/011_emergency.sql` — 7 tables: emergency_incidents, incident_command_assignments, incident_log_entries, mci_patients, surge_capacity_snapshots, cbrn_decon_log, resource_requests
+  - [x] `modules/tpt-hospital/api/emergency.go` — CIMS incident lifecycle (declared→activated→escalated→stand_down→closed), command role assignments, append-only incident log, resource requests
+  - [x] `modules/tpt-hospital/api/mci.go` — Mass casualty triage: START (adults) + JumpSTART (paediatric <8yr/<25kg) algorithm, tag-number system, NHI linkage after initial triage
+  - [x] `modules/tpt-hospital/api/surge.go` — Hospital surge capacity tiers (0=normal, 1=expanded, 2=crisis, 3=catastrophic); live bed/ICU/ED count snapshots; HEOC escalation events
+  - [x] `modules/tpt-hospital/api/cbrn.go` — CBRN decontamination workflow: hot→warm→cold zone progression, per-patient decon lifecycle, PPE level recording
+  - [x] `core/rbac/model.go` — `RoleIncidentCommander`, `RoleEmergencyResponseCoordinator`
+  - [x] `core/rbac/checker.go` — `emergency.*` resource permissions
+  - [x] `core/events/bus.go` — incident event type constants (declared/activated/escalated/stand_down/surge_changed/mci_batch)
 
 ## Hospital Specialist Modules (Milestone 10b — spun out as independent services)
 > These were separated from tpt-hospital so they can be deployed independently
@@ -422,3 +431,56 @@
 - [x] `core/health/` — populate health aggregation endpoint with all provider health checks — NHI, HPI, NES, ACC, PHARMAC, PRIMHD, WorkSafe, Medsafe, EpiSurv, ERMS provider types added to `core/health/model.go`
 - [x] ACC and PHARMAC: add Redis caching layer — `core/acc/cache.go` (1h TTL for claim/PO status) + `core/pharmac/cache.go` (24h TTL for schedule/medicine lookups)
 - [x] FHIR Subscription engine: complete WebSocket hub (`core/subscription/ws.go`) and email dispatch channel implementations (`Engine.SetWSHub`, `Engine.SetEmailSender`)
+
+---
+
+## Milestone 13 — Platform Completeness & Patient Experience
+
+### Clinical Safety
+- [x] `core/ddi/` — Drug-drug & drug-allergy interaction checker interface + `MultiChecker`
+  - [x] `core/ddi/pharmac_checker.go` — PHARMAC-backed interaction checks (drug-drug + allergy via NZULM generic name)
+  - [x] `core/ddi/local_checker.go` — Offline fallback with 20 hard-coded high-risk interactions (warfarin/aspirin, SSRI/tramadol, lithium/NSAIDs, sotalol/QTc, etc.)
+- [x] `core/repo/allergy.go` — `AllergyStore`: CRUD for FHIR `AllergyIntolerance` resources per patient; `ActiveSubstances()` fast path for DDI integration
+- [x] `core/repo/condition.go` — `ConditionStore`: problem list management (ProblemListItem / EncounterDiagnosis), `PromoteToProblems()`, `ProblemList()`, `EncounterDiagnoses()`
+- [x] `core/scoring/news2.go` — Full NEWS2 scoring table (RCP 2017): `Calculate()`, `CheckAndAlert()` (publishes `DeteriorationEvent` to `events.Bus` when score ≥ 5)
+
+### Patient Communication & Engagement
+- [x] `core/messaging/` — Secure bidirectional patient-provider messaging threads + unread counts + `NotifyFunc` callback
+- [x] `core/sms/inbound.go` — Two-way SMS: MessageBird / Vonage / Twilio webhook parsers; `ParseReply()` maps "1"→confirm, "2"→cancel; `InboundHandler` confirms/cancels appointment by phone number lookup
+- [x] `core/comms-prefs/prefs.go` — Per-patient communication preference store (channel × purpose); marketing opt-in required; upsert via `ON CONFLICT`
+- [x] `core/recall/recall.go` — Recall item model + River `Worker` that contacts overdue patients via `NotifyFunc`
+- [x] `core/forms/forms.go` — Intake form engine: `FormTemplate` (JSONB questions, appointment-type routing) + `FormInstance` (URL-safe token, expiry) + `SubmitResponse()` in transaction
+
+### Appointment Self-Service
+- [x] `modules/tpt-doctor/api/appointments_self_service.go` — Cancel / Reschedule (conflict check) / JoinWaitlist / LeaveWaitlist + async `backfillWaitlist()` goroutine
+
+### AI & Voice
+- [x] `core/ai/ai.go` — AI provider interface: `Feature` type (referral_draft, discharge_summary, coding_suggestion, diagnosis_differential, translation, stt); `FeatureGuard`; 4 clinical prompt templates; per-tenant `Config.EnabledFeatures`
+  - [x] `core/ai/providers.go` — `NoopProvider`, `LocalProvider` (Ollama-compatible), `ClaudeProvider` (Anthropic API; default model `claude-haiku-4-5-20251001`)
+  - [x] `core/ai/openai_provider.go` — `OpenAIProvider` with Whisper `Transcribe()` via multipart/form-data
+- [x] `packages/ui/src/hooks/useSpeechToText.ts` — `useSpeechToText` hook: primary = Web Speech API (offline PWA, Chrome/Edge/Safari); fallback = MediaRecorder + cloud STT; language defaults to `en-NZ`
+
+### Record Transfer
+- [x] `core/gp2gp/gp2gp.go` — Flexible patient record transfer: internal tpt-to-tpt via `BundleImporter` (zero network hop); external via FHIR `$everything` bundle available for HealthLink pickup
+
+### Internationalisation
+- [x] `packages/ui/src/i18n/index.ts` — i18n engine: lazy-load language JSON; AI translation fallback (missing keys POST to `aiTranslateUrl`, cached in `localStorage`); `detectLanguage()` checks localStorage then `navigator.language`
+  - [x] `en.json` — Full English translations (~60 keys)
+  - [x] `mi.json` — Full Te Reo Māori translations
+  - [x] `sm.json` — Partial Samoan translations
+  - [x] `to.json` — Partial Tongan translations
+  - [x] `zh.json` — Partial Mandarin Chinese translations
+
+### QR Check-In
+- [x] `interop/api/checkin_qr.go` — `GenerateCheckInQR` (24h payload, base64 JSON); `RedeemCheckInQR` (validates expiry, delegates to `checkInPatient`)
+
+### Analytics & Migrations
+- [x] `core/db/migrate/012_features.sql` — messaging_threads/messages, patient_comms_prefs, recall_items, form_templates/instances/responses, appointment_waitlist, gp2gp_transfers, `queue_wait_p50` materialized view (P50 wait per queue per hour-of-day), pg_cron 15-min refresh; population_health_summary, medication_active_summary, financial_summary, equity_condition_summary views
+
+### NZ-Specific Primary Care Schemes
+- [x] `modules/tpt-doctor/api/nz_schemes.go` — Community Pharmacy Referral Scheme (CPRS): 7 eligible conditions, async pharmacy gateway dispatch; Green Prescription (He Oranga Mauri): 6 chronic disease indicators, async HealthLink dispatch to Sport NZ regional office
+
+### Stub Completions
+- [x] `modules/tpt-allied-health/api/physio.go` — Added `pool db.Pool` + `logger` to `PhysioHandler`; real DB queries for `CreateTreatmentPlan`, `GetTreatmentPlan`, `ListTreatmentPlans`, `GetSessionNote`, `ListSessionNotes` against `physio_treatment_plans` and `physio_session_notes`
+- [x] `modules/tpt-vision/api/ophth.go` — `CreateExam` persists to `vision_ophthalmic_exams` (full exam as FHIR JSONB + all scalar columns); `GetExam` / `ListExams` query and unmarshal from JSONB; added pgx/v5 to vision `go.mod`
+- [x] `modules/tpt-dental/api/chart.go` — `GetChart` queries `dental_charts` (returns empty chart when no rows); `SaveChart` upserts via `ON CONFLICT (tenant_id, patient_nhi) DO UPDATE`; new `modules/tpt-dental/db/migrate/001_dental_charts.sql`

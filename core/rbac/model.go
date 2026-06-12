@@ -25,6 +25,12 @@ const (
 	RoleBillingManager   BuiltInRole = "billing_manager"  // billing + finance; no clinical content
 	RoleInventoryManager BuiltInRole = "inventory_manager"
 	RoleRosterManager    BuiltInRole = "roster_manager"
+
+	// Emergency & disaster management roles (CIMS-aligned).
+	// RoleIncidentCommander can declare incidents, assign CIMS roles, and stand down.
+	RoleIncidentCommander            BuiltInRole = "incident_commander"
+	// RoleEmergencyResponseCoordinator supports the IC: manages MCI triage, resources, and surge.
+	RoleEmergencyResponseCoordinator BuiltInRole = "emergency_response_coordinator"
 )
 
 // Department defines an access boundary within a tenant (e.g. GP, Pharmacy, Lab, Admin).

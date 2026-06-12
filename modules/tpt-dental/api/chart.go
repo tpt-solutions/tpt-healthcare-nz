@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -10,7 +11,9 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
+	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-dental/internal/fdi"
+	"github.com/jackc/pgx/v5"
 )
 
 // ChartHandler handles dental charting CRUD operations.
@@ -44,14 +47,45 @@ func (h *ChartHandler) GetChart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load chart from storage (simplified — real implementation queries DB).
-	chart := &fdi.DentalChart{
-		PatientNHI: patientNhi,
-		Dentition:  fdi.DentitionPermanent,
-		ChartDate:  time.Now().UnixMilli(),
+	ctx := r.Context()
+	tenantID, _ := middleware.TenantFromContext(ctx)
+
+	var chart fdi.DentalChart
+	var entriesJSON json.RawMessage
+
+	err := h.pool.QueryRow(ctx, `
+		SELECT patient_nhi, COALESCE(visit_id,''), dentition, entries,
+		       clinician_id, practice_id, chart_date
+		FROM dental_charts
+		WHERE tenant_id=$1 AND patient_nhi=$2
+		ORDER BY chart_date DESC
+		LIMIT 1`,
+		tenantID, patientNhi,
+	).Scan(
+		&chart.PatientNHI, &chart.VisitID, &chart.Dentition,
+		&entriesJSON, &chart.ClinicianID, &chart.PracticeID, &chart.ChartDate,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Return an empty chart — patient has no recorded history yet.
+			writeJSON(w, http.StatusOK, &fdi.DentalChart{
+				PatientNHI: patientNhi,
+				Dentition:  fdi.DentitionPermanent,
+				Entries:    []fdi.ToothChartEntry{},
+				ChartDate:  time.Now().UnixMilli(),
+			})
+			return
+		}
+		h.logger.Error("get dental chart", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to fetch chart"})
+		return
 	}
 
-	writeJSON(w, http.StatusOK, chart)
+	if err := json.Unmarshal(entriesJSON, &chart.Entries); err != nil {
+		chart.Entries = []fdi.ToothChartEntry{}
+	}
+
+	writeJSON(w, http.StatusOK, &chart)
 }
 
 // SaveChart saves or updates the full dental chart for a patient.
@@ -87,16 +121,61 @@ func (h *ChartHandler) SaveChart(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	ctx := r.Context()
+	tenantID, _ := middleware.TenantFromContext(ctx)
+
+	entriesJSON, err := json.Marshal(chart.Entries)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "MARSHAL_ERROR", Message: "failed to serialise entries"})
+		return
+	}
+
+	dentition := chart.Dentition
+	if dentition == "" {
+		dentition = fdi.DentitionPermanent
+	}
+
+	_, err = h.pool.Exec(ctx, `
+		INSERT INTO dental_charts
+			(tenant_id, patient_nhi, visit_id, dentition, entries,
+			 clinician_id, practice_id, chart_date, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
+		ON CONFLICT (tenant_id, patient_nhi)
+		DO UPDATE SET
+			visit_id     = EXCLUDED.visit_id,
+			dentition    = EXCLUDED.dentition,
+			entries      = EXCLUDED.entries,
+			clinician_id = EXCLUDED.clinician_id,
+			practice_id  = EXCLUDED.practice_id,
+			chart_date   = EXCLUDED.chart_date,
+			updated_at   = NOW()`,
+		tenantID, patientNhi,
+		nilIfEmpty(chart.VisitID), string(dentition), entriesJSON,
+		chart.ClinicianID, chart.PracticeID, chart.ChartDate,
+	)
+	if err != nil {
+		h.logger.Error("save dental chart", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to save chart"})
+		return
+	}
+
 	h.logger.Info("dental chart saved",
 		slog.String("patient_nhi", patientNhi),
 		slog.Int("entries", len(chart.Entries)))
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status":    "saved",
+		"status":     "saved",
 		"patientNhi": patientNhi,
-		"entries":   len(chart.Entries),
-		"chartDate": chart.ChartDate,
+		"entries":    len(chart.Entries),
+		"chartDate":  chart.ChartDate,
 	})
+}
+
+func nilIfEmpty(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // GetTooth returns the charting status for a specific tooth.

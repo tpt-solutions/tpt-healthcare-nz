@@ -16,6 +16,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/auth/auth0"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
+	"github.com/PhillipC05/tpt-healthcare/core/events"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 )
@@ -42,6 +43,7 @@ type Server struct {
 	auth       auth.Provider
 	hpiClient  *hpi.Client
 	auditTrail *audit.Trail
+	eventBus   *events.Bus
 	logger     *slog.Logger
 }
 
@@ -79,6 +81,7 @@ func NewServer(cfg Config) (*Server, error) {
 		auth:       authProvider,
 		hpiClient:  hpiClient,
 		auditTrail: trail,
+		eventBus:   events.New(),
 		logger:     cfg.Logger,
 	}
 
@@ -103,6 +106,8 @@ func (s *Server) Handler() http.Handler {
 //   - Infection control: HAI surveillance, isolation precautions
 //   - Outpatient: hospital-based specialist clinics and waitlists
 //   - Hospital in the Home (HITH): virtual ward episodes and nursing visits
+//   - Emergency & disaster management: CIMS incident command, MCI triage,
+//     surge capacity management, CBRN decontamination (HERP / CDEM Act 2002)
 //
 // Specialist departments are separate modules:
 //   tpt-oncology, tpt-renal, tpt-maternity, tpt-cardiology,
@@ -120,6 +125,12 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	infectionControl := &InfectionControlHandler{pool: s.pool, enc: s.enc, auditTrail: s.auditTrail, logger: s.logger}
 	outpatient := &OutpatientHandler{pool: s.pool, enc: s.enc, hpiClient: s.hpiClient, auditTrail: s.auditTrail, logger: s.logger}
 	hith := &HITHHandler{pool: s.pool, enc: s.enc, hpiClient: s.hpiClient, auditTrail: s.auditTrail, logger: s.logger}
+
+	// Emergency & disaster management handlers (CIMS / MCI / surge / CBRN).
+	emergency := &EmergencyHandler{pool: s.pool, auditTrail: s.auditTrail, eventBus: s.eventBus, logger: s.logger}
+	mci := &MCIHandler{pool: s.pool, enc: s.enc, auditTrail: s.auditTrail, logger: s.logger}
+	surge := &SurgeHandler{pool: s.pool, auditTrail: s.auditTrail, eventBus: s.eventBus, logger: s.logger}
+	cbrn := &CBRNHandler{pool: s.pool, auditTrail: s.auditTrail, logger: s.logger}
 
 	chain := func(h http.Handler) http.Handler {
 		h = middleware.AuditWrap(s.auditTrail)(h)
@@ -245,6 +256,41 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.Handle("GET /api/v1/hith/episodes/{id}/visits", chain(http.HandlerFunc(hith.ListVisits)))
 	mux.Handle("PUT /api/v1/hith/episodes/{id}/visits/{visitId}", chain(http.HandlerFunc(hith.UpdateVisit)))
 	mux.Handle("POST /api/v1/hith/episodes/{id}/discharge", chain(http.HandlerFunc(hith.Discharge)))
+
+	// ── Emergency & disaster management (CIMS) ────────────────────────────────
+	mux.Handle("POST /api/v1/emergency/incidents", chain(http.HandlerFunc(emergency.DeclareIncident)))
+	mux.Handle("GET /api/v1/emergency/incidents", chain(http.HandlerFunc(emergency.ListIncidents)))
+	mux.Handle("GET /api/v1/emergency/incidents/{id}", chain(http.HandlerFunc(emergency.GetIncident)))
+	mux.Handle("POST /api/v1/emergency/incidents/{id}/activate", chain(http.HandlerFunc(emergency.ActivateIncident)))
+	mux.Handle("POST /api/v1/emergency/incidents/{id}/escalate", chain(http.HandlerFunc(emergency.EscalateIncident)))
+	mux.Handle("POST /api/v1/emergency/incidents/{id}/stand-down", chain(http.HandlerFunc(emergency.StandDown)))
+	mux.Handle("POST /api/v1/emergency/incidents/{id}/close", chain(http.HandlerFunc(emergency.CloseIncident)))
+	mux.Handle("POST /api/v1/emergency/incidents/{id}/assign-role", chain(http.HandlerFunc(emergency.AssignRole)))
+	mux.Handle("GET /api/v1/emergency/incidents/{id}/log", chain(http.HandlerFunc(emergency.ListLog)))
+	mux.Handle("POST /api/v1/emergency/incidents/{id}/log", chain(http.HandlerFunc(emergency.AddLog)))
+	mux.Handle("GET /api/v1/emergency/incidents/{id}/resources", chain(http.HandlerFunc(emergency.ListResources)))
+	mux.Handle("POST /api/v1/emergency/incidents/{id}/resources", chain(http.HandlerFunc(emergency.RequestResource)))
+	mux.Handle("PATCH /api/v1/emergency/incidents/{id}/resources/{rid}", chain(http.HandlerFunc(emergency.UpdateResource)))
+
+	// ── MCI triage ────────────────────────────────────────────────────────────
+	mux.Handle("POST /api/v1/emergency/incidents/{id}/mci/patients", chain(http.HandlerFunc(mci.TagPatient)))
+	mux.Handle("GET /api/v1/emergency/incidents/{id}/mci/patients", chain(http.HandlerFunc(mci.ListPatients)))
+	mux.Handle("PUT /api/v1/emergency/incidents/{id}/mci/patients/{pid}", chain(http.HandlerFunc(mci.UpdatePatient)))
+	mux.Handle("POST /api/v1/emergency/incidents/{id}/mci/patients/{pid}/identify", chain(http.HandlerFunc(mci.IdentifyPatient)))
+	mux.Handle("GET /api/v1/emergency/incidents/{id}/mci/summary", chain(http.HandlerFunc(mci.Summary)))
+
+	// ── Surge capacity ────────────────────────────────────────────────────────
+	mux.Handle("GET /api/v1/emergency/incidents/{id}/surge", chain(http.HandlerFunc(surge.GetSurgeStatus)))
+	mux.Handle("POST /api/v1/emergency/incidents/{id}/surge/snapshot", chain(http.HandlerFunc(surge.RecordSnapshot)))
+	mux.Handle("POST /api/v1/emergency/incidents/{id}/surge/escalate", chain(http.HandlerFunc(surge.EscalateSurge)))
+	mux.Handle("POST /api/v1/emergency/incidents/{id}/surge/de-escalate", chain(http.HandlerFunc(surge.DeEscalateSurge)))
+	mux.Handle("GET /api/v1/emergency/incidents/{id}/surge/history", chain(http.HandlerFunc(surge.ListSnapshots)))
+
+	// ── CBRN decontamination (only active for type='cbrn' incidents) ──────────
+	mux.Handle("GET /api/v1/emergency/incidents/{id}/cbrn/zones", chain(http.HandlerFunc(cbrn.ListZones)))
+	mux.Handle("GET /api/v1/emergency/incidents/{id}/cbrn/patients", chain(http.HandlerFunc(cbrn.ListPatients)))
+	mux.Handle("POST /api/v1/emergency/incidents/{id}/cbrn/patients/{pid}/decon-start", chain(http.HandlerFunc(cbrn.StartDecon)))
+	mux.Handle("POST /api/v1/emergency/incidents/{id}/cbrn/patients/{pid}/decon-complete", chain(http.HandlerFunc(cbrn.CompleteDecon)))
 
 	return mux
 }

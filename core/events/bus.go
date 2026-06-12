@@ -31,6 +31,14 @@ const (
 	EventBackupStarted  = "backup.started"
 	EventBackupComplete = "backup.complete"
 	EventBackupFailed   = "backup.failed"
+
+	// Emergency & disaster management events
+	EventIncidentDeclared  = "incident.declared"
+	EventIncidentActivated = "incident.activated"
+	EventIncidentEscalated = "incident.escalated"
+	EventIncidentStandDown = "incident.stand_down"
+	EventSurgeLevelChanged = "incident.surge.level_changed"
+	EventMCITriageBatch    = "incident.mci.triage_batch"
 )
 
 // subscribeAllKey is the internal key used to register handlers that receive every event.

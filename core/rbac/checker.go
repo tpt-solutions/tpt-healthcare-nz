@@ -111,6 +111,22 @@ func (c *Checker) CanAccess(ctx context.Context, principal *auth.Principal, reso
 
 	case "pharmacy":
 		return slices.Contains(roles, string(RolePharmacist))
+
+	case "emergency.incident", "emergency.log", "emergency.resource",
+		"emergency.mci", "emergency.surge", "emergency.cbrn":
+		// Incident declaration and MCI triage open to all clinical staff.
+		// Stand-down and command assignments restricted to IC / ERC roles.
+		if action == "read" {
+			return slices.ContainsFunc(roles, func(r string) bool {
+				return r == string(RoleClinician) || r == string(RoleNurse) ||
+					r == string(RolePracticeAdmin) || r == string(RoleNetworkAdmin) ||
+					r == string(RoleIncidentCommander) || r == string(RoleEmergencyResponseCoordinator)
+			})
+		}
+		return slices.ContainsFunc(roles, func(r string) bool {
+			return r == string(RoleClinician) || r == string(RoleNurse) ||
+				r == string(RoleIncidentCommander) || r == string(RoleEmergencyResponseCoordinator)
+		})
 	}
 
 	// Unknown resource — deny by default.

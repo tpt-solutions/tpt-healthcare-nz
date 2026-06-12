@@ -1,0 +1,70 @@
+{
+  "common.loading": "E tūtaki ana…",
+  "common.error": "He hapa. Ngāua anō.",
+  "common.save": "Tiaki",
+  "common.cancel": "Whakakore",
+  "common.confirm": "Whakau",
+  "common.delete": "Muku",
+  "common.edit": "Tāiri",
+  "common.back": "Hoki",
+  "common.close": "Katia",
+  "common.search": "Rapu",
+  "common.yes": "Āe",
+  "common.no": "Kāo",
+  "common.required": "Hiahiatia",
+  "common.optional": "Āheitanga",
+
+  "portal.dashboard.title": "Tōku Hauora",
+  "portal.dashboard.appointments": "Ōku Tūnga",
+  "portal.dashboard.messages": "Ngā Karere",
+  "portal.dashboard.results": "Ngā Hua Whakamātautau",
+  "portal.dashboard.medications": "Ngā Rongoā",
+  "portal.dashboard.documents": "Ōku Tuhinga",
+
+  "portal.appointment.book": "Tāpaea he Tūnga",
+  "portal.appointment.cancel": "Whakakore Tūnga",
+  "portal.appointment.reschedule": "Whakararangi Anō",
+  "portal.appointment.checkin": "Tāurutanga",
+  "portal.appointment.confirm_prompt": "Patua te 1 ki te whakau, 2 ki te whakakore i tēnei tūnga.",
+  "portal.appointment.waitlist_join": "Uru ki te Rārangi Tatari",
+  "portal.appointment.waitlist_leave": "Wehe i te Rārangi Tatari",
+
+  "portal.queue.position": "Ko koe te tau {{position}} i roto i te rārangi",
+  "portal.queue.wait": "Tatari tūāhua: {{minutes}} meneti",
+  "portal.queue.called": "Kua rite te rata māu!",
+  "portal.queue.checkin_success": "Kua tāuruhia koe. Noho mai.",
+
+  "portal.messaging.new_message": "Karere Hou",
+  "portal.messaging.send": "Tuku",
+  "portal.messaging.placeholder": "Tuhia tōu karere…",
+  "portal.messaging.reply_note": "Ka taea ngā whakautu i roto i te rā mahi kotahi.",
+
+  "portal.forms.title": "Puka Whakamōhio",
+  "portal.forms.complete_before": "Whakaurua tēnei puka i mua i tō tūnga i {{date}}.",
+  "portal.forms.submit": "Tuku Puka",
+  "portal.forms.submitted": "Tēnā koe — kua tae mai tō puka.",
+
+  "portal.settings.language": "Reo",
+  "portal.settings.notifications": "Ngā Āhuatanga Whakamōhio",
+  "portal.settings.notifications.appointment_reminder": "Whakamahara tūnga",
+  "portal.settings.notifications.test_result": "Ngā hua whakamātautau",
+  "portal.settings.notifications.recall": "Ngā karangatanga hauora",
+  "portal.settings.notifications.message": "Ngā karere",
+
+  "clinic.encounter.dictate": "Kōrero",
+  "clinic.encounter.dictate.listening": "E whakarongo ana…",
+  "clinic.encounter.dictate.stop": "Mutu",
+  "clinic.encounter.dictate.unsupported": "Kāore e tautokohia ana te kōrero i tēnei pūkanohi",
+
+  "clinic.problem_list.title": "Rārangi Raruraru",
+  "clinic.problem_list.add": "Tāpiri Raruraru",
+
+  "clinic.allergy.title": "Ngā Mate Āwhero",
+  "clinic.allergy.add": "Tāpiri Āwhero",
+  "clinic.allergy.alert": "Matohi āwhero: {{substance}}",
+
+  "clinic.news2.title": "Tohu NEWS2",
+  "clinic.news2.risk.low": "Tūraru iti",
+  "clinic.news2.risk.medium": "Tūraru waenganui",
+  "clinic.news2.risk.high": "Tūraru teitei — whakaaro ināianei"
+}
