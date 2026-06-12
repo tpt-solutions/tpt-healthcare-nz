@@ -22,9 +22,17 @@ use (
 	./modules/tpt-oncology
 	./modules/tpt-osteopathy
 	./modules/tpt-palliative
+	./modules/tpt-blood-bank
+	./modules/tpt-clinical-trials
+	./modules/tpt-dental
+	./modules/tpt-disability
+	./modules/tpt-epidemiology
+	./modules/tpt-health-billing
 	./modules/tpt-pathology
 	./modules/tpt-pharmacy
 	./modules/tpt-practice
+	./modules/tpt-screening
+	./modules/tpt-telehealth
 	./modules/tpt-radiology
 	./modules/tpt-rehabilitation
 	./modules/tpt-renal

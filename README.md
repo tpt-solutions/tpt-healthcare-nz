@@ -63,6 +63,7 @@ Specialty modules (`modules/tpt-doctor`, `modules/tpt-pharmacy`, etc.) import `c
 - **AES-256-GCM** field encryption for all PHI at rest
 - **Multi-tenant** — tenant extraction middleware, per-tenant RBAC
 - **Observability** — OpenTelemetry tracing, Prometheus metrics, structured `slog` logging
+- **PWA-ready** — encrypted IndexedDB offline store (`@tpt/offline-store`), PIN lock, Web Bluetooth vitals (`@tpt/diagnostics`)
 - **Privacy Act 2020 & HIPC 2020** compliant by design
 
 ---
@@ -75,6 +76,7 @@ Specialty modules (`modules/tpt-doctor`, `modules/tpt-pharmacy`, etc.) import `c
 | `tpt-pharmacy` | Pharmacy dispensing and prescriptions |
 | `tpt-hospital` | Hospital inpatient and outpatient |
 | `tpt-mental-health` | Mental health (extra-sensitive consent) |
+| `tpt-addiction` | Addiction and substance use |
 | `tpt-aged-care` | Aged residential and community care |
 | `tpt-maternal-child-health` | Maternity and child health |
 | `tpt-oncology` | Oncology and cancer services |
@@ -87,15 +89,24 @@ Specialty modules (`modules/tpt-doctor`, `modules/tpt-pharmacy`, etc.) import `c
 | `tpt-renal` | Renal and dialysis |
 | `tpt-allied-health` | Allied health (physiotherapy, OT, etc.) |
 | `tpt-community-health` | Community nursing and district health |
-| `tpt-mental-health` | Addiction and substance use |
 | `tpt-counselling` | Counselling and psychotherapy |
 | `tpt-nutrition` | Dietetics and nutrition |
 | `tpt-vision` | Optometry and ophthalmology |
 | `tpt-chiropractic` | Chiropractic |
 | `tpt-osteopathy` | Osteopathy |
-| `tpt-acupuncture` | Acupuncture and TCM |
+| `tpt-acupuncture` | Acupuncture |
+| `tpt-tcm` | Traditional Chinese Medicine |
 | `tpt-massage` | Massage therapy |
 | `tpt-naturopathy` | Naturopathy |
+| `tpt-dental` | Dentistry |
+| `tpt-disability` | Disability support services |
+| `tpt-blood-bank` | Blood bank and transfusion |
+| `tpt-clinical-trials` | Clinical trials management |
+| `tpt-epidemiology` | Epidemiology and public health |
+| `tpt-health-billing` | Health billing and claims |
+| `tpt-practice` | Practice management |
+| `tpt-screening` | Screening programmes |
+| `tpt-telehealth` | Telehealth and virtual consultations |
 
 ---
 
@@ -103,7 +114,7 @@ Specialty modules (`modules/tpt-doctor`, `modules/tpt-pharmacy`, etc.) import `c
 
 - **Go 1.22+**
 - **Node.js 20+** and **pnpm 9+**
-- **Docker Desktop** (or Docker Engine + Compose plugin)
+- **PostgreSQL 16+** and **Redis 7+** — via Docker (see Quick Start) or natively (see [Without Docker](#without-docker))
 - `golangci-lint` v1.60+ — `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`
 
 ---
@@ -133,7 +144,63 @@ make test
 ```
 
 The interop gateway starts on `http://localhost:8080` by default.  
-The clinic frontend starts on `http://localhost:5173`.
+The clinic frontend starts on `http://localhost:3000`, portal on `http://localhost:3001`, and admin on `http://localhost:3002`.
+
+---
+
+## Without Docker
+
+You can run PostgreSQL and Redis natively if Docker Desktop is not available.
+
+### WSL2 (recommended on Windows)
+
+```bash
+sudo apt update && sudo apt install -y postgresql-16 redis-server
+sudo service postgresql start
+sudo service redis-server start
+sudo -u postgres psql -c "CREATE USER tpt WITH PASSWORD 'tpt';"
+sudo -u postgres psql -c "CREATE DATABASE tpt_healthcare_dev OWNER tpt;"
+```
+
+### Native Windows
+
+**PostgreSQL**: `winget install PostgreSQL.PostgreSQL.16` or download from [postgresql.org](https://www.postgresql.org/download/windows/).
+
+**Redis**: install [Memurai](https://www.memurai.com/) (Redis-compatible, free developer edition).
+
+Then create the dev database in psql or pgAdmin:
+
+```sql
+CREATE USER tpt WITH PASSWORD 'tpt';
+CREATE DATABASE tpt_healthcare_dev OWNER tpt;
+```
+
+### Native macOS/Linux
+
+```bash
+brew install postgresql@16 redis   # macOS
+brew services start postgresql@16 redis
+createuser -P tpt   # enter password: tpt
+createdb -O tpt tpt_healthcare_dev
+```
+
+### After setting up the database
+
+Use these values in your `.env` (matching the `.env.example` defaults):
+
+```
+DATABASE_URL=postgres://tpt:tpt@localhost:5432/tpt_healthcare_dev
+REDIS_URL=redis://localhost:6379
+```
+
+Then build and run the interop server directly (no Docker):
+
+```bash
+make build
+./bin/tpt-health-interop serve
+```
+
+---
 
 ### Generating an ENCRYPTION_KEY
 
@@ -185,13 +252,15 @@ This platform is designed for use in New Zealand's regulated health information 
 tpt-healthcare-nz/
 ├── core/           # Shared Go module — DB, auth, FHIR, NZ integrations, audit
 ├── interop/        # tpt-health-interop service — FHIR REST gateway
-├── modules/        # Specialty-specific Go modules
-├── apps/           # Frontend applications (React + Vite)
+├── modules/        # Specialty-specific Go modules (35 clinical specialties)
+├── apps/           # Frontend applications (React + Vite PWAs)
 ├── packages/       # Shared frontend packages (@tpt/*)
 ├── deploy/         # Docker Compose files
-├── tools/          # Code generation (FHIR type generator)
+├── tools/          # Code generation (FHIR type generator, icon generator)
 └── installer/      # First-run wizard and installers
 ```
+
+> **Go module namespace**: The GitHub repository is `tpt-healthcare-nz` but the Go module namespace used in all `go.mod` files is `github.com/PhillipC05/tpt-healthcare` (without `-nz`). These are different by design — see [CLAUDE.md](CLAUDE.md) for details.
 
 Full layout and conventions: [CLAUDE.md](CLAUDE.md)
 

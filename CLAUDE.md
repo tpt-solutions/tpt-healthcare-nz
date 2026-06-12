@@ -43,9 +43,42 @@ tpt-healthcare-nz/
 │   ├── cmd/tpt-health-interop/  # Cobra CLI entrypoint (serve, migrate, validate)
 │   └── api/                     # HTTP server and FHIR REST API handlers
 │
-├── modules/                     # Per-specialty Go modules (tpt-doctor, tpt-pharmacy, etc.)
-│   └── tpt-doctor/
-│       └── go.mod               # module github.com/PhillipC05/tpt-healthcare/modules/tpt-doctor
+├── modules/                     # Per-specialty Go modules (one per clinical specialty)
+│   ├── tpt-doctor/              # General practice / primary care
+│   ├── tpt-pharmacy/            # Pharmacy dispensing and prescriptions
+│   ├── tpt-hospital/            # Hospital inpatient and outpatient
+│   ├── tpt-mental-health/       # Mental health (extra-sensitive consent)
+│   ├── tpt-addiction/           # Addiction and substance use
+│   ├── tpt-aged-care/           # Aged residential and community care
+│   ├── tpt-maternal-child-health/ # Maternity and child health
+│   ├── tpt-oncology/            # Oncology and cancer services
+│   ├── tpt-radiology/           # Radiology and imaging
+│   ├── tpt-pathology/           # Pathology and lab results
+│   ├── tpt-cardiology/          # Cardiology
+│   ├── tpt-immunisation/        # Immunisation register
+│   ├── tpt-rehabilitation/      # Rehabilitation services
+│   ├── tpt-palliative/          # Palliative care
+│   ├── tpt-renal/               # Renal and dialysis
+│   ├── tpt-allied-health/       # Allied health (physio, OT, etc.)
+│   ├── tpt-community-health/    # Community nursing and district health
+│   ├── tpt-counselling/         # Counselling and psychotherapy
+│   ├── tpt-nutrition/           # Dietetics and nutrition
+│   ├── tpt-vision/              # Optometry and ophthalmology
+│   ├── tpt-chiropractic/        # Chiropractic
+│   ├── tpt-osteopathy/          # Osteopathy
+│   ├── tpt-acupuncture/         # Acupuncture
+│   ├── tpt-tcm/                 # Traditional Chinese Medicine
+│   ├── tpt-massage/             # Massage therapy
+│   ├── tpt-naturopathy/         # Naturopathy
+│   ├── tpt-dental/              # Dentistry
+│   ├── tpt-disability/          # Disability support services
+│   ├── tpt-blood-bank/          # Blood bank and transfusion
+│   ├── tpt-clinical-trials/     # Clinical trials management
+│   ├── tpt-epidemiology/        # Epidemiology and public health
+│   ├── tpt-health-billing/      # Health billing and claims
+│   ├── tpt-practice/            # Practice management
+│   ├── tpt-screening/           # Screening programmes
+│   └── tpt-telehealth/          # Telehealth and virtual consultations
 │
 ├── apps/                        # Frontend applications (pnpm workspace)
 │   ├── tpt-clinic/              # Clinician-facing React/Vite app
@@ -56,7 +89,9 @@ tpt-healthcare-nz/
 │   ├── fhir-types/              # @tpt/fhir-types — FHIR R5 + NZ extensions
 │   ├── ui/                      # @tpt/ui — shared React component library (Tailwind)
 │   ├── api-client/              # @tpt/api-client — openapi-typescript generated client
-│   └── nz-codes/                # @tpt/nz-codes — NHI validation, ACC codes, NZ URIs
+│   ├── nz-codes/                # @tpt/nz-codes — NHI validation, ACC codes, NZ URIs
+│   ├── diagnostics/             # @tpt/diagnostics — PWA diagnostic hooks (camera vitals, Web Bluetooth, sensor tests)
+│   └── offline-store/           # @tpt/offline-store — encrypted IndexedDB offline store + PIN lock context
 │
 ├── deploy/
 │   ├── docker-compose.dev.yml   # Local dev stack (Postgres + Redis + interop)
@@ -92,11 +127,14 @@ use (
 
 ### Module naming convention
 
-| Module | Path |
-|--------|------|
-| `github.com/PhillipC05/tpt-healthcare/core` | `./core` |
-| `github.com/PhillipC05/tpt-healthcare/interop` | `./interop` |
-| `github.com/PhillipC05/tpt-healthcare/modules/tpt-doctor` | `./modules/tpt-doctor` |
+> **Note on module paths vs. GitHub repo name**: The GitHub repository is `https://github.com/PhillipC05/tpt-healthcare-nz` (with `-nz`), but the Go module namespace is `github.com/PhillipC05/tpt-healthcare` (without `-nz`). This is intentional — the module path is a unique identifier, not a `go get` URL. All `go.mod` files use the shorter namespace. Do not change module paths without updating every `go.mod` and every import in the codebase.
+
+| Module | `go.mod` module path |
+|--------|---------------------|
+| `core` | `github.com/PhillipC05/tpt-healthcare/core` |
+| `interop` | `github.com/PhillipC05/tpt-healthcare/interop` |
+| `modules/tpt-doctor` | `github.com/PhillipC05/tpt-healthcare/modules/tpt-doctor` |
+| _(all other modules follow the same pattern)_ | `github.com/PhillipC05/tpt-healthcare/modules/<name>` |
 
 Downstream modules depend on `core` via a `replace` directive pointing to `../core` in their `go.mod`, in addition to the workspace. This ensures the module resolves correctly both inside and outside the workspace.
 
@@ -112,6 +150,59 @@ pnpm workspaces (`pnpm-workspace.yaml`) include:
 Always run `pnpm install` from the repository root. Never run `npm install` or `yarn`; use `pnpm` exclusively.
 
 Package naming: all shared packages use the `@tpt/` scope (e.g., `@tpt/ui`, `@tpt/fhir-types`).
+
+**pnpm build script approval**: `esbuild` requires a native build step. This is pre-approved in `pnpm-workspace.yaml` via `onlyBuiltDependencies`. If you add a dependency with native build scripts, add its name to that list. If you see `[ERR_PNPM_IGNORED_BUILDS]` after a fresh clone, run `pnpm rebuild esbuild` once to build the previously-skipped binary.
+
+---
+
+## Local Development Without Docker
+
+If Docker is unavailable, run PostgreSQL and Redis natively. The `.env.example` defaults connect to `localhost:5432` and `localhost:6379`.
+
+### Option A — WSL2 (recommended on Windows)
+
+```bash
+sudo apt update && sudo apt install -y postgresql-16 redis-server
+sudo service postgresql start
+sudo service redis-server start
+sudo -u postgres psql -c "CREATE USER tpt WITH PASSWORD 'tpt';"
+sudo -u postgres psql -c "CREATE DATABASE tpt_healthcare_dev OWNER tpt;"
+```
+
+Then set in `.env`:
+```
+DATABASE_URL=postgres://tpt:tpt@localhost:5432/tpt_healthcare_dev
+REDIS_URL=redis://localhost:6379
+```
+
+### Option B — Native Windows
+
+**PostgreSQL**: install via `winget install PostgreSQL.PostgreSQL.16` (or the installer from postgresql.org).
+
+**Redis**: install [Memurai](https://www.memurai.com/) (Redis-compatible, free developer edition) or enable the Redis feature via WSL2 as above.
+
+After installing, create the dev database:
+
+```sql
+-- run in psql / pgAdmin
+CREATE USER tpt WITH PASSWORD 'tpt';
+CREATE DATABASE tpt_healthcare_dev OWNER tpt;
+```
+
+### Starting the interop server without Docker
+
+Build and run the interop binary directly (no container required):
+
+```bash
+make build
+./bin/tpt-health-interop serve
+```
+
+Migrations run automatically on `serve` if `AUTO_MIGRATE=true` is set in `.env`, or run them explicitly:
+
+```bash
+./bin/tpt-health-interop migrate
+```
 
 ---
 
