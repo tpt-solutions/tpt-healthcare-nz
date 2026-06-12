@@ -56,15 +56,35 @@
   "clinic.encounter.dictate.stop": "Mutu",
   "clinic.encounter.dictate.unsupported": "Kāore e tautokohia ana te kōrero i tēnei pūkanohi",
 
+  "clinic.queue.call_next": "Karanga i te Mea Hou",
+  "clinic.queue.check_in": "Tāurutia te Tūroro",
+  "clinic.queue.no_show": "Tohua he Kore Ahu",
+
   "clinic.problem_list.title": "Rārangi Raruraru",
   "clinic.problem_list.add": "Tāpiri Raruraru",
+  "clinic.problem_list.promote": "Kake ki te Rārangi Raruraru",
 
   "clinic.allergy.title": "Ngā Mate Āwhero",
   "clinic.allergy.add": "Tāpiri Āwhero",
   "clinic.allergy.alert": "Matohi āwhero: {{substance}}",
 
+  "clinic.ddi.alert": "Matohi tauwehe rongoā",
+  "clinic.ddi.severity.contraindicated": "Kāore e taea",
+  "clinic.ddi.severity.major": "Tauwehe nui",
+  "clinic.ddi.severity.moderate": "Tauwehe waenganui",
+  "clinic.ddi.severity.minor": "Tauwehe iti",
+
   "clinic.news2.title": "Tohu NEWS2",
   "clinic.news2.risk.low": "Tūraru iti",
   "clinic.news2.risk.medium": "Tūraru waenganui",
-  "clinic.news2.risk.high": "Tūraru teitei — whakaaro ināianei"
+  "clinic.news2.risk.high": "Tūraru teitei — whakaaro ināianei",
+
+  "admin.recall.title": "Whakahaere Karangatanga",
+  "admin.recall.create": "Hanga Karangatanga",
+  "admin.recall.due": "E Tū Ana",
+  "admin.recall.overdue": "Kua Roa",
+  "admin.recall.status.pending": "E Tatari Ana",
+  "admin.recall.status.sent": "Kua Mōhiotia",
+  "admin.recall.status.booked": "Kua Tāpaea",
+  "admin.recall.status.completed": "Kua Oti"
 }

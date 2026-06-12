@@ -4,21 +4,87 @@
   "common.save": "Tauhi",
   "common.cancel": "Fakatoʻo",
   "common.confirm": "Fakamoʻoni",
+  "common.delete": "Fakaʻauha",
+  "common.edit": "Liliu",
   "common.back": "Toe Foki",
   "common.close": "Fakaʻosi",
   "common.search": "Kumi",
   "common.yes": "ʻIo",
   "common.no": "Ikai",
+  "common.required": "Fiemaʻu",
+  "common.optional": "Taʻefiemaʻu",
+
   "portal.dashboard.title": "Hoku Moʻui Lelei",
   "portal.dashboard.appointments": "Hoku Ngaahi Taimi",
   "portal.dashboard.messages": "Ngaahi Nūnuʻa",
+  "portal.dashboard.results": "Ngaahi Ola Sivi",
+  "portal.dashboard.medications": "Ngaahi Faito'o",
+  "portal.dashboard.documents": "Hoku Ngaahi Tohi",
+
   "portal.appointment.book": "Fokotuʻu ha Taimi",
   "portal.appointment.cancel": "Fakatoʻo ʻa e Taimi",
+  "portal.appointment.reschedule": "Liliu ʻa e Taimi",
   "portal.appointment.checkin": "Lēkooti Hū Maʻu",
+  "portal.appointment.confirm_prompt": "Tali 1 ke fakamoʻoni pe 2 ke fakatoʻo ʻa e taimi ko ʻeni.",
+  "portal.appointment.waitlist_join": "Hū ki he Lāine Tatali",
+  "portal.appointment.waitlist_leave": "Mavahe mei he Lāine Tatali",
+
   "portal.queue.position": "Ko koe ko e fika {{position}} ʻi he laine",
   "portal.queue.wait": "Fakatali ʻoku fakafuofua ki ha: {{minutes}} miniti",
   "portal.queue.called": "ʻOku hoko ʻa e toketā kiate koe!",
+  "portal.queue.checkin_success": "Kuo ke lēkooti hū maʻu. Kataki ʻo nofo.",
+
+  "portal.messaging.new_message": "Nūnuʻa Foʻou",
   "portal.messaging.send": "Foaki",
+  "portal.messaging.placeholder": "Tohi ho nūnuʻa…",
+  "portal.messaging.reply_note": "ʻE lava ke maʻu ha tali mei he faleʻaonga ki he ʻaho ngāue ʻe taha.",
+
+  "portal.forms.title": "Fomu Faka-kimuʻa ʻo e Fakakaukau",
+  "portal.forms.complete_before": "Kataki ʻo fakaʻosi ʻa e fomu ko ʻeni kimuʻa ʻo ho taimi ʻi he {{date}}.",
   "portal.forms.submit": "Foaki ʻa e Pepa",
-  "portal.settings.language": "Lea"
+  "portal.forms.submitted": "Mālō — kuo maʻu hoʻo fomu.",
+
+  "portal.settings.language": "Lea",
+  "portal.settings.notifications": "Ngaahi Filifiliga Fakahā",
+  "portal.settings.notifications.appointment_reminder": "Ngaahi fakamanatu taimi",
+  "portal.settings.notifications.test_result": "Ngaahi ola sivi",
+  "portal.settings.notifications.recall": "Ngaahi fakamanatu moʻui lelei",
+  "portal.settings.notifications.message": "Ngaahi nūnuʻa malu",
+
+  "clinic.encounter.dictate": "Lea",
+  "clinic.encounter.dictate.listening": "ʻOku fofonga…",
+  "clinic.encounter.dictate.stop": "Tuku",
+  "clinic.encounter.dictate.unsupported": "ʻOku ʻikai poupouʻi ʻa e lea ʻaki ʻi he browser ko ʻeni",
+
+  "clinic.queue.call_next": "Ui ʻa e Hoko",
+  "clinic.queue.check_in": "Lēkooti Hū ʻa e Toketa",
+  "clinic.queue.no_show": "Fakaʻilonga Ko e ʻikai ʻAʻahi",
+
+  "clinic.problem_list.title": "Lisi Palopalema",
+  "clinic.problem_list.add": "Tānaki Palopalema",
+  "clinic.problem_list.promote": "Fakamāʻolunga ki he Lisi Palopalema",
+
+  "clinic.allergy.title": "Ngaahi Alisi",
+  "clinic.allergy.add": "Tānaki Alisi",
+  "clinic.allergy.alert": "Fakaʻilonga alisi: {{substance}}",
+
+  "clinic.ddi.alert": "Fakaʻilonga fetuʻutaki foʻi vaʻa",
+  "clinic.ddi.severity.contraindicated": "ʻOku tapu",
+  "clinic.ddi.severity.major": "Fetuʻutaki lahi",
+  "clinic.ddi.severity.moderate": "Fetuʻutaki vahevahe",
+  "clinic.ddi.severity.minor": "Fetuʻutaki siʻisiʻi",
+
+  "clinic.news2.title": "Fika NEWS2",
+  "clinic.news2.risk.low": "Faingataʻa siʻisiʻi",
+  "clinic.news2.risk.medium": "Faingataʻa vahevahe",
+  "clinic.news2.risk.high": "Faingataʻa lahi — fakamālohi ʻaupito",
+
+  "admin.recall.title": "Puleʻi ʻo e Foki",
+  "admin.recall.create": "Ngaohi ʻa e Foki",
+  "admin.recall.due": "Taimi",
+  "admin.recall.overdue": "Kuopau",
+  "admin.recall.status.pending": "ʻOku tatali",
+  "admin.recall.status.sent": "Kuo fakaʻilo",
+  "admin.recall.status.booked": "Kuo lēkooti",
+  "admin.recall.status.completed": "Kuo ʻosi"
 }

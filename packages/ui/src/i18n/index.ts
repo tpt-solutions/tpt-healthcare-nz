@@ -7,13 +7,20 @@
  *   sm    — Samoan (Gagana Samoa)
  *   to    — Tongan (Lea Fakatonga)
  *   zh    — Mandarin Chinese (Simplified)
+ *   hi    — Hindi (हिन्दी)
+ *   yue   — Cantonese (廣東話)
+ *   fr    — French (Français)
+ *   es    — Spanish (Español)
+ *   ne    — Nepali (नेपाली)
+ *   vi    — Vietnamese (Tiếng Việt)
  *
  * Translation files live alongside this file as JSON:
- *   src/i18n/en.json
- *   src/i18n/mi.json
- *   src/i18n/sm.json
- *   src/i18n/to.json
- *   src/i18n/zh.json
+ *   src/i18n/en.json   src/i18n/hi.json
+ *   src/i18n/mi.json   src/i18n/yue.json
+ *   src/i18n/sm.json   src/i18n/fr.json
+ *   src/i18n/to.json   src/i18n/es.json
+ *   src/i18n/zh.json   src/i18n/ne.json
+ *                      src/i18n/vi.json
  *
  * Usage:
  *   import { useTranslation } from '@tpt/ui/i18n'
@@ -29,14 +36,20 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 
-export type SupportedLanguage = 'en' | 'mi' | 'sm' | 'to' | 'zh'
+export type SupportedLanguage = 'en' | 'mi' | 'sm' | 'to' | 'zh' | 'hi' | 'yue' | 'fr' | 'es' | 'ne' | 'vi'
 
 export const SUPPORTED_LANGUAGES: Record<SupportedLanguage, string> = {
   en: 'English',
   mi: 'Te Reo Māori',
   sm: 'Gagana Samoa',
   to: 'Lea Fakatonga',
-  zh: '中文',
+  zh: '中文（普通话）',
+  hi: 'हिन्दी',
+  yue: '廣東話',
+  fr: 'Français',
+  es: 'Español',
+  ne: 'नेपाली',
+  vi: 'Tiếng Việt',
 }
 
 type TranslationMap = Record<string, string>
@@ -66,18 +79,29 @@ const loaders: Record<SupportedLanguage, Loader> = {
   sm: () => import('./sm.json'),
   to: () => import('./to.json'),
   zh: () => import('./zh.json'),
+  hi: () => import('./hi.json'),
+  yue: () => import('./yue.json'),
+  fr: () => import('./fr.json'),
+  es: () => import('./es.json'),
+  ne: () => import('./ne.json'),
+  vi: () => import('./vi.json'),
 }
 
 /**
  * Detect the user's preferred language from browser settings, falling back
  * to 'en'. Only returns a language we actually support.
+ *
+ * Special cases:
+ *   zh-HK / yue-* → 'yue'  (Cantonese; yue is a 3-char BCP 47 subtag)
  */
 export function detectLanguage(): SupportedLanguage {
   const stored = localStorage.getItem(STORAGE_KEY) as SupportedLanguage | null
   if (stored && stored in SUPPORTED_LANGUAGES) return stored
 
-  const nav = navigator.language.slice(0, 2) as SupportedLanguage
-  if (nav in SUPPORTED_LANGUAGES) return nav
+  const nav = navigator.language
+  if (nav === 'zh-HK' || nav === 'yue' || nav.startsWith('yue-')) return 'yue'
+  const code = nav.slice(0, 2) as SupportedLanguage
+  if (code in SUPPORTED_LANGUAGES) return code
   return 'en'
 }
 

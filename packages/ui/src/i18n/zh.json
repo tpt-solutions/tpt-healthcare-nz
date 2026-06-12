@@ -11,34 +11,80 @@
   "common.search": "搜索",
   "common.yes": "是",
   "common.no": "否",
+  "common.required": "必填",
+  "common.optional": "选填",
+
   "portal.dashboard.title": "我的健康",
   "portal.dashboard.appointments": "我的预约",
   "portal.dashboard.messages": "消息",
   "portal.dashboard.results": "检查结果",
   "portal.dashboard.medications": "药物",
   "portal.dashboard.documents": "我的文件",
+
   "portal.appointment.book": "预约",
   "portal.appointment.cancel": "取消预约",
   "portal.appointment.reschedule": "重新安排",
   "portal.appointment.checkin": "签到",
   "portal.appointment.confirm_prompt": "回复1确认，回复2取消此预约。",
   "portal.appointment.waitlist_join": "加入候补名单",
+  "portal.appointment.waitlist_leave": "退出候补名单",
+
   "portal.queue.position": "您排在第{{position}}位",
   "portal.queue.wait": "预计等待时间：{{minutes}}分钟",
   "portal.queue.called": "医生准备好为您服务！",
   "portal.queue.checkin_success": "签到成功，请就座。",
+
   "portal.messaging.new_message": "新消息",
   "portal.messaging.send": "发送",
   "portal.messaging.placeholder": "输入您的消息…",
+  "portal.messaging.reply_note": "诊所回复可能需要1个工作日。",
+
   "portal.forms.title": "就诊前问卷",
+  "portal.forms.complete_before": "请在 {{date}} 预约前填写此问卷。",
   "portal.forms.submit": "提交问卷",
   "portal.forms.submitted": "感谢您——您的问卷已收到。",
+
   "portal.settings.language": "语言",
   "portal.settings.notifications": "通知偏好",
+  "portal.settings.notifications.appointment_reminder": "预约提醒",
+  "portal.settings.notifications.test_result": "检查结果",
+  "portal.settings.notifications.recall": "健康召回",
+  "portal.settings.notifications.message": "安全消息",
+
   "clinic.encounter.dictate": "语音输入",
   "clinic.encounter.dictate.listening": "正在聆听…",
   "clinic.encounter.dictate.stop": "停止",
+  "clinic.encounter.dictate.unsupported": "此浏览器不支持语音输入",
+
+  "clinic.queue.call_next": "叫下一位",
+  "clinic.queue.check_in": "为患者办理签到",
+  "clinic.queue.no_show": "标记为缺席",
+
+  "clinic.problem_list.title": "问题列表",
+  "clinic.problem_list.add": "添加问题",
+  "clinic.problem_list.promote": "加入问题列表",
+
+  "clinic.allergy.title": "过敏",
+  "clinic.allergy.add": "添加过敏",
   "clinic.allergy.alert": "过敏警告：{{substance}}",
+
+  "clinic.ddi.alert": "药物相互作用警告",
+  "clinic.ddi.severity.contraindicated": "禁忌",
+  "clinic.ddi.severity.major": "严重相互作用",
+  "clinic.ddi.severity.moderate": "中度相互作用",
+  "clinic.ddi.severity.minor": "轻度相互作用",
+
   "clinic.news2.title": "NEWS2评分",
-  "clinic.news2.risk.high": "高风险——立即升级处理"
+  "clinic.news2.risk.low": "低风险",
+  "clinic.news2.risk.medium": "中等风险",
+  "clinic.news2.risk.high": "高风险——立即升级处理",
+
+  "admin.recall.title": "召回管理",
+  "admin.recall.create": "创建召回",
+  "admin.recall.due": "到期",
+  "admin.recall.overdue": "逾期",
+  "admin.recall.status.pending": "待处理",
+  "admin.recall.status.sent": "已通知",
+  "admin.recall.status.booked": "已预约",
+  "admin.recall.status.completed": "已完成"
 }
