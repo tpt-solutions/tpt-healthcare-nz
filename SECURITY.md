@@ -50,7 +50,7 @@ Include in your report:
 | High vulnerabilities (CVSS 7.0–8.9) patched | Within 30 days of confirmation |
 | Medium / low vulnerabilities | Next scheduled release |
 
-We treat the 72-hour acknowledgement deadline as a hard commitment. If you do not receive a response within 72 hours, escalate to `phillip@tpt.nz`.
+We treat the 72-hour acknowledgement deadline as a hard commitment. If you do not receive a response within 72 hours, escalate to `support@tptsolutions.co.nz`.
 
 ### Coordinated Disclosure
 

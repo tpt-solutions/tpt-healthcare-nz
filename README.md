@@ -3,7 +3,7 @@
 Open-source New Zealand healthcare platform built on FHIR R5. Provides a compliant interoperability gateway, national system integrations (NHI, HPI, NES, ACC, PHARMAC), and specialty-specific clinical modules for NZ healthcare providers.
 
 [![Go 1.22](https://img.shields.io/badge/Go-1.22-00ADD8?logo=go)](https://go.dev)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![FHIR R5](https://img.shields.io/badge/FHIR-R5-orange)](https://hl7.org/fhir/R5/)
 [![HIPC 2020](https://img.shields.io/badge/HIPC-2020-blue)](https://www.privacy.org.nz/privacy-act-2020/codes-of-practice/hipc2020/)
 
@@ -276,4 +276,4 @@ See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy. Do not o
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2024 tpt-healthcare-nz contributors
+[Apache 2.0](LICENSE) — Copyright 2024 tpt-healthcare-nz contributors
