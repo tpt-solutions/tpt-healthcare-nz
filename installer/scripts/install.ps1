@@ -37,7 +37,7 @@ $ErrorActionPreference = 'Stop'
 # ---------------------------------------------------------------------------
 $AppName        = 'tpt-health-interop'
 $DisplayName    = 'TPT Health Interoperability Service'
-$GithubOrg      = 'PhillipC05'
+$GithubOrg      = 'tpt-solutions'
 $GithubRepo     = 'tpt-healthcare-nz'
 $ServiceName    = 'TptHealthInterop'
 $ServiceUser    = 'NT AUTHORITY\LocalService'

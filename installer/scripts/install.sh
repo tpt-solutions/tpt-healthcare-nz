@@ -30,7 +30,7 @@ header()  { printf "\n${BOLD}${CYAN}==> %s${RESET}\n" "$*"; }
 # Constants
 # ---------------------------------------------------------------------------
 APP_NAME="tpt-health-interop"
-GITHUB_ORG="PhillipC05"
+GITHUB_ORG="tpt-solutions"
 GITHUB_REPO="tpt-healthcare-nz"
 BINARY_VERSION="${TPT_VERSION:-latest}"
 DOWNLOAD_BASE="https://github.com/${GITHUB_ORG}/${GITHUB_REPO}/releases"

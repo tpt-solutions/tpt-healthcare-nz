@@ -13,6 +13,7 @@
     }
   },
   "scripts": { "build": "tsc", "typecheck": "tsc --noEmit" },
+  "dependencies": { "@tpt/nz-codes": "workspace:*" },
   "peerDependencies": { "react": "^18.0.0", "react-dom": "^18.0.0" },
   "devDependencies": { "typescript": "^5.4.0", "@types/react": "^18.0.0", "@types/react-dom": "^18.0.0" }
 }

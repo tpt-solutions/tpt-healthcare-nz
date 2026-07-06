@@ -127,7 +127,7 @@ use (
 
 ### Module naming convention
 
-> **Note on module paths vs. GitHub repo name**: The GitHub repository is `https://github.com/PhillipC05/tpt-healthcare-nz` (with `-nz`), but the Go module namespace is `github.com/PhillipC05/tpt-healthcare` (without `-nz`). This is intentional — the module path is a unique identifier, not a `go get` URL. All `go.mod` files use the shorter namespace. Do not change module paths without updating every `go.mod` and every import in the codebase.
+> **Note on module paths vs. GitHub repo name**: The GitHub repository is `https://github.com/tpt-solutions/tpt-healthcare-nz` (with `-nz`), but the Go module namespace is `github.com/PhillipC05/tpt-healthcare` (without `-nz`, and still under the original personal namespace). This is intentional — the module path is a unique identifier, not a `go get` URL, and does not need to track the repo's current owner. Do not change module paths without updating every `go.mod` and every import in the codebase.
 
 | Module | `go.mod` module path |
 |--------|---------------------|

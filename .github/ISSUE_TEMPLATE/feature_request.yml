@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest a feature or enhancement for tpt-healthcare-nz. This repository does not accept external pull requests — file an issue and a maintainer or internal agent will scope the work.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: The clinical, compliance, or workflow gap this addresses.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you'd like to see, at whatever level of detail you have.
+    validations:
+      required: true
+
+  - type: input
+    id: module
+    attributes:
+      label: Affected module/specialty (if known)
+      description: e.g. tpt-pharmacy, tpt-oncology, core/consent
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: compliance
+    attributes:
+      label: Compliance touchpoints
+      description: Check any that apply — these trigger an additional internal compliance review per CONTRIBUTING.md.
+      options:
+        - label: Touches consent, audit, or encryption
+        - label: Touches a national integration (NHI, NES, HPI, ACC, PHARMAC)
+        - label: Touches extra-sensitive records (mental health, addiction)

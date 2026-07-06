@@ -23,7 +23,7 @@ export class TptApiClient {
   }
 
   private buildUrl(path: string, params?: RequestOptions['params']): string {
-    const url = new URL(`${this.baseUrl}${path}`);
+    const url = new URL(`${this.baseUrl}${path}`, window.location.origin);
     if (params) {
       for (const [key, value] of Object.entries(params)) {
         if (value !== undefined) {

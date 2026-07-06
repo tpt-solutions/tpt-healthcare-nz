@@ -123,7 +123,7 @@ Specialty modules (`modules/tpt-doctor`, `modules/tpt-pharmacy`, etc.) import `c
 
 ```bash
 # 1. Clone
-git clone https://github.com/PhillipC05/tpt-healthcare-nz.git
+git clone https://github.com/tpt-solutions/tpt-healthcare-nz.git
 cd tpt-healthcare-nz
 
 # 2. Configure environment
@@ -220,7 +220,7 @@ Paste the output into `.env` as `ENCRYPTION_KEY=<value>`.
 | `make dev` | Start Postgres, Redis, and the interop server via Docker Compose |
 | `make build` | Build all Go binaries |
 | `make test` | Run all Go unit + integration tests |
-| `make test-race` | Run tests with the race detector (recommended before PRs) |
+| `make test-race` | Run tests with the race detector (recommended before merging) |
 | `make lint` | Run `golangci-lint` across all Go modules |
 | `make migrate` | Apply pending database migrations |
 | `pnpm dev` | Start all frontend apps in watch mode |
@@ -260,7 +260,7 @@ tpt-healthcare-nz/
 └── installer/      # First-run wizard and installers
 ```
 
-> **Go module namespace**: The GitHub repository is `tpt-healthcare-nz` but the Go module namespace used in all `go.mod` files is `github.com/PhillipC05/tpt-healthcare` (without `-nz`). These are different by design — see [CLAUDE.md](CLAUDE.md) for details.
+> **Go module namespace**: The GitHub repository is `tpt-solutions/tpt-healthcare-nz` but the Go module namespace used in all `go.mod` files is `github.com/PhillipC05/tpt-healthcare` (without `-nz`, and unrelated to the repo's current owner). These are different by design — see [CLAUDE.md](CLAUDE.md) for details.
 
 Full layout and conventions: [CLAUDE.md](CLAUDE.md)
 
@@ -268,7 +268,7 @@ Full layout and conventions: [CLAUDE.md](CLAUDE.md)
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for branching strategy, code style, testing requirements, and the compliance checklist that all PRs must pass.
+This repository does not accept external pull requests — contributions happen via issues. See [CONTRIBUTING.md](CONTRIBUTING.md) for branching strategy, code style, testing requirements, the issue process, and the compliance checklist that all changes must pass.
 
 ## Security
 

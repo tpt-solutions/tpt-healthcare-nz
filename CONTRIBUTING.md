@@ -1,6 +1,8 @@
 # Contributing to tpt-healthcare-nz
 
-Thank you for contributing to tpt-healthcare-nz. Because this codebase handles sensitive New Zealand health information, contributions are held to a higher standard than a typical open-source project. Please read this document fully before opening a pull request.
+Thank you for your interest in tpt-healthcare-nz. Because this codebase handles sensitive New Zealand health information, contributions are held to a higher standard than a typical open-source project.
+
+**This repository does not accept external pull requests.** Code changes are made internally (by tpt-solutions maintainers and their AI agents) in response to filed issues. If you've found a bug, have a feature request, or a security concern, please open an issue — see [Issue Process](#issue-process) below.
 
 ---
 
@@ -12,7 +14,7 @@ Thank you for contributing to tpt-healthcare-nz. Because this codebase handles s
 4. [Code Style](#code-style)
 5. [Testing Requirements](#testing-requirements)
 6. [Commit Message Format](#commit-message-format)
-7. [Pull Request Process](#pull-request-process)
+7. [Issue Process](#issue-process)
 8. [Adding New Modules](#adding-new-modules)
 9. [Compliance Checklist](#compliance-checklist)
 
@@ -38,12 +40,12 @@ If you are unfamiliar with these systems, review the linked resources in `docs/r
 
 ## Branching Strategy
 
-We use a trunk-based development model with short-lived feature branches.
+We use trunk-based development. Maintainers and their AI agents commit or push directly to `master`; there is no external pull request review step.
 
 | Branch | Purpose |
 |--------|---------|
-| `master` | Production-ready code. Protected. Merges require at least one reviewer approval. |
-| `feat/<scope>/<description>` | New features (e.g., `feat/nhi/patient-match-endpoint`) |
+| `master` | Production-ready code. Protected: direct pushes require CI to pass; force-pushes and deletion are blocked. |
+| `feat/<scope>/<description>` | New features (e.g., `feat/nhi/patient-match-endpoint`), merged internally once CI passes |
 | `fix/<scope>/<description>` | Bug fixes (e.g., `fix/acc/claim-status-polling`) |
 | `chore/<description>` | Tooling, dependencies, CI (e.g., `chore/update-pgx-v5`) |
 | `docs/<description>` | Documentation-only changes |
@@ -52,7 +54,7 @@ We use a trunk-based development model with short-lived feature branches.
 Branch naming rules:
 - Use lowercase and hyphens only (no underscores, no slashes within the description segment).
 - Keep descriptions concise (3–6 words).
-- Delete feature branches after merge.
+- Delete branches after merging into `master`.
 
 ---
 
@@ -69,7 +71,7 @@ Branch naming rules:
 
 ```bash
 # Clone the repo
-git clone https://github.com/PhillipC05/tpt-healthcare-nz.git
+git clone https://github.com/tpt-solutions/tpt-healthcare-nz.git
 cd tpt-healthcare-nz
 
 # Install frontend dependencies
@@ -103,7 +105,7 @@ Always use UAT/sandbox credentials for NHI, NES, HPI, and ACC during development
 
 ### Go
 
-- **Formatting**: `gofmt -w ./...` — enforced by CI. No PRs will be merged with formatting errors.
+- **Formatting**: `gofmt -w ./...` — enforced by CI. No change will be merged with formatting errors.
 - **Linting**: `golangci-lint run ./core/... ./interop/...` must pass with zero errors.
 - **Package names**: short, lowercase, no underscores (e.g., `package nhi`, `package audit`).
 - **Exported symbols**: document all exported functions, types, and constants with a godoc comment.
@@ -126,7 +128,7 @@ Always use UAT/sandbox credentials for NHI, NES, HPI, and ACC during development
 
 ## Testing Requirements
 
-All PRs must include tests. The bar varies by change type:
+All changes must include tests. The bar varies by change type:
 
 | Change type | Required tests |
 |-------------|----------------|
@@ -136,7 +138,7 @@ All PRs must include tests. The bar varies by change type:
 | New migration | Test that migration runs cleanly on a fresh DB and is idempotent |
 | FHIR resource handling | Round-trip test (create → read → validate against NZ Base IG profile) |
 | Audit trail | Test that every write produces the correct AuditEvent |
-| Frontend component | Vitest unit test + Playwright smoke test for critical paths |
+| Frontend component | Vitest unit test + Playwright e2e coverage for critical paths |
 
 ### Test conventions
 
@@ -145,6 +147,17 @@ All PRs must include tests. The bar varies by change type:
 - Integration tests are tagged with `//go:build integration` and must be runnable with `go test -tags=integration ./...`.
 - Use `testify/assert` for assertions; `testify/require` when test cannot continue after failure.
 - Test helpers in `testutil/` within each module — do not export test helpers into production packages.
+
+### End-to-end tests (`e2e/`)
+
+The `e2e/` package holds Playwright specs covering critical clinical workflows across `apps/tpt-clinic` and `apps/tpt-portal`. It's its own pnpm workspace member (`@tpt/e2e`), separate from each app's own `test` script, so it doesn't get swept into a plain `pnpm test`.
+
+- Run the full suite: `pnpm test:e2e` (from repo root) or `pnpm --filter @tpt/e2e test`.
+- Interactive/debug mode: `pnpm --filter @tpt/e2e test:ui`.
+- View the last HTML report: `pnpm --filter @tpt/e2e report`.
+- Each spec's `webServer` builds and serves the real app via `vite preview` — no backend is required to run these today (see below).
+
+**Current scope — mocked API boundary, not a real backend.** Specs stub `fetch` calls via Playwright's `page.route()` (see `e2e/fixtures/auth.ts`) rather than hitting a running `tpt-health-interop` instance. This is intentional for the first iteration: there's no seed data or test-practitioner infrastructure yet, and `deploy/docker-compose.dev.yml`'s `interop` service is still a placeholder container. This still protects routing/guards, form validation, and render logic — the highest-churn source of frontend regressions — but does **not** exercise real backend behaviour (audit trail writes, encryption, HIPC consent checks). Real-backend e2e integration is a tracked follow-up once seed infra exists; add new specs to `e2e/specs/<app>/` following the existing page-object pattern in `e2e/pages/`.
 
 ---
 
@@ -199,25 +212,16 @@ with jitter capped at 5 minutes.
 
 ---
 
-## Pull Request Process
+## Issue Process
 
-1. **Open a draft PR** early so reviewers can follow your progress.
-2. **Fill in the PR template** completely. Do not delete sections.
-3. **Self-review** your diff before requesting review. Remove debug logging, commented-out code, and TODO comments that belong in issues.
-4. **CI must be green**: all tests, linting, and formatting checks must pass.
-5. **At least one approval** from a maintainer is required before merge.
-6. **Compliance changes** (anything touching consent, audit, encryption, breach notification, or national integrations) require an additional review from the compliance lead.
-7. **Squash merge** is the default merge strategy. The PR title becomes the commit message — ensure it follows the commit message format above.
-8. **Delete the branch** after merge.
+This repository does not accept external pull requests. All contributions — bug reports, feature requests, and security concerns (non-sensitive ones; see [SECURITY.md](SECURITY.md) for vulnerability disclosure) — go through GitHub Issues.
 
-### PR template sections
-
-- Summary: what does this PR do and why?
-- Related issues
-- Type of change (feature / bug fix / refactor / compliance / docs)
-- Testing: describe how you tested the changes
-- Compliance checklist (see below)
-- Screenshots (for UI changes)
+1. **Search existing issues** first to avoid duplicates.
+2. **Use the appropriate issue template** (bug report or feature request) and fill it in completely — the domain context (NHI, HPI, ACC, FHIR resource type, etc.) helps maintainers triage faster.
+3. **Be specific**: steps to reproduce, expected vs. actual behaviour, and any relevant module (e.g. `tpt-doctor`, `core/nhi`).
+4. A maintainer or an internal AI agent will pick up the issue, implement the change directly against `master` (or a short-lived branch merged internally), and reference the issue number in the commit (`Closes #123` / `Refs #456`, per the commit message format above).
+5. **Compliance-sensitive changes** (anything touching consent, audit, encryption, breach notification, or national integrations) get an additional internal compliance review before merging, regardless of how the change was proposed.
+6. **CI must be green** (`make lint`, `make test`, `make build`, and the frontend `pnpm lint`/`pnpm build`) before a change lands on `master`.
 
 ---
 
@@ -271,7 +275,7 @@ modules/<module-name>/
 
 ## Compliance Checklist
 
-Before marking a PR as ready for review, confirm:
+Before merging or pushing any change touching consent, audit, encryption, or national integrations, confirm:
 
 - [ ] No PHI is logged at any log level.
 - [ ] All new clinical writes produce an `AuditEvent` via `core/audit/trail.go`.
@@ -280,5 +284,5 @@ Before marking a PR as ready for review, confirm:
 - [ ] Any new field storing PHI uses `core/encryption/` for at-rest encryption.
 - [ ] New migrations are append-only (no DROP COLUMN, no column renames without deprecation path).
 - [ ] New national integration endpoints use UAT credentials in tests, not production.
-- [ ] The PR does not introduce any hardcoded secrets, keys, or credentials.
+- [ ] The change does not introduce any hardcoded secrets, keys, or credentials.
 - [ ] The Privacy Act 2020 and HIPC data minimisation principle has been considered — only necessary data is collected and stored.
