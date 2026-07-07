@@ -44,7 +44,7 @@ export async function deriveKey(pin: string, salt: Uint8Array): Promise<CryptoKe
   return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt,
+      salt: salt as BufferSource,
       iterations: PBKDF2_ITERATIONS,
       hash: 'SHA-256',
     },
@@ -74,7 +74,7 @@ export async function encrypt(key: CryptoKey, plaintext: string): Promise<Encryp
 /** Decrypt an EncryptedBlob back to a plaintext string. Throws on wrong key. */
 export async function decrypt(key: CryptoKey, blob: EncryptedBlob): Promise<string> {
   const plainBuffer = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: blob.iv },
+    { name: 'AES-GCM', iv: blob.iv as BufferSource },
     key,
     blob.ciphertext
   );
@@ -90,7 +90,7 @@ export async function derivePinVerifier(pin: string, salt: Uint8Array): Promise<
   const enc = new TextEncoder();
   const km = await crypto.subtle.importKey('raw', enc.encode(pin), { name: 'PBKDF2' }, false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations: 1, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: salt as BufferSource, iterations: 1, hash: 'SHA-256' },
     km,
     256
   );

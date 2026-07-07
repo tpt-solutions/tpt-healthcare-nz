@@ -24,17 +24,11 @@ export const ACC32 = "ACC32";
 // Identifier Systems
 // ---------------------------------------------------------------------------
 
-/** FHIR identifier system for ACC claim IDs. */
-export const ACC_CLAIM_SYSTEM =
-  "https://standards.digital.health.nz/ns/acc-claim-id";
-
-/** FHIR identifier system for ACC purchase order numbers. */
-export const ACC_PURCHASE_ORDER_SYSTEM =
-  "https://standards.digital.health.nz/ns/acc-purchase-order-id";
-
-/** FHIR identifier system for ACC provider numbers. */
-export const ACC_PROVIDER_SYSTEM =
-  "https://standards.digital.health.nz/ns/acc-provider-id";
+export {
+  ACC_CLAIM_SYSTEM,
+  ACC_PURCHASE_ORDER_SYSTEM,
+  ACC_PROVIDER_SYSTEM,
+} from "./uris.js";
 
 // ---------------------------------------------------------------------------
 // Types

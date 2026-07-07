@@ -3,7 +3,10 @@ package api
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,58 +14,90 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/PhillipC05/tpt-healthcare/core/acc"
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/auth"
 	"github.com/PhillipC05/tpt-healthcare/core/auth/auth0"
+	"github.com/PhillipC05/tpt-healthcare/core/auth/jwt"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
+	"github.com/PhillipC05/tpt-healthcare/core/db/migrate"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	"github.com/PhillipC05/tpt-healthcare/core/episurv"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/medsafe"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
-	"github.com/PhillipC05/tpt-healthcare/core/nhi"
 	"github.com/PhillipC05/tpt-healthcare/core/nes"
+	"github.com/PhillipC05/tpt-healthcare/core/nhi"
+	"github.com/PhillipC05/tpt-healthcare/core/pharmac"
 	pharmacygateway "github.com/PhillipC05/tpt-healthcare/core/pharmacy-gateway"
 	"github.com/PhillipC05/tpt-healthcare/core/pharmacy-gateway/fred"
 	"github.com/PhillipC05/tpt-healthcare/core/pharmacy-gateway/hl7v2"
 	"github.com/PhillipC05/tpt-healthcare/core/pharmacy-gateway/toniq"
-	"github.com/PhillipC05/tpt-healthcare/core/pharmac"
 	"github.com/PhillipC05/tpt-healthcare/core/worksafe"
 )
 
 // Config holds all configuration for the tpt-doctor server.
 type Config struct {
-	Host                string
-	Port                int
-	DatabaseURL         string
-	RedisURL            string
-	EncryptionKey       string
-	Auth0Domain         string
-	Auth0Audience       string
-	TenantHeader        string
+	Host          string
+	Port          int
+	DatabaseURL   string
+	RedisURL      string
+	EncryptionKey string
+	Auth0Domain   string
+	Auth0Audience string
+	TenantHeader  string
 	// ACCBaseURL is the root URL for the ACC FHIR endpoint. Leave empty to
 	// disable ACC integration (claim submissions will return 503).
-	ACCBaseURL          string
+	ACCBaseURL string
+	// ACCToken is the bearer token for ACC FHIR API requests.
+	ACCToken string
+	// NHIBaseURL is the root URL for the Ministry NHI FHIR endpoint. Leave
+	// empty to disable NHI Ministry lookups (patient registration will accept
+	// a locally-validated NHI without Ministry confirmation).
+	NHIBaseURL string
+	// NHIToken is the bearer token for NHI FHIR API requests.
+	NHIToken string
+	// NESBaseURL is the root URL for the National Enrolment Service FHIR
+	// endpoint. Leave empty to disable NES enrolment integration.
+	NESBaseURL string
+	// NESToken is the bearer token for NES FHIR API requests.
+	NESToken string
+	// PharmacBaseURL is the root URL for the PHARMAC formulary API.
+	PharmacBaseURL string
+	// PharmacToken is the optional bearer token for the PHARMAC API.
+	PharmacToken string
+	// DevAuth enables a dev/test-only local login endpoint
+	// (POST /api/v1/auth/token) that issues Ed25519 JWTs instead of requiring
+	// Auth0. Never enable this in production.
+	DevAuth bool
+	// DevAuthEmail and DevAuthPassword are the credentials accepted by the dev
+	// login endpoint. Only used when DevAuth is true.
+	DevAuthEmail    string
+	DevAuthPassword string
+	// DevAuthTenantID is the tenant UUID issued in dev-mode JWTs. Must match a
+	// seeded row in the tenants table.
+	DevAuthTenantID string
 	// WorkSafeBaseURL is the root URL for the WorkSafe NZ FHIR endpoint. Leave
 	// empty to disable WorkSafe integration for work-related injury claims.
-	WorkSafeBaseURL     string
+	WorkSafeBaseURL string
 	// WorkSafeToken is the bearer token for WorkSafe API requests. Required when
 	// WorkSafeBaseURL is set.
-	WorkSafeToken       string
+	WorkSafeToken string
 	// TenantHPIFacilityID is the HPI facility OrgID for this practice,
 	// required for NES enrolment transfers. Leave empty to disable transfers.
 	TenantHPIFacilityID string
 	// EpiSurvBaseURL is the root URL for the ESR EpiSurv notifiable disease API.
 	// Leave empty to disable automatic EpiSurv notifications.
-	EpiSurvBaseURL      string
+	EpiSurvBaseURL string
 	// EpiSurvToken is the bearer token for EpiSurv API requests.
-	EpiSurvToken        string
+	EpiSurvToken string
 	// MedsafeBaseURL is the root URL for the Medsafe/CARM ADE reporting API.
 	// Leave empty to disable ADE reporting endpoints.
-	MedsafeBaseURL      string
+	MedsafeBaseURL string
 	// MedsafeToken is the bearer token for Medsafe CARM API requests.
-	MedsafeToken        string
+	MedsafeToken string
 	// PharmacyGatewayHL7v2Addr is the MLLP host:port used as the HL7 v2 fallback
 	// connector for pharmacies not registered with a FHIR PMS. Leave empty to
 	// disable the fallback (dispatches to unregistered pharmacies will fail).
@@ -109,6 +144,7 @@ type Server struct {
 	auditTrail          *audit.Trail
 	tenantHPIFacilityID string
 	logger              *slog.Logger
+	devAuth             *devAuthHandler
 }
 
 // NewServer constructs and configures a Server, wiring all dependencies.
@@ -130,20 +166,57 @@ func NewServer(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("init encryption cipher: %w", err)
 	}
 
-	authProvider, err := auth0.NewProvider(cfg.Auth0Domain, cfg.Auth0Audience)
-	if err != nil {
-		return nil, fmt.Errorf("init auth0 provider: %w", err)
+	var authProvider auth.Provider
+	var devJWT *jwt.Provider
+	if cfg.DevAuth {
+		_, priv, keyErr := ed25519.GenerateKey(rand.Reader)
+		if keyErr != nil {
+			return nil, fmt.Errorf("generate dev auth signing key: %w", keyErr)
+		}
+		devJWT = jwt.New(priv)
+		authProvider = devJWT
+	} else {
+		authProvider, err = auth0.NewProvider(cfg.Auth0Domain, cfg.Auth0Audience)
+		if err != nil {
+			return nil, fmt.Errorf("init auth0 provider: %w", err)
+		}
 	}
 
-	nhiClient := nhi.NewClient(cfg.Logger)
-	nesClient := nes.NewClient(cfg.Logger)
+	var nhiClient *nhi.Client
+	if cfg.NHIBaseURL != "" {
+		token := cfg.NHIToken
+		nhiClient = nhi.New(cfg.NHIBaseURL, func(_ context.Context) (string, error) {
+			return token, nil
+		})
+	}
+
+	var nesClient *nes.Client
+	if cfg.NESBaseURL != "" {
+		token := cfg.NESToken
+		nesClient = nes.New(cfg.NESBaseURL, func(_ context.Context) (string, error) {
+			return token, nil
+		})
+	}
+
 	hpiClient := hpi.NewClient(cfg.RedisURL, cfg.Logger)
-	pharmClient := pharmac.NewClient(cfg.Logger)
+
+	pharmacBaseURL := cfg.PharmacBaseURL
+	if pharmacBaseURL == "" {
+		pharmacBaseURL = "https://www.pharmac.govt.nz/api/v1"
+	}
+	pharmacToken := cfg.PharmacToken
+	pharmClient := pharmac.New(pharmacBaseURL, func(_ context.Context) (string, error) {
+		return pharmacToken, nil
+	})
+
 	trail := audit.NewTrail(pool)
 
 	var accClient *acc.Client
 	if cfg.ACCBaseURL != "" {
-		accClient = acc.NewClient(cfg.ACCBaseURL, cfg.Logger)
+		token := cfg.ACCToken
+		accClient = acc.New(cfg.ACCBaseURL, func(_ context.Context) (string, error) {
+			return token, nil
+		})
 	}
 
 	var wsClient *worksafe.Client
@@ -175,6 +248,20 @@ func NewServer(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("init pharmacy gateway: %w", err)
 	}
 
+	var devAuth *devAuthHandler
+	if cfg.DevAuth {
+		tenantID, tErr := uuid.Parse(cfg.DevAuthTenantID)
+		if tErr != nil {
+			return nil, fmt.Errorf("invalid DevAuthTenantID: %w", tErr)
+		}
+		devAuth = &devAuthHandler{
+			jwtProvider: devJWT,
+			email:       cfg.DevAuthEmail,
+			password:    cfg.DevAuthPassword,
+			tenantID:    tenantID,
+		}
+	}
+
 	s := &Server{
 		cfg:                 cfg,
 		pool:                pool,
@@ -192,6 +279,7 @@ func NewServer(cfg Config) (*Server, error) {
 		auditTrail:          trail,
 		tenantHPIFacilityID: cfg.TenantHPIFacilityID,
 		logger:              cfg.Logger,
+		devAuth:             devAuth,
 	}
 
 	s.mux = s.buildRoutes()
@@ -298,12 +386,20 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/ready", s.handleReady)
 
+	// Dev-only login endpoint — never registered unless DevAuth is enabled.
+	if s.devAuth != nil {
+		mux.HandleFunc("POST /api/v1/auth/token", s.devAuth.Login)
+	}
+
 	// Patient routes.
 	mux.Handle("GET /api/v1/patients", chain(http.HandlerFunc(patients.List)))
 	mux.Handle("POST /api/v1/patients", chain(http.HandlerFunc(patients.Create)))
 	mux.Handle("GET /api/v1/patients/{id}", chain(http.HandlerFunc(patients.Get)))
 	mux.Handle("PUT /api/v1/patients/{id}", chain(http.HandlerFunc(patients.Update)))
-	mux.Handle("GET /api/v1/patients/nhi/{nhi}", chain(http.HandlerFunc(patients.GetByNHI)))
+	// Registered outside /api/v1/patients/ to avoid a route conflict with
+	// /api/v1/patients/{id}/enrolment (net/http's ServeMux treats both as
+	// ambiguous 2-segment wildcard patterns otherwise).
+	mux.Handle("GET /api/v1/nhi-lookup/{nhi}", chain(http.HandlerFunc(patients.GetByNHI)))
 
 	// NES enrolment routes (enrol, update, transfer).
 	mux.Handle("GET /api/v1/patients/{id}/enrolment", chain(http.HandlerFunc(patients.GetEnrolment)))
@@ -416,7 +512,8 @@ func RunMigrations(ctx context.Context, databaseURL string, logger *slog.Logger)
 	}
 	defer pool.Close()
 
-	if err := db.Migrate(ctx, pool, logger); err != nil {
+	runner := migrate.New(migrate.MigrationsFS, pool)
+	if err := runner.Up(ctx); err != nil {
 		return fmt.Errorf("run migrations: %w", err)
 	}
 	return nil
@@ -495,6 +592,17 @@ func splitTrimmed(s string) []string {
 		}
 	}
 	return out
+}
+
+// errNotFound is a sentinel returned by handler lookup helpers when a
+// requested resource does not exist (or is not visible to the caller's
+// tenant). Callers translate it to a 404 response via errors.Is.
+var errNotFound = errors.New("resource not found")
+
+// idFromPath extracts the "id" path parameter from a request routed through
+// the {id} wildcard segment.
+func idFromPath(r *http.Request) string {
+	return r.PathValue("id")
 }
 
 // apiError is the standard error response envelope.

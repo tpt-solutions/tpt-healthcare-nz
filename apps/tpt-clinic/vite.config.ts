@@ -53,8 +53,11 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       proxy: {
+        // tpt-doctor (the GP clinical management service) owns /api/v1/patients,
+        // /appointments, /prescriptions, etc. Override with VITE_API_PROXY_TARGET
+        // to point at a different backend (e.g. interop) for local development.
         '/api': {
-          target: 'http://localhost:8080',
+          target: env.VITE_API_PROXY_TARGET || 'http://localhost:8082',
           changeOrigin: true,
         },
       },

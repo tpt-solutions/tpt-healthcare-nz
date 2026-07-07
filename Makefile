@@ -27,6 +27,20 @@ MODULES_WITH_CMD := \
 
 MODULE_BINS := $(foreach m,$(MODULES_WITH_CMD),./bin/tpt-$(shell echo $(m) | tr '_' '-'))
 
+# All Go modules under modules/ (kept in sync with go.work). golangci-lint
+# cannot resolve the ./modules/... glob directly because "modules" is not
+# itself a Go module boundary under go.work — each subdirectory must be
+# listed explicitly.
+ALL_MODULES := \
+	tpt-acupuncture tpt-addiction tpt-aged-care tpt-allied-health \
+	tpt-blood-bank tpt-cardiology tpt-chiropractic tpt-clinical-trials \
+	tpt-community-health tpt-counselling tpt-dental tpt-disability \
+	tpt-doctor tpt-epidemiology tpt-health-billing tpt-hospital \
+	tpt-immunisation tpt-massage tpt-maternal-child-health tpt-mental-health \
+	tpt-naturopathy tpt-nutrition tpt-oncology tpt-osteopathy tpt-palliative \
+	tpt-pathology tpt-pharmacy tpt-practice tpt-radiology tpt-rehabilitation \
+	tpt-renal tpt-screening tpt-tcm tpt-telehealth tpt-vision
+
 help:
 	@echo "tpt-healthcare"
 	@echo ""
@@ -69,7 +83,7 @@ test-%:
 # Linting
 # ---------------------------------------------------------------------------
 lint:
-	golangci-lint run ./core/... ./interop/... ./modules/...
+	golangci-lint run --timeout=10m ./core/... ./interop/... $(foreach m,$(ALL_MODULES),./modules/$(m)/...)
 
 lint-%:
 	golangci-lint run ./$(subst -,,$*)/...

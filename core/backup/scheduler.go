@@ -66,7 +66,7 @@ func (w *TriggerWorker) Work(ctx context.Context, job *river.Job[TriggerArgs]) e
 		var cmdErr error
 		go func() {
 			cmdErr = cmd.Run()
-			pw.CloseWithErr(cmdErr)
+			pw.CloseWithError(cmdErr)
 		}()
 
 		result, uploadErr := w.uploader.Upload(ctx, storageKey, pr, storage.UploadOptions{

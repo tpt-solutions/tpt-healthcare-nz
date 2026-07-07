@@ -60,14 +60,14 @@ type Claim struct {
 
 // claimCreateRequest is the body for POST /api/v1/claims.
 type claimCreateRequest struct {
-	EncounterID string      `json:"encounterId"`
-	PatientID   string      `json:"patientId"`
-	PatientNHI  string      `json:"patientNhi"`
-	PractitionerHPI   string           `json:"practitionerHpi"`
-	FormType          ACCFormType      `json:"formType"`
-	DiagnosisCodes    []string         `json:"diagnosisCodes"`
-	InjuryDate        time.Time        `json:"injuryDate"`
-	InjuryDescription string           `json:"injuryDescription"`
+	EncounterID       string      `json:"encounterId"`
+	PatientID         string      `json:"patientId"`
+	PatientNHI        string      `json:"patientNhi"`
+	PractitionerHPI   string      `json:"practitionerHpi"`
+	FormType          ACCFormType `json:"formType"`
+	DiagnosisCodes    []string    `json:"diagnosisCodes"`
+	InjuryDate        time.Time   `json:"injuryDate"`
+	InjuryDescription string      `json:"injuryDescription"`
 	// Destination selects ACC or WorkSafe NZ. Defaults to "acc" when omitted.
 	Destination ClaimDestination `json:"destination"`
 	// EmployerNZBN is the NZBN of the employing organisation; only relevant for WorkSafe claims.

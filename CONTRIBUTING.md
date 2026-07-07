@@ -157,7 +157,16 @@ The `e2e/` package holds Playwright specs covering critical clinical workflows a
 - View the last HTML report: `pnpm --filter @tpt/e2e report`.
 - Each spec's `webServer` builds and serves the real app via `vite preview` — no backend is required to run these today (see below).
 
-**Current scope — mocked API boundary, not a real backend.** Specs stub `fetch` calls via Playwright's `page.route()` (see `e2e/fixtures/auth.ts`) rather than hitting a running `tpt-health-interop` instance. This is intentional for the first iteration: there's no seed data or test-practitioner infrastructure yet, and `deploy/docker-compose.dev.yml`'s `interop` service is still a placeholder container. This still protects routing/guards, form validation, and render logic — the highest-churn source of frontend regressions — but does **not** exercise real backend behaviour (audit trail writes, encryption, HIPC consent checks). Real-backend e2e integration is a tracked follow-up once seed infra exists; add new specs to `e2e/specs/<app>/` following the existing page-object pattern in `e2e/pages/`.
+**Default scope — mocked API boundary.** Most specs stub `fetch` calls via Playwright's `page.route()` (see `e2e/fixtures/auth.ts`) rather than hitting a running backend. This protects routing/guards, form validation, and render logic — the highest-churn source of frontend regressions — but does **not** exercise real backend behaviour (audit trail writes, encryption, HIPC consent checks). `pnpm test:e2e` / CI run only this mocked variant; no backend is required.
+
+**Real-backend variant.** `e2e/specs/clinic/patient-create.spec.ts` also has a real-backend mode that exercises the actual `tpt-doctor` service and a real Postgres database end to end (registration form → `POST /api/v1/patients` → row in `patients` → navigation to the new patient's real UUID). To run it:
+
+```bash
+docker compose -f deploy/docker-compose.dev.yml up -d postgres redis tpt-doctor
+E2E_REAL_BACKEND=true pnpm test:e2e --grep "New patient registration"
+```
+
+The `tpt-doctor` container runs migrations and seeds a fixed dev tenant (`deploy/seed/e2e_seed.sql`) on start, and exposes a dev-only `POST /api/v1/auth/token` login endpoint (`core/auth/jwt`-issued, gated by `TPT_DOCTOR_DEV_AUTH_ENABLED` — never enable this in production) so the suite can authenticate without Auth0. Add new real-backend specs by following the same pattern: import `test`/`expect` from `e2e/fixtures/real-backend-auth.ts` instead of `e2e/fixtures/auth.ts`, and gate the `describe` block behind `process.env.E2E_REAL_BACKEND`.
 
 ---
 

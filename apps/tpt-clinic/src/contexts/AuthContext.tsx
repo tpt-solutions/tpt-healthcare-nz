@@ -16,6 +16,13 @@ export interface AuthUser {
   roles: string[];
 }
 
+interface LoginResponse {
+  access_token: string;
+  user: AuthUser;
+  /** Tenant UUID for the authenticated practice, sent as X-Tenant-ID on API calls */
+  tenant_id?: string;
+}
+
 interface AuthState {
   user: AuthUser | null;
   isAuthenticated: boolean;
@@ -27,6 +34,8 @@ interface AuthContextValue extends AuthState {
   logout: () => void;
   /** Returns the current in-memory access token, or null if not authenticated */
   getToken: () => string | null;
+  /** Returns the current in-memory tenant ID, or null if not authenticated */
+  getTenantId: () => string | null;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -37,6 +46,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
  * On page reload the user will need to re-authenticate.
  */
 let inMemoryToken: string | null = null;
+let inMemoryTenantId: string | null = null;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
@@ -46,6 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   const getToken = useCallback((): string | null => inMemoryToken, []);
+  const getTenantId = useCallback((): string | null => inMemoryTenantId, []);
 
   const login = useCallback(async (email: string, password: string): Promise<void> => {
     setState((prev) => ({ ...prev, isLoading: true }));
@@ -61,12 +72,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(body.message ?? 'Invalid credentials');
       }
 
-      const data = (await response.json()) as {
-        access_token: string;
-        user: AuthUser;
-      };
+      const data = (await response.json()) as LoginResponse;
 
       inMemoryToken = data.access_token;
+      inMemoryTenantId = data.tenant_id ?? null;
 
       setState({
         user: data.user,
@@ -81,14 +90,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     inMemoryToken = null;
+    inMemoryTenantId = null;
     setState({ user: null, isAuthenticated: false, isLoading: false });
     // Optionally revoke server-side session
     void fetch('/api/v1/auth/logout', { method: 'POST' }).catch(() => undefined);
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ ...state, login, logout, getToken }),
-    [state, login, logout, getToken],
+    () => ({ ...state, login, logout, getToken, getTenantId }),
+    [state, login, logout, getToken, getTenantId],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

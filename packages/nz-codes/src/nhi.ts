@@ -13,7 +13,7 @@
 //
 // The validation logic here mirrors the Go implementation in core/nhi/.
 
-export const NHI_SYSTEM = "https://standards.digital.health.nz/ns/nhi-id";
+export { NHI_SYSTEM } from "./uris.js";
 
 // Letters used in NHI identifiers — I and O are excluded.
 const NHI_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // 24 letters

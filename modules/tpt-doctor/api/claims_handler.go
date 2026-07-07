@@ -109,7 +109,7 @@ func (h *ClaimsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify the encounter exists and is completed before issuing a claim.
-	encounter, err := (&EncountersHandler{pool: h.pool, logger: h.logger}).getEncounterByID(ctx, req.EncounterID, tenantID)
+	encounter, err := (&EncountersHandler{pool: h.pool, logger: h.logger}).getEncounterByID(ctx, req.EncounterID, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusUnprocessableEntity, apiError{Code: "ENCOUNTER_NOT_FOUND", Message: "encounter not found"})
@@ -127,27 +127,26 @@ func (h *ClaimsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claim, err := h.insertClaim(ctx, req, tenantID)
+	claim, err := h.insertClaim(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert claim", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create claim"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "Claim",
 		ResourceID:   claim.ID,
 		TenantID:     tenantID,
-		Metadata: map[string]string{
+		Details: map[string]any{
 			"encounter_id": req.EncounterID,
 			"form_type":    string(req.FormType),
 			"destination":  string(req.Destination),
 		},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt: time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusCreated, claim)
 }
@@ -172,7 +171,7 @@ func (h *ClaimsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claim, err := h.getClaimByID(ctx, id, tenantID)
+	claim, err := h.getClaimByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "claim not found"})
@@ -183,15 +182,14 @@ func (h *ClaimsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "Claim",
 		ResourceID:   id,
 		TenantID:     tenantID,
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, claim)
 }
@@ -358,12 +356,11 @@ func (h *ClaimsHandler) lodgeACC(ctx context.Context, id, tenantID string, reser
 		return "", "", fmt.Errorf("ACC integration is not configured on this server")
 	}
 
-	lodgeReq := acc.LodgeRequest{
-		FormType:          string(reserved.FormType),
+	lodgeReq := acc.Claim{
 		PatientNHI:        reserved.PatientNHI,
-		PractitionerHPI:   reserved.PractitionerHPI,
+		ProviderHPI:       reserved.PractitionerHPI,
 		DiagnosisCodes:    reserved.DiagnosisCodes,
-		InjuryDate:        reserved.InjuryDate,
+		DateOfAccident:    reserved.InjuryDate,
 		InjuryDescription: reserved.InjuryDescription,
 	}
 
@@ -438,10 +435,6 @@ func (h *ClaimsHandler) pollACCStatus(ctx context.Context, claim *Claim) claimSt
 	mappedStatus := mapACCStatus(accStatus.Status)
 	if mappedStatus != claim.Status {
 		claim.Status = mappedStatus
-		claim.RejectionReason = accStatus.RejectionReason
-		if accStatus.PaidAmount > 0 {
-			claim.PaidAmount = &accStatus.PaidAmount
-		}
 		if _, err := h.updateClaimStatus(ctx, *claim); err != nil {
 			h.logger.Error("sync ACC status to local DB", slog.Any("error", err))
 		}
@@ -527,19 +520,19 @@ func validateClaimCreate(req *claimCreateRequest) error {
 	return nil
 }
 
-// mapACCStatus translates an ACC API status string to the local ClaimStatus enum.
-func mapACCStatus(accStatus string) ClaimStatus {
+// mapACCStatus translates an ACC API ClaimStatus to the local ClaimStatus enum.
+func mapACCStatus(accStatus acc.ClaimStatus) ClaimStatus {
 	switch accStatus {
-	case "ACCEPTED":
+	case acc.ClaimActive:
 		return ClaimStatusAccepted
-	case "REJECTED":
+	case acc.ClaimDeclined:
 		return ClaimStatusRejected
-	case "PAID":
+	case acc.ClaimComplete:
 		return ClaimStatusPaid
-	case "PENDING":
+	case acc.ClaimDisputed:
+		return ClaimStatusRejected
+	case acc.ClaimPending:
 		return ClaimStatusPending
-	case "SUBMITTED":
-		return ClaimStatusSubmitted
 	default:
 		return ClaimStatusPending
 	}

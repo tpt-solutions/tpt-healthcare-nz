@@ -21,29 +21,29 @@ const (
 // Dosage represents a medication dosage instruction.
 type Dosage struct {
 	Text             string  `json:"text"`
-	Route            string  `json:"route,omitempty"`            // e.g. "oral", "topical"
-	DoseValue        float64 `json:"doseValue"`                  // numeric dose
-	DoseUnit         string  `json:"doseUnit"`                   // e.g. "mg", "mL"
-	Frequency        string  `json:"frequency"`                  // e.g. "twice daily"
-	DurationDays     int     `json:"durationDays,omitempty"`     // 0 = ongoing
-	MaxDailyDose     float64 `json:"maxDailyDose,omitempty"`     // safety cap
+	Route            string  `json:"route,omitempty"`        // e.g. "oral", "topical"
+	DoseValue        float64 `json:"doseValue"`              // numeric dose
+	DoseUnit         string  `json:"doseUnit"`               // e.g. "mg", "mL"
+	Frequency        string  `json:"frequency"`              // e.g. "twice daily"
+	DurationDays     int     `json:"durationDays,omitempty"` // 0 = ongoing
+	MaxDailyDose     float64 `json:"maxDailyDose,omitempty"` // safety cap
 	MaxDailyDoseUnit string  `json:"maxDailyDoseUnit,omitempty"`
 }
 
 // Prescription is the domain model for an e-prescription (FHIR MedicationRequest).
 type Prescription struct {
-	ID                     string             `json:"id"`
-	PatientID              string             `json:"patientId"`
-	PatientNHI             string             `json:"patientNhi"`
-	PractitionerHPI        string             `json:"practitionerHpi"`
-	EncounterID            string             `json:"encounterId,omitempty"`
-	NZULMCode              string             `json:"nzulmCode"`    // NZMT product code
-	MedicationName         string             `json:"medicationName"`
-	Status                 PrescriptionStatus `json:"status"`
-	Dosage                 Dosage             `json:"dosage"`
-	PHARMACSubsidised      bool               `json:"pharmácSubsidised"`
-	SubsidyCode            string             `json:"subsidyCode,omitempty"`
-	InteractionWarnings    []string           `json:"interactionWarnings,omitempty"`
+	ID                  string             `json:"id"`
+	PatientID           string             `json:"patientId"`
+	PatientNHI          string             `json:"patientNhi"`
+	PractitionerHPI     string             `json:"practitionerHpi"`
+	EncounterID         string             `json:"encounterId,omitempty"`
+	NZULMCode           string             `json:"nzulmCode"` // NZMT product code
+	MedicationName      string             `json:"medicationName"`
+	Status              PrescriptionStatus `json:"status"`
+	Dosage              Dosage             `json:"dosage"`
+	PHARMACSubsidised   bool               `json:"pharmácSubsidised"`
+	SubsidyCode         string             `json:"subsidyCode,omitempty"`
+	InteractionWarnings []string           `json:"interactionWarnings,omitempty"`
 	// InteractionCheckSkipped is true when the drug interaction check could not
 	// be performed (e.g. active-medication lookup failed). The prescriber must
 	// manually verify interactions before dispensing.

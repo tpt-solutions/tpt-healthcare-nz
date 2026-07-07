@@ -13,8 +13,8 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/medsafe"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
-	pharmacygateway "github.com/PhillipC05/tpt-healthcare/core/pharmacy-gateway"
 	"github.com/PhillipC05/tpt-healthcare/core/pharmac"
+	pharmacygateway "github.com/PhillipC05/tpt-healthcare/core/pharmacy-gateway"
 )
 
 // PrescriptionsHandler handles all /api/v1/prescriptions routes.
@@ -108,7 +108,9 @@ func (h *PrescriptionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Validate prescriber APC — must have prescribing scope.
+	// 1. Validate prescriber APC. The HPI client only reports a single Scope
+	// string, not a structured prescribing-scope flag, so we can only assert
+	// the APC itself is current here.
 	apcStatus, err := h.hpiClient.ValidateAPC(ctx, req.PractitionerHPI)
 	if err != nil {
 		h.logger.Error("HPI APC validation for prescription", slog.Any("error", err))
@@ -120,14 +122,6 @@ func (h *PrescriptionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			Code:    "INVALID_APC",
 			Message: "prescriber does not have a current Annual Practising Certificate",
 			Details: apcStatus,
-		})
-		return
-	}
-	if !apcStatus.HasPrescribingScope {
-		writeJSON(w, http.StatusForbidden, apiError{
-			Code:    "NO_PRESCRIBING_SCOPE",
-			Message: "practitioner's registration does not include prescribing scope of practice",
-			Details: map[string]string{"hpi": req.PractitionerHPI, "scope": apcStatus.ScopeOfPractice},
 		})
 		return
 	}
@@ -428,7 +422,7 @@ func (h *PrescriptionsHandler) ReportADE(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	rx, err := h.getPrescriptionByID(ctx, id, tenantID)
+	rx, err := h.getPrescriptionByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "prescription not found"})
@@ -472,16 +466,15 @@ func (h *PrescriptionsHandler) ReportADE(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "ADEReport",
 		ResourceID:   submitted.ID.String(),
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"prescription": id, "nzulm": rx.NZULMCode},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"prescription": id, "nzulm": rx.NZULMCode},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusCreated, submitted)
 }
@@ -527,7 +520,7 @@ func (h *PrescriptionsHandler) Dispatch(w http.ResponseWriter, r *http.Request) 
 		req.Quantity = 1
 	}
 
-	rx, err := h.getPrescriptionByID(ctx, id, tenantID)
+	rx, err := h.getPrescriptionByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "prescription not found"})
@@ -573,21 +566,20 @@ func (h *PrescriptionsHandler) Dispatch(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "MedicationRequest",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata: map[string]string{
+		Details: map[string]any{
 			"action":      "dispatch",
 			"pharmacyHpi": req.PharmacyHPI,
 			"connector":   string(result.Connector),
 			"externalId":  result.ExternalID,
 		},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt: time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, result)
 }

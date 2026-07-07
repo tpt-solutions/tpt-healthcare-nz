@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider } from '@tpt/ui';
+import { ThemeProvider, ErrorBoundary } from '@tpt/ui';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -68,29 +68,31 @@ export default function App() {
         <PINProvider inactivityMs={inactivityMs}>
           <AppSecurity />
           <LockScreenOverlay />
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
 
-            <Route
-              element={
-                <ProtectedRoute>
-                  <NavLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/waiting" element={<WaitingPage />} />
-              <Route path="/appointments" element={<AppointmentsPage />} />
-              <Route path="/appointments/book" element={<BookAppointmentPage />} />
-              <Route path="/records" element={<RecordsPage />} />
-              <Route path="/prescriptions" element={<PrescriptionsPage />} />
-              <Route path="/messages" element={<MessagesPage />} />
-              <Route path="/consent" element={<ConsentPage />} />
-            </Route>
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <NavLayout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route path="/dashboard" element={<DashboardPage />} />
+                <Route path="/waiting" element={<WaitingPage />} />
+                <Route path="/appointments" element={<AppointmentsPage />} />
+                <Route path="/appointments/book" element={<BookAppointmentPage />} />
+                <Route path="/records" element={<RecordsPage />} />
+                <Route path="/prescriptions" element={<PrescriptionsPage />} />
+                <Route path="/messages" element={<MessagesPage />} />
+                <Route path="/consent" element={<ConsentPage />} />
+              </Route>
 
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </ErrorBoundary>
         <UpdateToast />
         </PINProvider>
         </AuthProvider>

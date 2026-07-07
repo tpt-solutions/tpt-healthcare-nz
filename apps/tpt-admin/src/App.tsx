@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
-import { ThemeProvider } from '@tpt/ui';
+import { ThemeProvider, ErrorBoundary } from '@tpt/ui';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { NavLayout } from './components/NavLayout';
 import { LoginPage } from './pages/LoginPage';
@@ -30,6 +30,7 @@ export default function App() {
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
+        <ErrorBoundary>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/onboarding" element={<OnboardingWizard />} />
@@ -68,6 +69,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+        </ErrorBoundary>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>

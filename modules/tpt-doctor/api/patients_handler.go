@@ -9,6 +9,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
+	"github.com/PhillipC05/tpt-healthcare/core/fhir/translate"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 	"github.com/PhillipC05/tpt-healthcare/core/nes"
 	"github.com/PhillipC05/tpt-healthcare/core/nhi"
@@ -133,7 +134,7 @@ func (h *PatientsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// GetByNHI handles GET /api/v1/patients/nhi/{nhi}.
+// GetByNHI handles GET /api/v1/nhi-lookup/{nhi}.
 // Validates NHI format, queries the Ministry NHI API, and returns the FHIR Patient.
 func (h *PatientsHandler) GetByNHI(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -154,16 +155,13 @@ func (h *PatientsHandler) GetByNHI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	patient, err := h.nhiClient.Lookup(ctx, nhiValue)
+	r4Patient, err := h.nhiClient.GetPatient(ctx, nhiValue)
 	if err != nil {
-		if errors.Is(err, nhi.ErrNotFound) {
-			writeJSON(w, http.StatusNotFound, apiError{Code: "NHI_NOT_FOUND", Message: "no patient found for NHI"})
-			return
-		}
 		h.logger.Error("NHI lookup", slog.Any("error", err), slog.String("nhi", nhiValue))
-		writeJSON(w, http.StatusBadGateway, apiError{Code: "NHI_LOOKUP_ERROR", Message: "NHI API lookup failed"})
+		writeJSON(w, http.StatusBadGateway, apiError{Code: "NHI_LOOKUP_ERROR", Message: "NHI API lookup failed or NHI not found"})
 		return
 	}
+	patient := translate.PatientR4ToR5(r4Patient)
 
 	_ = h.auditTrail.Record(ctx, audit.Event{
 		PrincipalID:  principal.ID,
@@ -198,28 +196,29 @@ func (h *PatientsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_BODY", Message: err.Error()})
 		return
 	}
-
-	if err := validateNHIFormat(req.NHI); err != nil {
-		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_NHI", Message: err.Error()})
-		return
-	}
-	if req.Patient == nil {
-		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_PATIENT", Message: "patient FHIR resource is required"})
+	if req.FirstName == "" || req.LastName == "" || req.DateOfBirth == "" || req.Gender == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_FIELDS", Message: "firstName, lastName, dateOfBirth, and gender are required"})
 		return
 	}
 
-	// Confirm NHI exists with the Ministry before registration.
-	if _, err := h.nhiClient.Lookup(ctx, req.NHI); err != nil {
-		if errors.Is(err, nhi.ErrNotFound) {
-			writeJSON(w, http.StatusUnprocessableEntity, apiError{Code: "NHI_NOT_FOUND", Message: "NHI not found in Ministry registry"})
+	// The NHI is optional at registration time — the Ministry may not have
+	// assigned one yet. When present, validate its format and, if the NHI
+	// Ministry client is configured, confirm it exists in the registry.
+	if req.NHI != "" {
+		if err := validateNHIFormat(req.NHI); err != nil {
+			writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_NHI", Message: err.Error()})
 			return
 		}
-		h.logger.Error("NHI confirm", slog.Any("error", err))
-		writeJSON(w, http.StatusBadGateway, apiError{Code: "NHI_CONFIRM_ERROR", Message: "could not confirm NHI with Ministry"})
-		return
+		if h.nhiClient != nil {
+			if _, err := h.nhiClient.GetPatient(ctx, req.NHI); err != nil {
+				h.logger.Error("NHI confirm", slog.Any("error", err))
+				writeJSON(w, http.StatusUnprocessableEntity, apiError{Code: "NHI_NOT_FOUND", Message: "NHI not found in Ministry registry"})
+				return
+			}
+		}
 	}
 
-	rec, err := h.persistPatient(ctx, req.NHI, req.Patient, tenantID.String())
+	rec, err := h.persistPatient(ctx, req.NHI, req.toFHIRPatient(), tenantID.String())
 	if err != nil {
 		h.logger.Error("persist patient", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "PERSIST_ERROR", Message: "failed to save patient"})
@@ -364,14 +363,11 @@ func (h *PatientsHandler) GetEnrolment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	enrolment, err := h.nesClient.GetEnrolment(ctx, string(nhiPlain))
+	// The NES API has no distinct "not enrolled" response — a lookup for a
+	// patient with no active enrolment simply errors (typically HTTP 404).
+	enrolment, err := h.nesClient.GetStatus(ctx, string(nhiPlain))
 	if err != nil {
-		if errors.Is(err, nes.ErrNotEnrolled) {
-			writeJSON(w, http.StatusOK, map[string]any{"enrolled": false, "patientId": id})
-			return
-		}
-		h.logger.Error("NES get enrolment", slog.Any("error", err))
-		writeJSON(w, http.StatusBadGateway, apiError{Code: "NES_ERROR", Message: "failed to retrieve enrolment from NES"})
+		writeJSON(w, http.StatusOK, map[string]any{"enrolled": false, "patientId": id})
 		return
 	}
 
@@ -448,12 +444,9 @@ func (h *PatientsHandler) CreateEnrolment(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	enrolment, err := h.nesClient.Enrol(ctx, nes.EnrolRequest{
-		NHI:             string(nhiPlain),
-		PractitionerHPI: req.PractitionerHPI,
-		FundingCode:     req.FundingCode,
-		StartDate:       req.StartDate,
-	})
+	// The practice (not the individual practitioner) is the NES enrolling
+	// party; the practice's HPI facility ID is configured at server startup.
+	enrolment, err := h.nesClient.Enrol(ctx, string(nhiPlain), h.tenantHPIFacilityID)
 	if err != nil {
 		h.logger.Error("NES enrol", slog.Any("error", err))
 		writeJSON(w, http.StatusBadGateway, apiError{Code: "NES_ENROL_ERROR", Message: "failed to enrol patient via NES"})

@@ -73,6 +73,42 @@ services:
     # Placeholder entrypoint — replace once the binary is built into the image.
     entrypoint: ["sh", "-c", "echo 'interop placeholder: build the image with make build and update docker-compose.dev.yml' && sleep infinity"]
 
+  # tpt-doctor: the GP clinical management service backing the tpt-clinic app's
+  # patient/appointment/prescription APIs. Built from source (see
+  # modules/tpt-doctor/Dockerfile) — no placeholder needed. On start, the
+  # container runs migrations, applies the e2e/dev seed data, then serves.
+  #
+  # DEV_AUTH is enabled here (never enable this in a production deployment):
+  # it exposes POST /api/v1/auth/token, issuing a JWT for a fixed dev
+  # practitioner identity without requiring Auth0, so the clinic app and the
+  # e2e suite can log in against a real backend in local dev/CI.
+  tpt-doctor:
+    build:
+      context: ..
+      dockerfile: modules/tpt-doctor/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      TPT_DOCTOR_DATABASE_URL: postgres://tpt:tpt_dev_password@postgres:5432/tpt_healthcare_dev?sslmode=disable
+      TPT_DOCTOR_REDIS_URL: redis://redis:6379
+      # Dev-only placeholder key (64 hex chars = 32 bytes). Override via
+      # TPT_DOCTOR_ENCRYPTION_KEY for anything beyond local dev/e2e.
+      TPT_DOCTOR_ENCRYPTION_KEY: ${TPT_DOCTOR_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      TPT_DOCTOR_SERVER_HOST: 0.0.0.0
+      TPT_DOCTOR_SERVER_PORT: "8082"
+      TPT_DOCTOR_TENANT_HPI_FACILITY_ID: E2E0001
+      TPT_DOCTOR_DEV_AUTH_ENABLED: "true"
+      TPT_DOCTOR_DEV_AUTH_EMAIL: e2e.practitioner@tpt.test
+      TPT_DOCTOR_DEV_AUTH_PASSWORD: Test1234!
+      TPT_DOCTOR_DEV_AUTH_TENANT_ID: e2e00000-0000-0000-0000-000000000001
+      DATABASE_URL: postgres://tpt:tpt_dev_password@postgres:5432/tpt_healthcare_dev?sslmode=disable
+
   tpt-acupuncture:
     image: golang:1.22-alpine
     restart: unless-stopped

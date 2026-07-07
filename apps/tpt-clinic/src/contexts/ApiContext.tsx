@@ -16,10 +16,12 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
 export class TptApiClient {
   private readonly baseUrl: string;
   private readonly getToken: () => string | null;
+  private readonly getTenantId: () => string | null;
 
-  constructor(baseUrl: string, getToken: () => string | null) {
+  constructor(baseUrl: string, getToken: () => string | null, getTenantId: () => string | null) {
     this.baseUrl = baseUrl;
     this.getToken = getToken;
+    this.getTenantId = getTenantId;
   }
 
   private buildUrl(path: string, params?: RequestOptions['params']): string {
@@ -37,11 +39,13 @@ export class TptApiClient {
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const { params, body, headers: extraHeaders, ...rest } = options;
     const token = this.getToken();
+    const tenantId = this.getTenantId();
 
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       Accept: 'application/fhir+json, application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
       ...extraHeaders,
     };
 
@@ -105,11 +109,11 @@ export class ApiError extends Error {
 const ApiContext = createContext<TptApiClient | null>(null);
 
 export function ApiProvider({ children }: { children: React.ReactNode }) {
-  const { getToken } = useAuth();
+  const { getToken, getTenantId } = useAuth();
 
   const client = useMemo(
-    () => new TptApiClient('/api/v1', getToken),
-    [getToken],
+    () => new TptApiClient('/api/v1', getToken, getTenantId),
+    [getToken, getTenantId],
   );
 
   return <ApiContext.Provider value={client}>{children}</ApiContext.Provider>;

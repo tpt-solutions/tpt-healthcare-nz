@@ -41,7 +41,7 @@ const (
 type PHOReport struct {
 	ID            string          `json:"id"`
 	Type          PHOReportType   `json:"type"`
-	Period        string          `json:"period"`       // YYYY-MM
+	Period        string          `json:"period"` // YYYY-MM
 	Status        PHOReportStatus `json:"status"`
 	RecordCount   int             `json:"recordCount"`
 	PHOReference  string          `json:"phoReference,omitempty"` // Reference assigned by PHO on submission
@@ -65,7 +65,7 @@ type PHOCapitationRecord struct {
 // PHOFFSRecord is a single row in a FFS extract.
 // PatientNHI is omitted from JSON for the same reason as PHOCapitationRecord.
 type PHOFFSRecord struct {
-	PatientID     string    `json:"patientId"`     // internal opaque identifier
+	PatientID     string    `json:"patientId"` // internal opaque identifier
 	VisitDate     time.Time `json:"visitDate"`
 	FundingCode   string    `json:"fundingCode"`
 	DiagnosisCode string    `json:"diagnosisCode"` // ICD-10-AM
@@ -105,22 +105,21 @@ func (h *PHOHandler) ListReports(w http.ResponseWriter, r *http.Request) {
 	typeFilter := q.Get("type")
 	statusFilter := q.Get("status")
 
-	reports, err := h.listReports(ctx, tenantID, typeFilter, statusFilter)
+	reports, err := h.listReports(ctx, tenantID.String(), typeFilter, statusFilter)
 	if err != nil {
 		h.logger.Error("list PHO reports", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list PHO reports"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "PHOReport",
 		ResourceID:   "list",
 		TenantID:     tenantID,
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"reports": reports,
@@ -155,30 +154,29 @@ func (h *PHOHandler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Count the records for this period before inserting the report shell.
-	recordCount, err := h.countPeriodRecords(ctx, tenantID, req.Type, req.Period)
+	recordCount, err := h.countPeriodRecords(ctx, tenantID.String(), req.Type, req.Period)
 	if err != nil {
 		h.logger.Error("count PHO period records", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "COUNT_ERROR", Message: "failed to count records for period"})
 		return
 	}
 
-	report, err := h.insertReport(ctx, req, recordCount, tenantID)
+	report, err := h.insertReport(ctx, req, recordCount, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert PHO report", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to generate PHO report"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "PHOReport",
 		ResourceID:   report.ID,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"type": string(req.Type), "period": req.Period},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"type": string(req.Type), "period": req.Period},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusCreated, report)
 }
@@ -203,7 +201,7 @@ func (h *PHOHandler) GetReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	report, err := h.getReportByID(ctx, id, tenantID)
+	report, err := h.getReportByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "PHO report not found"})
@@ -214,15 +212,14 @@ func (h *PHOHandler) GetReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "PHOReport",
 		ResourceID:   id,
 		TenantID:     tenantID,
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, report)
 }
@@ -249,7 +246,7 @@ func (h *PHOHandler) SubmitReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	report, err := h.getReportByID(ctx, id, tenantID)
+	report, err := h.getReportByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "PHO report not found"})
@@ -271,23 +268,22 @@ func (h *PHOHandler) SubmitReport(w http.ResponseWriter, r *http.Request) {
 	// Generate a stub PHO reference. Production calls the PHO's submission API.
 	phoRef := fmt.Sprintf("PHO-%s-%s", report.Type, report.Period)
 	now := time.Now().UTC()
-	submitted, err := h.markReportSubmitted(ctx, id, phoRef, now, tenantID)
+	submitted, err := h.markReportSubmitted(ctx, id, phoRef, now, tenantID.String())
 	if err != nil {
 		h.logger.Error("mark PHO report submitted", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "SUBMIT_ERROR", Message: "failed to submit PHO report"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "PHOReport",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "submit", "pho_reference": phoRef},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"action": "submit", "pho_reference": phoRef},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, submitted)
 }
@@ -313,7 +309,7 @@ func (h *PHOHandler) GetCapitationRecords(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	report, err := h.getReportByID(ctx, id, tenantID)
+	report, err := h.getReportByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "PHO report not found"})
@@ -324,19 +320,18 @@ func (h *PHOHandler) GetCapitationRecords(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "PHOReport",
 		ResourceID:   id + "/records",
 		TenantID:     tenantID,
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	switch report.Type {
 	case PHOReportCapitation:
-		records, err := h.fetchCapitationRecords(ctx, tenantID, report.Period)
+		records, err := h.fetchCapitationRecords(ctx, tenantID.String(), report.Period)
 		if err != nil {
 			h.logger.Error("fetch capitation records", slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, apiError{Code: "FETCH_ERROR", Message: "failed to fetch capitation records"})
@@ -345,7 +340,7 @@ func (h *PHOHandler) GetCapitationRecords(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusOK, map[string]any{"records": records, "total": len(records)})
 
 	case PHOReportFFS:
-		records, err := h.fetchFFSRecords(ctx, tenantID, report.Period)
+		records, err := h.fetchFFSRecords(ctx, tenantID.String(), report.Period)
 		if err != nil {
 			h.logger.Error("fetch FFS records", slog.Any("error", err))
 			writeJSON(w, http.StatusInternalServerError, apiError{Code: "FETCH_ERROR", Message: "failed to fetch FFS records"})

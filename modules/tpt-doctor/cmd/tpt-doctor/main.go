@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -67,6 +68,7 @@ func initConfig() {
 	}
 
 	viper.SetEnvPrefix("TPT_DOCTOR")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
@@ -85,17 +87,30 @@ var serveCmd = &cobra.Command{
 		}))
 
 		srv, err := api.NewServer(api.Config{
-			Host:          viper.GetString("server.host"),
-			Port:          viper.GetInt("server.port"),
-			DatabaseURL:   viper.GetString("database.url"),
-			RedisURL:      viper.GetString("redis.url"),
-			EncryptionKey: viper.GetString("encryption.key"),
-			Auth0Domain:   viper.GetString("auth0.domain"),
-			Auth0Audience: viper.GetString("auth0.audience"),
-			TenantHeader:    viper.GetString("tenant.header"),
-			WorkSafeBaseURL: viper.GetString("worksafe.base_url"),
-			WorkSafeToken:   viper.GetString("worksafe.token"),
-			Logger:          logger,
+			Host:                viper.GetString("server.host"),
+			Port:                viper.GetInt("server.port"),
+			DatabaseURL:         viper.GetString("database.url"),
+			RedisURL:            viper.GetString("redis.url"),
+			EncryptionKey:       viper.GetString("encryption.key"),
+			Auth0Domain:         viper.GetString("auth0.domain"),
+			Auth0Audience:       viper.GetString("auth0.audience"),
+			TenantHeader:        viper.GetString("tenant.header"),
+			TenantHPIFacilityID: viper.GetString("tenant_hpi_facility_id"),
+			WorkSafeBaseURL:     viper.GetString("worksafe.base_url"),
+			WorkSafeToken:       viper.GetString("worksafe.token"),
+			ACCBaseURL:          viper.GetString("acc.base_url"),
+			ACCToken:            viper.GetString("acc.token"),
+			NHIBaseURL:          viper.GetString("nhi.base_url"),
+			NHIToken:            viper.GetString("nhi.token"),
+			NESBaseURL:          viper.GetString("nes.base_url"),
+			NESToken:            viper.GetString("nes.token"),
+			PharmacBaseURL:      viper.GetString("pharmac.base_url"),
+			PharmacToken:        viper.GetString("pharmac.token"),
+			DevAuth:             viper.GetBool("dev_auth.enabled"),
+			DevAuthEmail:        viper.GetString("dev_auth.email"),
+			DevAuthPassword:     viper.GetString("dev_auth.password"),
+			DevAuthTenantID:     viper.GetString("dev_auth.tenant_id"),
+			Logger:              logger,
 		})
 		if err != nil {
 			return fmt.Errorf("create server: %w", err)

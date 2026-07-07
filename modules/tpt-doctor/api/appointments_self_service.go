@@ -19,17 +19,17 @@ import (
 // WaitlistEntry represents a patient who wants an earlier appointment if one
 // becomes available after a cancellation.
 type WaitlistEntry struct {
-	ID              uuid.UUID  `json:"id"`
-	TenantID        uuid.UUID  `json:"tenantId"`
-	PatientID       string     `json:"patientId"`
-	PractitionerHPI string     `json:"practitionerHpi,omitempty"`
-	AppointmentType string     `json:"appointmentType,omitempty"`
+	ID              uuid.UUID `json:"id"`
+	TenantID        uuid.UUID `json:"tenantId"`
+	PatientID       string    `json:"patientId"`
+	PractitionerHPI string    `json:"practitionerHpi,omitempty"`
+	AppointmentType string    `json:"appointmentType,omitempty"`
 	// EarliestDate is the earliest the patient is available (optional).
-	EarliestDate    *time.Time `json:"earliestDate,omitempty"`
+	EarliestDate *time.Time `json:"earliestDate,omitempty"`
 	// LatestDate is the latest the patient wants an earlier slot by.
 	// Entries past this date are automatically purged.
-	LatestDate      *time.Time `json:"latestDate,omitempty"`
-	CreatedAt       time.Time  `json:"createdAt"`
+	LatestDate *time.Time `json:"latestDate,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
 }
 
 type cancelRequest struct {

@@ -37,8 +37,8 @@ type LabOrder struct {
 	PatientNHI    string         `json:"patientNhi"`
 	OrderingHPI   string         `json:"orderingHpi"`
 	EncounterID   string         `json:"encounterId,omitempty"`
-	Tests         []string       `json:"tests"`           // LOINC codes
-	Priority      string         `json:"priority"`        // routine, urgent, stat
+	Tests         []string       `json:"tests"`    // LOINC codes
+	Priority      string         `json:"priority"` // routine, urgent, stat
 	ClinicalNotes string         `json:"clinicalNotes,omitempty"`
 	Status        LabOrderStatus `json:"status"`
 	FHIRReport    string         `json:"fhirReport,omitempty"` // FHIR DiagnosticReport JSON (encrypted at rest)

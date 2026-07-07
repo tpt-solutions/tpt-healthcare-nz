@@ -68,6 +68,9 @@ importers:
       workbox-strategies:
         specifier: ^7.0.0
         version: 7.4.1
+      workbox-window:
+        specifier: ^7.0.0
+        version: 7.4.1
 
   apps/tpt-clinic:
     dependencies:

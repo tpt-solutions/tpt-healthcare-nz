@@ -37,28 +37,28 @@ import (
 type CPRSCondition string
 
 const (
-	CPRSUncomplicatedUTI          CPRSCondition = "uti_uncomplicated"
-	CPRSColdSore                  CPRSCondition = "cold_sore"
-	CPRSVaginalThrush             CPRSCondition = "vaginal_thrush"
-	CPRSImpetigo                  CPRSCondition = "impetigo"
-	CPRSHeadLice                  CPRSCondition = "head_lice"
-	CPRSInfectedInsectBite        CPRSCondition = "infected_insect_bite"
-	CPRSEarWax                    CPRSCondition = "earwax"
+	CPRSUncomplicatedUTI   CPRSCondition = "uti_uncomplicated"
+	CPRSColdSore           CPRSCondition = "cold_sore"
+	CPRSVaginalThrush      CPRSCondition = "vaginal_thrush"
+	CPRSImpetigo           CPRSCondition = "impetigo"
+	CPRSHeadLice           CPRSCondition = "head_lice"
+	CPRSInfectedInsectBite CPRSCondition = "infected_insect_bite"
+	CPRSEarWax             CPRSCondition = "earwax"
 )
 
 // CPRSReferral is the domain model for a Community Pharmacy Referral.
 type CPRSReferral struct {
-	ID              uuid.UUID     `json:"id"`
-	TenantID        uuid.UUID     `json:"tenantId"`
-	PatientID       string        `json:"patientId"`
-	PatientNHI      string        `json:"patientNhi"`
-	ReferringGPHPI  string        `json:"referringGpHpi"`
-	Condition       CPRSCondition `json:"condition"`
-	ClinicalNotes   string        `json:"clinicalNotes,omitempty"`
+	ID             uuid.UUID     `json:"id"`
+	TenantID       uuid.UUID     `json:"tenantId"`
+	PatientID      string        `json:"patientId"`
+	PatientNHI     string        `json:"patientNhi"`
+	ReferringGPHPI string        `json:"referringGpHpi"`
+	Condition      CPRSCondition `json:"condition"`
+	ClinicalNotes  string        `json:"clinicalNotes,omitempty"`
 	// PreferredPharmacyHPIFacility is the HPI facility ID of the patient's
 	// preferred community pharmacy. Leave empty for "any enrolled pharmacy".
-	PreferredPharmacyHPIFacility string    `json:"preferredPharmacyHpiFacility,omitempty"`
-	Status                       string    `json:"status"`
+	PreferredPharmacyHPIFacility string     `json:"preferredPharmacyHpiFacility,omitempty"`
+	Status                       string     `json:"status"`
 	DispatchedAt                 *time.Time `json:"dispatchedAt,omitempty"`
 	CreatedAt                    time.Time  `json:"createdAt"`
 }
@@ -161,31 +161,31 @@ func (s *NZSchemesHandler) CreateCPRSReferral(w http.ResponseWriter, r *http.Req
 type GreenPrescriptionIndicator string
 
 const (
-	GreenRxT2Diabetes    GreenPrescriptionIndicator = "type2_diabetes"
-	GreenRxHypertension  GreenPrescriptionIndicator = "hypertension"
-	GreenRxCOPD          GreenPrescriptionIndicator = "copd"
-	GreenRxObesity       GreenPrescriptionIndicator = "obesity"
-	GreenRxDepression    GreenPrescriptionIndicator = "depression"
+	GreenRxT2Diabetes      GreenPrescriptionIndicator = "type2_diabetes"
+	GreenRxHypertension    GreenPrescriptionIndicator = "hypertension"
+	GreenRxCOPD            GreenPrescriptionIndicator = "copd"
+	GreenRxObesity         GreenPrescriptionIndicator = "obesity"
+	GreenRxDepression      GreenPrescriptionIndicator = "depression"
 	GreenRxMusculoskeletal GreenPrescriptionIndicator = "musculoskeletal"
 )
 
 // GreenPrescription is the domain model for a He Oranga Mauri referral.
 type GreenPrescription struct {
-	ID                uuid.UUID                  `json:"id"`
-	TenantID          uuid.UUID                  `json:"tenantId"`
-	PatientID         string                     `json:"patientId"`
-	PatientNHI        string                     `json:"patientNhi"`
-	ReferringGPHPI    string                     `json:"referringGpHpi"`
-	Indicator         GreenPrescriptionIndicator `json:"indicator"`
-	GoalStatement     string                     `json:"goalStatement"`
+	ID             uuid.UUID                  `json:"id"`
+	TenantID       uuid.UUID                  `json:"tenantId"`
+	PatientID      string                     `json:"patientId"`
+	PatientNHI     string                     `json:"patientNhi"`
+	ReferringGPHPI string                     `json:"referringGpHpi"`
+	Indicator      GreenPrescriptionIndicator `json:"indicator"`
+	GoalStatement  string                     `json:"goalStatement"`
 	// RecommendedActivity describes the type of physical activity recommended.
-	RecommendedActivity string    `json:"recommendedActivity"`
+	RecommendedActivity string `json:"recommendedActivity"`
 	// SportNZRegion is the Sport NZ regional office to receive the referral.
-	SportNZRegion       string    `json:"sportNzRegion"`
-	DurationWeeks       int       `json:"durationWeeks"`
-	Status              string    `json:"status"`
-	DispatchedAt        *time.Time `json:"dispatchedAt,omitempty"`
-	CreatedAt           time.Time  `json:"createdAt"`
+	SportNZRegion string     `json:"sportNzRegion"`
+	DurationWeeks int        `json:"durationWeeks"`
+	Status        string     `json:"status"`
+	DispatchedAt  *time.Time `json:"dispatchedAt,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt"`
 }
 
 type greenPrescriptionRequest struct {

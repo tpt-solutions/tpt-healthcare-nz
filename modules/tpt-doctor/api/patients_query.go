@@ -2,12 +2,27 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/fhir/r5"
 	"github.com/PhillipC05/tpt-healthcare/core/nhi"
 )
+
+// patientSearchName builds the plaintext search index string from a patient's
+// official name(s), used to populate the name_search column.
+func patientSearchName(p *r5.Patient) string {
+	var parts []string
+	for _, n := range p.Name {
+		if n.Family != "" {
+			parts = append(parts, n.Family)
+		}
+		parts = append(parts, n.Given...)
+	}
+	return strings.Join(parts, " ")
+}
 
 // validateNHIFormat validates the NHI using the checksum-aware validator in core/nhi/.
 // This covers both structural format and the Luhn check digit for old-format NHIs.
@@ -100,7 +115,7 @@ func (h *PatientsHandler) persistPatient(ctx context.Context, nhiValue string, p
 		return patientRecord{}, fmt.Errorf("encrypt NHI: %w", err)
 	}
 
-	fhirJSON, err := patient.MarshalJSON()
+	fhirJSON, err := json.Marshal(patient)
 	if err != nil {
 		return patientRecord{}, fmt.Errorf("marshal patient FHIR: %w", err)
 	}
@@ -109,7 +124,7 @@ func (h *PatientsHandler) persistPatient(ctx context.Context, nhiValue string, p
 		return patientRecord{}, fmt.Errorf("encrypt FHIR resource: %w", err)
 	}
 
-	nameSearch := patient.SearchName()
+	nameSearch := patientSearchName(patient)
 	dobIndex := patient.BirthDate
 
 	var rec patientRecord
@@ -134,7 +149,7 @@ func (h *PatientsHandler) persistPatient(ctx context.Context, nhiValue string, p
 
 // updatePatientFHIR updates only the FHIR resource blob of an existing patient.
 func (h *PatientsHandler) updatePatientFHIR(ctx context.Context, id string, patient *r5.Patient, tenantID string) (patientRecord, error) {
-	fhirJSON, err := patient.MarshalJSON()
+	fhirJSON, err := json.Marshal(patient)
 	if err != nil {
 		return patientRecord{}, fmt.Errorf("marshal patient FHIR: %w", err)
 	}
@@ -142,7 +157,7 @@ func (h *PatientsHandler) updatePatientFHIR(ctx context.Context, id string, pati
 	if err != nil {
 		return patientRecord{}, fmt.Errorf("encrypt FHIR resource: %w", err)
 	}
-	nameSearch := patient.SearchName()
+	nameSearch := patientSearchName(patient)
 
 	var rec patientRecord
 	err = h.pool.QueryRow(ctx,
@@ -181,7 +196,7 @@ func (h *PatientsHandler) recordToResponse(_ context.Context, rec patientRecord)
 	}
 
 	var patient r5.Patient
-	if err := patient.UnmarshalJSON(fhirJSON); err != nil {
+	if err := json.Unmarshal(fhirJSON, &patient); err != nil {
 		return patientResponse{}, fmt.Errorf("unmarshal FHIR Patient: %w", err)
 	}
 

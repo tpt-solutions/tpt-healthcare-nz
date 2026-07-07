@@ -22,12 +22,12 @@ import (
 type CertificateType string
 
 const (
-	CertTypeSickLeave    CertificateType = "sick-leave"      // Employee sick leave / Work and Income
-	CertTypeFitToWork    CertificateType = "fit-to-work"     // Return-to-work fitness
-	CertTypeACC          CertificateType = "acc"             // ACC45/ACC6 medical certificate
-	CertTypeImmunisation CertificateType = "immunisation"    // Vaccination proof
-	CertTypePreEmploy    CertificateType = "pre-employment"  // Pre-employment medical
-	CertTypeDeath        CertificateType = "death"           // Death certificate (MCCD)
+	CertTypeSickLeave    CertificateType = "sick-leave"     // Employee sick leave / Work and Income
+	CertTypeFitToWork    CertificateType = "fit-to-work"    // Return-to-work fitness
+	CertTypeACC          CertificateType = "acc"            // ACC45/ACC6 medical certificate
+	CertTypeImmunisation CertificateType = "immunisation"   // Vaccination proof
+	CertTypePreEmploy    CertificateType = "pre-employment" // Pre-employment medical
+	CertTypeDeath        CertificateType = "death"          // Death certificate (MCCD)
 )
 
 // Certificate is a medical certificate issued during or following an encounter.
@@ -38,8 +38,8 @@ type Certificate struct {
 	PatientNHI  string          `json:"patientNhi"`
 	IssuingHPI  string          `json:"issuingHpi"`
 	EncounterID string          `json:"encounterId,omitempty"`
-	FromDate    string          `json:"fromDate,omitempty"` // YYYY-MM-DD — start of incapacity / fitness
-	ToDate      string          `json:"toDate,omitempty"`   // YYYY-MM-DD — end of incapacity
+	FromDate    string          `json:"fromDate,omitempty"`  // YYYY-MM-DD — start of incapacity / fitness
+	ToDate      string          `json:"toDate,omitempty"`    // YYYY-MM-DD — end of incapacity
 	Diagnosis   string          `json:"diagnosis,omitempty"` // Free text or ICD-10-AM code
 	Notes       string          `json:"notes,omitempty"`
 	IssuedAt    time.Time       `json:"issuedAt"`
@@ -385,16 +385,16 @@ func (h *CertificatesHandler) insertCertificate(ctx context.Context, req certifi
 		           encounter_id, from_date, to_date, diagnosis, notes,
 		           issued_at, tenant_id, created_at, updated_at`,
 		db.NamedArgs{
-			"type":        req.Type,
-			"patient_id":  req.PatientID,
-			"patient_nhi": req.PatientNHI,
-			"issuing_hpi": req.IssuingHPI,
+			"type":         req.Type,
+			"patient_id":   req.PatientID,
+			"patient_nhi":  req.PatientNHI,
+			"issuing_hpi":  req.IssuingHPI,
 			"encounter_id": req.EncounterID,
-			"from_date":   req.FromDate,
-			"to_date":     req.ToDate,
-			"diagnosis":   req.Diagnosis,
-			"notes":       req.Notes,
-			"tenant_id":   tenantID,
+			"from_date":    req.FromDate,
+			"to_date":      req.ToDate,
+			"diagnosis":    req.Diagnosis,
+			"notes":        req.Notes,
+			"tenant_id":    tenantID,
 		},
 	).Scan(
 		&c.ID, &c.Type, &c.PatientID, &c.PatientNHI, &c.IssuingHPI,

@@ -27,3 +27,6 @@ export type { PatientBannerProps } from "./components/PatientBanner";
 
 export { NHIInput } from "./components/NHIInput";
 export type { NHIInputProps } from "./components/NHIInput";
+
+export { ErrorBoundary } from "./components/ErrorBoundary";
+export type { ErrorBoundaryProps } from "./components/ErrorBoundary";

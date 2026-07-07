@@ -115,23 +115,22 @@ func (h *ReferralsHandler) List(w http.ResponseWriter, r *http.Request) {
 	statusFilter := q.Get("status")
 	providerFilter := q.Get("provider")
 
-	referrals, err := h.listReferrals(ctx, tenantID, patientFilter, statusFilter, providerFilter)
+	referrals, err := h.listReferrals(ctx, tenantID.String(), patientFilter, statusFilter, providerFilter)
 	if err != nil {
-		h.logger.Error("list referrals", slog.Any("error", err), slog.String("tenant", tenantID))
+		h.logger.Error("list referrals", slog.Any("error", err), slog.String("tenant", tenantID.String()))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list referrals"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "ServiceRequest",
 		ResourceID:   "list",
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"patient": patientFilter, "status": statusFilter},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"patient": patientFilter, "status": statusFilter},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"referrals": referrals,
@@ -180,23 +179,22 @@ func (h *ReferralsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	referral, err := h.insertReferral(ctx, req, tenantID)
+	referral, err := h.insertReferral(ctx, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert referral", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create referral"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "create",
 		ResourceType: "ServiceRequest",
 		ResourceID:   referral.ID,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"specialty": req.SpecialtyCode, "priority": string(req.Priority)},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"specialty": req.SpecialtyCode, "priority": string(req.Priority)},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusCreated, referral)
 }
@@ -221,7 +219,7 @@ func (h *ReferralsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	referral, err := h.getReferralByID(ctx, id, tenantID)
+	referral, err := h.getReferralByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "referral not found"})
@@ -232,15 +230,14 @@ func (h *ReferralsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionRead,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "read",
 		ResourceType: "ServiceRequest",
 		ResourceID:   id,
 		TenantID:     tenantID,
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, referral)
 }
@@ -272,7 +269,7 @@ func (h *ReferralsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	referral, err := h.getReferralByID(ctx, id, tenantID)
+	referral, err := h.getReferralByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "referral not found"})
@@ -291,23 +288,22 @@ func (h *ReferralsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated, err := h.updateReferral(ctx, id, req, tenantID)
+	updated, err := h.updateReferral(ctx, id, req, tenantID.String())
 	if err != nil {
 		h.logger.Error("update referral", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "UPDATE_ERROR", Message: "failed to update referral"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "ServiceRequest",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "update"},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"action": "update"},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	writeJSON(w, http.StatusOK, updated)
 }
@@ -334,7 +330,7 @@ func (h *ReferralsHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	referral, err := h.getReferralByID(ctx, id, tenantID)
+	referral, err := h.getReferralByID(ctx, id, tenantID.String())
 	if err != nil {
 		if errors.Is(err, errNotFound) {
 			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "referral not found"})
@@ -354,23 +350,22 @@ func (h *ReferralsHandler) Send(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC()
-	sent, err := h.markReferralSent(ctx, id, now, tenantID)
+	sent, err := h.markReferralSent(ctx, id, now, tenantID.String())
 	if err != nil {
 		h.logger.Error("mark referral sent", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "SEND_ERROR", Message: "failed to send referral"})
 		return
 	}
 
-	if err := h.auditTrail.Write(ctx, audit.Event{
-		Actor:        principal,
-		Action:       audit.ActionWrite,
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID:  principal.ID,
+		Action:       "update",
 		ResourceType: "ServiceRequest",
 		ResourceID:   id,
 		TenantID:     tenantID,
-		Metadata:     map[string]string{"action": "send", "specialty": referral.SpecialtyCode},
-	}); err != nil {
-		h.logger.Error("audit write", slog.Any("error", err))
-	}
+		Details:      map[string]any{"action": "send", "specialty": referral.SpecialtyCode},
+		OccurredAt:   time.Now().UTC(),
+	})
 
 	// Dispatch the referral via fax/EDI when a provider is wired.
 	// The receiving provider's fax number is used as the "to" address; in

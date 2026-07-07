@@ -21,15 +21,15 @@ type Immunisation struct {
 	ID             string     `json:"id"`
 	PatientID      string     `json:"patientId"`
 	PatientNHI     string     `json:"patientNhi"`
-	VaccineCode    string     `json:"vaccineCode"`           // NZMT code
+	VaccineCode    string     `json:"vaccineCode"` // NZMT code
 	VaccineName    string     `json:"vaccineName"`
 	LotNumber      string     `json:"lotNumber,omitempty"`
 	ExpiryDate     string     `json:"expiryDate,omitempty"` // YYYY-MM-DD
 	DoseNumber     int        `json:"doseNumber"`
-	Series         string     `json:"series,omitempty"`    // e.g. "HPV-3-dose"
+	Series         string     `json:"series,omitempty"` // e.g. "HPV-3-dose"
 	BodySiteCode   string     `json:"bodySiteCode,omitempty"`
-	RouteCode      string     `json:"routeCode,omitempty"`  // SNOMED CT
-	AdministeredBy string     `json:"administeredBy"`       // HPI CPN
+	RouteCode      string     `json:"routeCode,omitempty"` // SNOMED CT
+	AdministeredBy string     `json:"administeredBy"`      // HPI CPN
 	EncounterID    string     `json:"encounterId,omitempty"`
 	OccurrenceDate time.Time  `json:"occurrenceDate"`
 	NIRSubmitted   bool       `json:"nirSubmitted"`
