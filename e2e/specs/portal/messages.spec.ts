@@ -7,7 +7,7 @@ test.describe('Patient secure messages', () => {
     await page.getByLabel('Password').fill('anything');
     await page.getByRole('button', { name: 'Sign in' }).click();
     await page.waitForURL('**/dashboard');
-    await page.getByRole('link', { name: 'Messages' }).click();
+    await page.locator('nav').getByRole('link', { name: 'Messages' }).click();
     await page.waitForURL('**/messages');
   });
 

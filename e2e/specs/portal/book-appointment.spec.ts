@@ -7,7 +7,7 @@ test.describe('Book appointment flow', () => {
     await page.getByLabel('Password').fill('anything');
     await page.getByRole('button', { name: 'Sign in' }).click();
     await page.waitForURL('**/dashboard');
-    await page.getByRole('link', { name: 'Book Appointment' }).click();
+    await page.locator('nav').getByRole('link', { name: 'Book Appointment' }).click();
     await page.waitForURL('**/appointments/book');
   });
 

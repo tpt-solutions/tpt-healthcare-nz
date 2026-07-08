@@ -20,7 +20,8 @@ test.describe('Onboarding wizard', () => {
     await onboarding.continueButton().click();
     await page.waitForTimeout(500);
     await expect(page.getByText('Step 2 of 7')).toBeVisible();
-    await expect(page.getByText('Departments')).toBeVisible();
+    // Step 2 heading is "Departments" — use the h2 within the wizard
+    await expect(page.getByRole('heading', { name: 'Departments' })).toBeVisible();
   });
 
   test('clicking back returns to the previous step', async ({ page }) => {

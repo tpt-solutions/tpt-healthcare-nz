@@ -25,17 +25,19 @@ test.describe('Audit log page', () => {
   });
 
   test('shows audit events in the table', async ({ page }) => {
-    await expect(page.getByText('Dr. Hemi Walker').first()).toBeVisible();
-    await expect(page.getByText('Patient').first()).toBeVisible();
-    await expect(page.getByText('read').first()).toBeVisible();
-    await expect(page.getByText('create').first()).toBeVisible();
+    // Scope to table rows to avoid matching hidden <option> elements in filter dropdowns
+    const tableBody = page.locator('table tbody');
+    await expect(tableBody.getByText('Dr. Hemi Walker').first()).toBeVisible();
+    await expect(tableBody.getByText('Patient').first()).toBeVisible();
   });
 
   test('filtering by action narrows results', async ({ page }) => {
     const audit = new AdminAuditPage(page);
+    const tableBody = page.locator('table tbody');
 
     await audit.actionFilter().selectOption('create');
-    await expect(page.getByText('read').first()).not.toBeVisible();
+    // After filtering to "create", "read" action rows should not be visible in the table
+    await expect(tableBody.getByText('read').first()).not.toBeVisible();
   });
 
   test('export CSV button is present', async ({ page }) => {

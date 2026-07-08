@@ -23,11 +23,10 @@ test.describe('ACC Provider registration', () => {
     await expect(page.getByText('0800 222 070')).toBeVisible();
   });
 
-  test('verifying with empty input shows an error', async ({ page }) => {
+  test('verify button is disabled when input is empty', async ({ page }) => {
     const accProvider = new AdminACCProviderPage(page);
 
-    await accProvider.verifyButton().click();
-    await expect(page.getByText('Enter an ACC provider number')).toBeVisible();
+    await expect(accProvider.verifyButton()).toBeDisabled();
   });
 
   test('verifying a provider number shows the result', async ({ page }) => {

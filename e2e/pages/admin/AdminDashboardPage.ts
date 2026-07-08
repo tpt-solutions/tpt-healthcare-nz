@@ -7,16 +7,17 @@ export class AdminDashboardPage {
     return this.page.getByRole('heading', { level: 1 });
   }
 
+  /** The KPI card with "Practitioners" as the uppercase label — use the sub-text to disambiguate from nav. */
   practitionersCard() {
-    return this.page.getByText('Practitioners').locator('..');
+    return this.page.getByText('registered this practice').locator('..');
   }
 
   enrolledPatientsCard() {
-    return this.page.getByText('Enrolled Patients').locator('..');
+    return this.page.getByText('NES enrolled').locator('..');
   }
 
   accClaimsCard() {
-    return this.page.getByText('ACC Claims').locator('..');
+    return this.page.getByText('month to date').locator('..');
   }
 
   overdueAuditCard() {

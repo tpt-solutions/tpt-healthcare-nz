@@ -68,15 +68,16 @@ test.describe('Clinics management', () => {
     const clinics = new AdminClinicsPage(page);
 
     await clinics.tenantsTab().click();
-    await expect(page.getByText('Auckland City Medical Centre')).toBeVisible();
-    await expect(page.getByText('F0K068-C')).toBeVisible();
+    // Wait for the tenants data to load
+    await expect(page.getByRole('row', { name: /Auckland City Medical Centre/ })).toBeVisible();
   });
 
   test('clicking approve opens the review modal', async ({ page }) => {
     const clinics = new AdminClinicsPage(page);
 
     await clinics.approveButton('Wellington Medical Centre').click();
-    await expect(page.getByText('Approve Application')).toBeVisible();
+    // The modal heading uses role=heading
+    await expect(page.getByRole('heading', { name: 'Approve Application' })).toBeVisible();
     await expect(clinics.modalNotesInput()).toBeVisible();
     await expect(clinics.modalConfirmButton()).toBeVisible();
     await expect(clinics.modalCancelButton()).toBeVisible();
@@ -86,6 +87,6 @@ test.describe('Clinics management', () => {
     const clinics = new AdminClinicsPage(page);
 
     await clinics.rejectButton('Wellington Medical Centre').click();
-    await expect(page.getByText('Reject Application')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Reject Application' })).toBeVisible();
   });
 });

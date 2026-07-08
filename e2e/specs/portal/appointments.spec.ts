@@ -7,7 +7,7 @@ test.describe('Patient appointments', () => {
     await page.getByLabel('Password').fill('anything');
     await page.getByRole('button', { name: 'Sign in' }).click();
     await page.waitForURL('**/dashboard');
-    await page.getByRole('link', { name: 'Appointments' }).click();
+    await page.locator('nav').getByRole('link', { name: 'Appointments' }).click();
     await page.waitForURL('**/appointments');
   });
 

@@ -8,23 +8,19 @@ export class AdminSecurityPage {
   }
 
   complianceChecklist() {
-    return this.page.getByText('HIPC Compliance Checklist');
+    return this.page.getByRole('heading', { name: 'HIPC Compliance Checklist' });
   }
 
   breachNotificationLog() {
-    return this.page.getByText('Breach Notification Log');
+    return this.page.getByRole('heading', { name: /Breach Notification Log/ });
   }
 
   dataRetentionSection() {
-    return this.page.getByText('Data Retention Status');
+    return this.page.getByRole('heading', { name: 'Data Retention Status' });
   }
 
   activeSessionsSection() {
-    return this.page.getByText('Active Sessions');
-  }
-
-  complianceCount() {
-    return this.page.locator('.bg-green-50, .bg-red-50').first().locator('p.text-2xl');
+    return this.page.getByRole('heading', { name: 'Active Sessions' });
   }
 
   terminateButton(userName: string) {

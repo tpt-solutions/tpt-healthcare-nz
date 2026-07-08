@@ -18,16 +18,13 @@ test.describe('Practitioners page', () => {
   });
 
   test('shows APC alert banner for expiring practitioners', async ({ page }) => {
-    const practitioners = new AdminPractitionersPage(page);
-
-    await expect(practitioners.apcAlertBanner()).toBeVisible();
-    await expect(page.getByText('Dr. Sione Tuilagi')).toBeVisible();
+    // The banner text "APC Action Required" appears as a paragraph, not heading
+    await expect(page.getByText('APC Action Required')).toBeVisible();
+    await expect(page.getByText('Dr. Sione Tuilagi').first()).toBeVisible();
   });
 
   test('shows HPCA compliance note', async ({ page }) => {
-    const practitioners = new AdminPractitionersPage(page);
-
-    await expect(practitioners.hpcaNote()).toBeVisible();
+    await expect(page.getByText('HPCA Act 2003')).toBeVisible();
   });
 
   test('search input filters practitioners', async ({ page }) => {

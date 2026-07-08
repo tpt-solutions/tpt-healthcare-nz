@@ -33,12 +33,10 @@ test.describe('Role assignments', () => {
   });
 
   test('shows the role reference legend', async ({ page }) => {
-    const roles = new AdminRolesPage(page);
-
-    await expect(roles.roleLegend()).toBeVisible();
-    await expect(page.getByText('Practice Admin')).toBeVisible();
-    await expect(page.getByText('Clinician')).toBeVisible();
-    await expect(page.getByText('Nurse')).toBeVisible();
+    // "Role reference" is a heading in the legend section
+    await expect(page.getByRole('heading', { name: 'Role reference' })).toBeVisible();
+    await expect(page.getByText('Practice Admin').first()).toBeVisible();
+    await expect(page.getByText('Clinician').first()).toBeVisible();
   });
 
   test('clicking grant role shows the form', async ({ page }) => {

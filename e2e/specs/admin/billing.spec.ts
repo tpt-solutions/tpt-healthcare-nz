@@ -25,17 +25,14 @@ test.describe('Billing page', () => {
   });
 
   test('PHO capitation section shows enrolled patients and rate', async ({ page }) => {
-    const billing = new AdminBillingPage(page);
-
-    await expect(billing.phoCapitationSection()).toBeVisible();
+    // "PHO Capitation" appears as a section heading
+    await expect(page.getByRole('heading', { name: 'PHO Capitation' })).toBeVisible();
     await expect(page.getByText('4,823').first()).toBeVisible();
     await expect(page.getByText('$60.37 / patient')).toBeVisible();
   });
 
   test('revenue chart section is visible', async ({ page }) => {
-    const billing = new AdminBillingPage(page);
-
-    await expect(billing.revenueChartSection()).toBeVisible();
+    await expect(page.getByText('Monthly Revenue by Funding Type')).toBeVisible();
     await expect(page.getByText('June 2026 Total')).toBeVisible();
   });
 

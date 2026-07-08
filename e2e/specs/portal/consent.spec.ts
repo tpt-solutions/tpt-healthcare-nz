@@ -7,7 +7,7 @@ test.describe('Patient consent management', () => {
     await page.getByLabel('Password').fill('anything');
     await page.getByRole('button', { name: 'Sign in' }).click();
     await page.waitForURL('**/dashboard');
-    await page.getByRole('link', { name: 'My Consent' }).click();
+    await page.locator('nav').getByRole('link', { name: 'My Consent' }).click();
     await page.waitForURL('**/consent');
   });
 
@@ -28,18 +28,22 @@ test.describe('Patient consent management', () => {
   });
 
   test('clicking Details expands the consent detail', async ({ page }) => {
-    await page.getByText('Share records with my GP').locator('..').getByRole('button', { name: 'Details' }).click();
+    // Scope to the consent card to avoid matching nav elements
+    const consentCard = page.locator('.bg-white.rounded-xl.border').filter({ hasText: 'Share records with my GP' });
+    await consentCard.getByRole('button', { name: 'Details' }).click();
     await expect(page.getByText('Under HIPC Rule 11')).toBeVisible();
   });
 
   test('revoking a consent opens a confirmation modal', async ({ page }) => {
-    await page.getByText('Share records with my GP').locator('..').getByRole('button', { name: 'Revoke' }).click();
+    const consentCard = page.locator('.bg-white.rounded-xl.border').filter({ hasText: 'Share records with my GP' });
+    await consentCard.getByRole('button', { name: 'Revoke' }).click();
     await expect(page.getByRole('heading', { name: 'Revoke consent?' })).toBeVisible();
     await expect(page.getByText('Revoking this consent takes effect immediately')).toBeVisible();
   });
 
   test('granting a revoked consent opens a confirmation modal', async ({ page }) => {
-    await page.getByText('Share medication history').locator('..').getByRole('button', { name: 'Grant' }).click();
+    const consentCard = page.locator('.bg-white.rounded-xl.border').filter({ hasText: 'Share medication history' });
+    await consentCard.getByRole('button', { name: 'Grant' }).click();
     await expect(page.getByRole('heading', { name: 'Grant consent?' })).toBeVisible();
   });
 });

@@ -7,7 +7,8 @@ test.describe('Patient prescriptions', () => {
     await page.getByLabel('Password').fill('anything');
     await page.getByRole('button', { name: 'Sign in' }).click();
     await page.waitForURL('**/dashboard');
-    await page.getByRole('link', { name: 'Prescriptions' }).click();
+    // Scope to sidebar nav to avoid matching "View all prescriptions" link on dashboard
+    await page.locator('nav').getByRole('link', { name: 'Prescriptions' }).click();
     await page.waitForURL('**/prescriptions');
   });
 
@@ -30,7 +31,7 @@ test.describe('Patient prescriptions', () => {
   });
 
   test('shows past prescriptions', async ({ page }) => {
-    await expect(page.getByText('Past Prescriptions')).toBeVisible();
+    await expect(page.getByText('Past Prescriptions').first()).toBeVisible();
     await expect(page.getByText('Amoxicillin 500 mg capsules')).toBeVisible();
   });
 

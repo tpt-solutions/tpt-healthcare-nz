@@ -18,7 +18,6 @@ test.describe('Security & compliance page', () => {
     const security = new AdminSecurityPage(page);
 
     await expect(security.complianceChecklist()).toBeVisible();
-    // Verify some key checks are present
     await expect(page.getByText('PHI encrypted at rest')).toBeVisible();
     await expect(page.getByText('TLS 1.2+ on all external connections')).toBeVisible();
     await expect(page.getByText('Audit trail for all health record access')).toBeVisible();
@@ -28,14 +27,15 @@ test.describe('Security & compliance page', () => {
     const security = new AdminSecurityPage(page);
 
     await expect(security.breachNotificationLog()).toBeVisible();
-    await expect(page.getByText('Privacy Act 2020 s113')).toBeVisible();
+    // "Privacy Act 2020 s113" appears in both breach and info sections — use first
+    await expect(page.getByText('Privacy Act 2020 s113').first()).toBeVisible();
   });
 
   test('shows data retention status table', async ({ page }) => {
     const security = new AdminSecurityPage(page);
 
     await expect(security.dataRetentionSection()).toBeVisible();
-    await expect(page.getByText('audit_events')).toBeVisible();
+    await expect(page.getByText('audit_events').first()).toBeVisible();
     await expect(page.getByText('10 years').first()).toBeVisible();
   });
 

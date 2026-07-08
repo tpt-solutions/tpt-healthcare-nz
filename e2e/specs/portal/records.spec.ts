@@ -7,14 +7,14 @@ test.describe('Patient health records', () => {
     await page.getByLabel('Password').fill('anything');
     await page.getByRole('button', { name: 'Sign in' }).click();
     await page.waitForURL('**/dashboard');
-    await page.getByRole('link', { name: 'Health Records' }).click();
+    await page.locator('nav').getByRole('link', { name: 'Health Records' }).click();
     await page.waitForURL('**/records');
   });
 
   test('renders the records heading and NHI banner', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'My Health Records' })).toBeVisible();
     await expect(page.getByText('National Health Index (NHI)')).toBeVisible();
-    await expect(page.getByText('ZZZ0032')).toBeVisible();
+    await expect(page.getByText('ZZZ0032').first()).toBeVisible();
   });
 
   test('shows HIPC data retention note', async ({ page }) => {

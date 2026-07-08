@@ -16,7 +16,7 @@ test.describe('Portal dashboard', () => {
 
   test('shows quick stats cards', async ({ page }) => {
     await expect(page.getByText('Next Appointment')).toBeVisible();
-    await expect(page.getByText('Active Medications')).toBeVisible();
+    await expect(page.getByText('Active Medications').first()).toBeVisible();
     await expect(page.getByText('Results to Review')).toBeVisible();
   });
 

@@ -15,28 +15,17 @@ export class AdminSettingsPage {
     return this.page.getByText('Settings saved successfully');
   }
 
+  /** Practice name input — label isn't associated via for/id, so locate by position. */
   practiceNameInput() {
-    return this.page.getByLabel('Practice Name');
+    return this.page.locator('input').filter({ hasText: '' }).nth(0);
   }
 
   hpiFacilityIdInput() {
-    return this.page.getByLabel('HPI Facility ID');
+    return this.page.locator('input.font-mono').first();
   }
 
   autoLockSelect() {
-    return this.page.getByLabel('Auto-lock after inactivity');
-  }
-
-  telehealthToggle() {
-    return this.page.getByText('Telehealth appointments').locator('..');
-  }
-
-  accClaimingToggle() {
-    return this.page.getByText('ACC claiming').locator('..');
-  }
-
-  hipcConsentToggle() {
-    return this.page.getByText('HIPC consent gate').locator('..');
+    return this.page.getByText('Auto-lock after inactivity').locator('..').locator('select');
   }
 
   appearanceSection() {

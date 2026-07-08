@@ -15,10 +15,6 @@ export class AdminClinicsPage {
     return this.page.getByRole('button', { name: 'Active Clinics' });
   }
 
-  statusFilterButton(label: string) {
-    return this.page.getByRole('button', { name: new RegExp(`^${label}$`, 'i') });
-  }
-
   applicationRow(practiceName: string) {
     return this.page.getByRole('row', { name: new RegExp(practiceName) });
   }
@@ -31,15 +27,16 @@ export class AdminClinicsPage {
     return this.applicationRow(practiceName).getByRole('button', { name: 'Reject' });
   }
 
+  /** The confirm button inside the review modal — scope to the fixed overlay. */
   modalConfirmButton() {
-    return this.page.getByRole('button', { name: /Approve & Provision|Reject/ });
+    return this.page.locator('.fixed.inset-0').getByRole('button', { name: /Approve & Provision|Reject/ });
   }
 
   modalCancelButton() {
-    return this.page.getByRole('button', { name: 'Cancel' });
+    return this.page.locator('.fixed.inset-0').getByRole('button', { name: 'Cancel' });
   }
 
   modalNotesInput() {
-    return this.page.locator('textarea');
+    return this.page.locator('.fixed.inset-0 textarea');
   }
 }
