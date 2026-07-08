@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 const CLINIC_PORT = 4173;
 const PORTAL_PORT = 4174;
+const ADMIN_PORT = 4175;
 
 export default defineConfig({
   testDir: './specs',
@@ -33,6 +34,14 @@ export default defineConfig({
         baseURL: `http://localhost:${PORTAL_PORT}`,
       },
     },
+    {
+      name: 'admin',
+      testDir: './specs/admin',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:${ADMIN_PORT}`,
+      },
+    },
   ],
   webServer: [
     {
@@ -49,6 +58,13 @@ export default defineConfig({
     {
       command: `pnpm --filter tpt-portal exec vite --port ${PORTAL_PORT} --strictPort`,
       url: `http://localhost:${PORTAL_PORT}`,
+      cwd: '..',
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+    {
+      command: `pnpm --filter tpt-admin exec vite --port ${ADMIN_PORT} --strictPort`,
+      url: `http://localhost:${ADMIN_PORT}`,
       cwd: '..',
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
