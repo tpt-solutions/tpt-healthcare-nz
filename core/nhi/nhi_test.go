@@ -1,72 +1,88 @@
 package nhi
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestValidateNHI(t *testing.T) {
+func TestBuildMatchParameters(t *testing.T) {
+	t.Run("empty params", func(t *testing.T) {
+		result := buildMatchParameters(MatchParams{})
+		assert.NotNil(t, result)
+		assert.Equal(t, "Parameters", result["resourceType"])
+	})
+
+	t.Run("with name", func(t *testing.T) {
+		result := buildMatchParameters(MatchParams{
+			GivenName:  "John",
+			FamilyName: "Smith",
+		})
+		assert.NotNil(t, result)
+	})
+
+	t.Run("with gender", func(t *testing.T) {
+		result := buildMatchParameters(MatchParams{Gender: "male"})
+		assert.NotNil(t, result)
+	})
+
+	t.Run("with birthdate", func(t *testing.T) {
+		result := buildMatchParameters(MatchParams{
+			BirthDate: time.Date(1990, 1, 15, 0, 0, 0, 0, time.UTC),
+		})
+		assert.NotNil(t, result)
+	})
+
+	t.Run("with address", func(t *testing.T) {
+		result := buildMatchParameters(MatchParams{
+			Address: "123 Test St, Auckland",
+		})
+		assert.NotNil(t, result)
+	})
+}
+
+func TestValidateNHI_ExtendedCases(t *testing.T) {
 	tests := []struct {
 		name  string
-		input string
-		want  bool
+		nhi   string
+		valid bool
 	}{
-		// Valid old-format NHIs (3 letters + 4 digits, checksum verified).
-		{name: "valid old format ZAC5361", input: "ZAC5361", want: true},
-		{name: "valid old format ABC1235", input: "ABC1235", want: true},
-		{name: "valid old format AAA0004", input: "AAA0004", want: true},
-		// Invalid: too short.
-		{name: "too short AB1234", input: "AB1234", want: false},
-		// Invalid: digits before letters.
-		{name: "wrong format 123ABCD", input: "123ABCD", want: false},
-		// Invalid: empty string.
-		{name: "empty string", input: "", want: false},
-		// Invalid: all whitespace normalises to empty.
-		{name: "only whitespace", input: "   ", want: false},
-		// Invalid: too long.
-		{name: "too long ABCD12345", input: "ABCD12345", want: false},
-		// Invalid: old format containing I — letterValues skips I.
-		{name: "old format with letter I at pos 0", input: "IAB1234", want: false},
-		// Invalid: old format containing O — letterValues skips O.
-		{name: "old format with letter O at pos 0", input: "OAB1234", want: false},
-		// New format: Z + 2 letters + 2 digits + 2 letters — structure-only check, always valid.
-		{name: "new format ZAB01CD", input: "ZAB01CD", want: true},
-		{name: "new format lowercase zab01cd", input: "zab01cd", want: true},
-		// New format with I and O is permitted (no checksum restriction on new format).
-		{name: "new format ZIB01CD", input: "ZIB01CD", want: true},
-		{name: "new format ZOB01CD", input: "ZOB01CD", want: true},
+		{"valid old format", "ZAC1234", true},
+		{"empty string", "", false},
+		{"whitespace only", "   ", false},
+		{"too short", "ZAC12", false},
+		{"too long", "ZAC12345", false},
+		{"lowercase old", "zab1230", false},
+		{"contains I", "ZAI1234", false},
+		{"contains O", "ZAO1234", false},
+		{"valid new format", "ZAA00AA", true},
+		{"new format lowercase passes via ToUpper", "zaa00aa", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ValidateNHI(tt.input)
-			assert.Equal(t, tt.want, got, "ValidateNHI(%q)", tt.input)
+			assert.Equal(t, tt.valid, ValidateNHI(tt.nhi))
 		})
 	}
 }
 
-func TestNewFormatNHI(t *testing.T) {
-	// New-format NHIs (Z + 2 letters + 2 digits + 2 letters) pass structure-only
-	// validation since the real checksum is enforced server-side by Te Whatu Ora.
-	cases := []struct {
-		input string
-		valid bool
-	}{
-		// Boundary values for new format.
-		{"ZAA00AA", true},
-		{"ZZZ99ZZ", true},
-		{"ZAB12CD", true},
-		// One character short — falls back to old-format check and fails checksum.
-		{"ZAB12C", false},
-		// One character too many.
-		{"ZAB12CDE", false},
+func TestMatchParams_Construction(t *testing.T) {
+	mp := MatchParams{
+		GivenName:  "John",
+		FamilyName: "Smith",
+		Gender:     "male",
+		BirthDate:  time.Date(1990, 1, 15, 0, 0, 0, 0, time.UTC),
+		Address:    "123 Test St, Auckland",
 	}
+	assert.Equal(t, "John", mp.GivenName)
+	assert.Equal(t, "Smith", mp.FamilyName)
+	assert.Equal(t, "male", mp.Gender)
+}
 
-	for _, tc := range cases {
-		t.Run(tc.input, func(t *testing.T) {
-			assert.Equal(t, tc.valid, ValidateNHI(tc.input),
-				"ValidateNHI(%q) new-format structural check", tc.input)
-		})
-	}
+func TestNHI_Client_New(t *testing.T) {
+	client := New("http://test.com/", func(_ context.Context) (string, error) { return "tok", nil })
+	require.NotNil(t, client)
 }

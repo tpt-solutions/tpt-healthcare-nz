@@ -16,7 +16,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@/*": ["src/*"],
+      "@/*": ["./src/*"],
       "@tpt/offline-store": ["../../packages/offline-store/src/index.ts"],
       "@tpt/offline-store/*": ["../../packages/offline-store/src/*"],
       "@tpt/ui": ["../../packages/ui/src/index.ts"],
