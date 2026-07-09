@@ -42,8 +42,8 @@ const (
 type DistanceType string
 
 const (
-	Distance DistanceType = "distance"
-	Near     DistanceType = "near"
+	Distance     DistanceType = "distance"
+	Near         DistanceType = "near"
 	Intermediate DistanceType = "intermediate"
 )
 
@@ -51,43 +51,43 @@ const (
 type PrismDirection string
 
 const (
-	BaseIn  PrismDirection = "BU" // base up
+	BaseIn   PrismDirection = "BU" // base up
 	BaseDown PrismDirection = "BD" // base down
-	BaseInn PrismDirection = "BI" // base in (nasal)
+	BaseInn  PrismDirection = "BI" // base in (nasal)
 	BaseOut  PrismDirection = "BO" // base out (temporal)
 )
 
 // EyePrescription holds the full refraction values for one eye.
 type EyePrescription struct {
-	Sphere       float64         `json:"sphere"`       // dioptres (0.25D steps)
-	Cylinder     float64         `json:"cylinder"`     // dioptres (optional)
-	Axis         int             `json:"axis"`          // degrees 1–180 (optional)
-	Prism        float64         `json:"prism"`         // prism dioptres (optional)
-	PrismDir     PrismDirection  `json:"prismDir,omitempty"`
-	ADD          float64         `json:"add"`           // near ADD power (dioptres)
-	VisualAcuity string          `json:"visualAcuity"`  // e.g. "6/6", "6/9"
+	Sphere       float64          `json:"sphere"`   // dioptres (0.25D steps)
+	Cylinder     float64          `json:"cylinder"` // dioptres (optional)
+	Axis         int              `json:"axis"`     // degrees 1–180 (optional)
+	Prism        float64          `json:"prism"`    // prism dioptres (optional)
+	PrismDir     PrismDirection   `json:"prismDir,omitempty"`
+	ADD          float64          `json:"add"`          // near ADD power (dioptres)
+	VisualAcuity string           `json:"visualAcuity"` // e.g. "6/6", "6/9"
 	Method       RefractionMethod `json:"method"`
-	Notes        string          `json:"notes,omitempty"`
+	Notes        string           `json:"notes,omitempty"`
 }
 
 // Prescription is a complete refraction prescription for a patient encounter.
 type Prescription struct {
-	ID               string            `json:"id"`
-	TenantID         string            `json:"tenantId"`
-	PatientNHI       string            `json:"patientNhi"`
-	ClinicianID      string            `json:"clinicianId"`
-	PracticeID       string            `json:"practiceId"`
-	Type             PrescriptionType  `json:"type"`
-	Distance         DistanceType      `json:"distance"`
-	RightEye         EyePrescription   `json:"rightEye"`
-	LeftEye          EyePrescription   `json:"leftEye"`
-	IssuedDate       int64             `json:"issuedDate"`
-	ExpiryDate       int64             `json:"expiryDate"`
-	IsCurrent        bool              `json:"isCurrent"`
-	CreatedAt        int64             `json:"createdAt"`
-	UpdatedAt        int64             `json:"updatedAt"`
-	FHIRResource     json.RawMessage   `json:"fhirResource,omitempty"`
-	FHIRVersion      int               `json:"fhirVersion,omitempty"`
+	ID           string           `json:"id"`
+	TenantID     string           `json:"tenantId"`
+	PatientNHI   string           `json:"patientNhi"`
+	ClinicianID  string           `json:"clinicianId"`
+	PracticeID   string           `json:"practiceId"`
+	Type         PrescriptionType `json:"type"`
+	Distance     DistanceType     `json:"distance"`
+	RightEye     EyePrescription  `json:"rightEye"`
+	LeftEye      EyePrescription  `json:"leftEye"`
+	IssuedDate   int64            `json:"issuedDate"`
+	ExpiryDate   int64            `json:"expiryDate"`
+	IsCurrent    bool             `json:"isCurrent"`
+	CreatedAt    int64            `json:"createdAt"`
+	UpdatedAt    int64            `json:"updatedAt"`
+	FHIRResource json.RawMessage  `json:"fhirResource,omitempty"`
+	FHIRVersion  int              `json:"fhirVersion,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -231,12 +231,12 @@ const (
 // for refraction/prescription data.
 func (p *Prescription) ToFHIRObservation() map[string]any {
 	issuedTime := time.UnixMilli(p.IssuedDate).Format(time.RFC3339)
-	
+
 	obs := map[string]any{
 		"resourceType": "Observation",
 		"id":           p.ID,
 		"meta": map[string]any{
-			"versionId": fmt.Sprintf("%d", p.FHIRVersion),
+			"versionId":   fmt.Sprintf("%d", p.FHIRVersion),
 			"lastUpdated": time.UnixMilli(p.UpdatedAt).Format(time.RFC3339),
 			"profile": []string{
 				"https://nzfhir.org/StructureDefinition/nz-vision-prescription",
@@ -308,15 +308,15 @@ func (p *Prescription) ToFHIRObservation() map[string]any {
 	// Add extension for prescription metadata
 	obs["extension"] = []map[string]any{
 		{
-			"url": "https://nzfhir.org/StructureDefinition/nz-vision-prescription-distance",
+			"url":       "https://nzfhir.org/StructureDefinition/nz-vision-prescription-distance",
 			"valueCode": string(p.Distance),
 		},
 		{
-			"url": "https://nzfhir.org/StructureDefinition/nz-vision-prescription-expiry",
+			"url":           "https://nzfhir.org/StructureDefinition/nz-vision-prescription-expiry",
 			"valueDateTime": time.UnixMilli(p.ExpiryDate).Format(time.RFC3339),
 		},
 		{
-			"url": "https://nzfhir.org/StructureDefinition/nz-vision-prescription-current",
+			"url":          "https://nzfhir.org/StructureDefinition/nz-vision-prescription-current",
 			"valueBoolean": p.IsCurrent,
 		},
 	}

@@ -83,11 +83,11 @@ Gap analysis for a large adult tertiary hospital (Auckland City) and paediatric 
 hospital (Starship) going live on `modules/tpt-hospital` + `modules/tpt-maternal-child-health`.
 See plan `lets-say-auckland-city-jolly-pinwheel.md` for full detail.
 
-- [ ] **tpt-hospital / tpt-pathology / tpt-radiology** — No lab/imaging order entry (CPOE) linked to admissions
-  - [ ] Design order model (admissionID-linked) and wire to pathology/radiology result callback
-- [ ] **core/hl7** — No HL7 ADT (A01/A02/A03/A08) or ORM/ORU message builders (`core/hl7/{client,mllp,parser}.go` is transport/parser only)
+- [x] **tpt-hospital / tpt-pathology / tpt-radiology** — CPOE implemented: `clinical_orders` table (`012_cpoe.sql`), `CPOEHandler` with 7 routes + result callback, HL7 ORM^O01 dispatch, admission-linked order lifecycle
+  - [x] Design order model (admissionID-linked) and wire to pathology/radiology result callback
+- [ ] **core/hl7** — HL7 ADT (A01/A02/A03/A08) message builders missing; ORM/ORU builders already exist (`core/hl7/orm.go`, `core/hl7/oru.go`)
   - [ ] Add ADT message builders for admit/transfer/discharge/update events
-  - [ ] Add ORM/ORU builders for lab/imaging order and result messages
+  - [x] ORM builders for lab/imaging order messages
 - [ ] **tpt-hospital/api/billing.go** — DRG/casemix grouper is a placeholder (`deriveDRG` hardcodes ~4 AR-DRG buckets from first letter of diagnosis code)
   - [ ] Implement real AR-DRG/WIES grouper in `core/terminology/`
 - [ ] **core/fhir** — No FHIR `Location` resource; `Encounter` only exists in r5, not r4

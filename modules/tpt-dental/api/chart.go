@@ -26,15 +26,15 @@ type ChartHandler struct {
 
 // chartStorage is the persisted representation of a dental chart.
 type chartStorage struct {
-	PatientNHI  string            `json:"patientNhi"`
-	Dentition   string            `json:"dentition"`
+	PatientNHI  string                `json:"patientNhi"`
+	Dentition   string                `json:"dentition"`
 	Entries     []fdi.ToothChartEntry `json:"entries"`
-	ChartDate   int64             `json:"chartDate"`
-	ClinicianID string            `json:"clinicianId"`
-	PracticeID  string            `json:"practiceId"`
-	VisitID     string            `json:"visitId,omitempty"`
-	CreatedAt   int64             `json:"createdAt"`
-	UpdatedAt   int64             `json:"updatedAt"`
+	ChartDate   int64                 `json:"chartDate"`
+	ClinicianID string                `json:"clinicianId"`
+	PracticeID  string                `json:"practiceId"`
+	VisitID     string                `json:"visitId,omitempty"`
+	CreatedAt   int64                 `json:"createdAt"`
+	UpdatedAt   int64                 `json:"updatedAt"`
 }
 
 // GetChart returns the full dental chart for a patient.

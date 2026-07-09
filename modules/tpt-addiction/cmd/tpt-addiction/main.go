@@ -75,12 +75,17 @@ var serveCmd = &cobra.Command{
 			Auth0Audience: viper.GetString("auth0.audience"), TenantHeader: viper.GetString("tenant.header"),
 			Logger: logger,
 		})
-		if err != nil { return fmt.Errorf("create server: %w", err) }
+		if err != nil {
+			return fmt.Errorf("create server: %w", err)
+		}
 		addr := fmt.Sprintf("%s:%d", viper.GetString("server.host"), viper.GetInt("server.port"))
 		httpSrv := &http.Server{Addr: addr, Handler: srv.Handler(), ReadTimeout: 30 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 120 * time.Second}
 		go func() {
 			logger.Info("tpt-addiction server starting", slog.String("addr", addr))
-			if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed { logger.Error("server error", slog.Any("error", err)); os.Exit(1) }
+			if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				logger.Error("server error", slog.Any("error", err))
+				os.Exit(1)
+			}
 		}()
 		quit := make(chan os.Signal, 1)
 		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -97,9 +102,13 @@ var migrateCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 		dbURL := viper.GetString("database.url")
-		if dbURL == "" { return fmt.Errorf("database.url required (set TPT_ADDICTION_DATABASE_URL)") }
+		if dbURL == "" {
+			return fmt.Errorf("database.url required (set TPT_ADDICTION_DATABASE_URL)")
+		}
 		logger.Info("running migrations")
-		if err := api.RunMigrations(context.Background(), dbURL); err != nil { return fmt.Errorf("migrations failed: %w", err) }
+		if err := api.RunMigrations(context.Background(), dbURL); err != nil {
+			return fmt.Errorf("migrations failed: %w", err)
+		}
 		logger.Info("migrations complete")
 		return nil
 	},
@@ -115,9 +124,18 @@ var validateCmd = &cobra.Command{
 			{"auth0 audience", "auth0.audience"},
 		}
 		allOK := true
-		for _, c := range checks { if viper.GetString(c.k) == "" { logger.Warn("missing", slog.String("key", c.n)); allOK = false } }
-		if !allOK { return fmt.Errorf("validation failed") }
-		if err := api.ValidateConnectivity(context.Background(), api.Config{DatabaseURL: viper.GetString("database.url"), RedisURL: viper.GetString("redis.url"), Logger: logger}); err != nil { return fmt.Errorf("connectivity: %w", err) }
+		for _, c := range checks {
+			if viper.GetString(c.k) == "" {
+				logger.Warn("missing", slog.String("key", c.n))
+				allOK = false
+			}
+		}
+		if !allOK {
+			return fmt.Errorf("validation failed")
+		}
+		if err := api.ValidateConnectivity(context.Background(), api.Config{DatabaseURL: viper.GetString("database.url"), RedisURL: viper.GetString("redis.url"), Logger: logger}); err != nil {
+			return fmt.Errorf("connectivity: %w", err)
+		}
 		logger.Info("all checks passed")
 		return nil
 	},

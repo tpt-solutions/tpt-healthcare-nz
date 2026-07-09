@@ -30,7 +30,7 @@ func (h *RefractionHandler) ListPrescriptions(w http.ResponseWriter, r *http.Req
 	h.logger.Info("list prescriptions", slog.String("patient_nhi", patientNhi))
 	// TODO: retrieve from DB
 	writeJSON(w, http.StatusOK, map[string]any{
-		"patientNhi":   patientNhi,
+		"patientNhi":    patientNhi,
 		"prescriptions": []any{},
 	})
 }
@@ -50,9 +50,9 @@ func (h *RefractionHandler) CreatePrescription(w http.ResponseWriter, r *http.Re
 
 	h.logger.Info("prescription created", slog.String("patient_nhi", presc.PatientNHI))
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"status":       "created",
-		"patientNhi":   presc.PatientNHI,
-		"issuedDate":   presc.IssuedDate,
+		"status":     "created",
+		"patientNhi": presc.PatientNHI,
+		"issuedDate": presc.IssuedDate,
 	})
 }
 
@@ -67,7 +67,7 @@ func (h *RefractionHandler) GetPrescription(w http.ResponseWriter, r *http.Reque
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{
-		"patientNhi":    patientNhi,
+		"patientNhi":     patientNhi,
 		"prescriptionId": prescriptionId,
 	})
 }

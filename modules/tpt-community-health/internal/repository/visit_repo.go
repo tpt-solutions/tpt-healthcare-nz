@@ -81,19 +81,23 @@ func (r *VisitRepository) List(ctx context.Context, patientNHI, clinicianID, sta
 	argIdx := 1
 	if patientNHI != "" {
 		where += fmt.Sprintf(" AND patient_nhi = $%d", argIdx)
-		args = append(args, patientNHI); argIdx++
+		args = append(args, patientNHI)
+		argIdx++
 	}
 	if clinicianID != "" {
 		where += fmt.Sprintf(" AND clinician_id = $%d", argIdx)
-		args = append(args, clinicianID); argIdx++
+		args = append(args, clinicianID)
+		argIdx++
 	}
 	if status != "" {
 		where += fmt.Sprintf(" AND status = $%d", argIdx)
-		args = append(args, status); argIdx++
+		args = append(args, status)
+		argIdx++
 	}
 	if visitType != "" {
 		where += fmt.Sprintf(" AND visit_type = $%d", argIdx)
-		args = append(args, visitType); argIdx++
+		args = append(args, visitType)
+		argIdx++
 	}
 
 	countArgs := args
@@ -311,14 +315,30 @@ func scanHomeVisit(s scanner) (*homevisit.HomeVisit, error) {
 		return nil, err
 	}
 	v.ScheduledDate = toMs(sd)
-	if !ast.IsZero() { v.ActualStartTime = toMs(ast) }
-	if !aet.IsZero() { v.ActualEndTime = toMs(aet) }
-	if lat != nil { v.Latitude = *lat }
-	if lon != nil { v.Longitude = *lon }
-	if ro != nil { v.RouteOrder = *ro }
-	if prev != nil { v.PreviousVisitID = *prev }
-	if cn != nil { v.CancellationReason = *cn }
-	if cnrs != nil { v.CancellationNotes = *cnrs }
+	if !ast.IsZero() {
+		v.ActualStartTime = toMs(ast)
+	}
+	if !aet.IsZero() {
+		v.ActualEndTime = toMs(aet)
+	}
+	if lat != nil {
+		v.Latitude = *lat
+	}
+	if lon != nil {
+		v.Longitude = *lon
+	}
+	if ro != nil {
+		v.RouteOrder = *ro
+	}
+	if prev != nil {
+		v.PreviousVisitID = *prev
+	}
+	if cn != nil {
+		v.CancellationReason = *cn
+	}
+	if cnrs != nil {
+		v.CancellationNotes = *cnrs
+	}
 	v.CreatedAt = toMs(ca)
 	v.UpdatedAt = toMs(ua)
 	return &v, nil

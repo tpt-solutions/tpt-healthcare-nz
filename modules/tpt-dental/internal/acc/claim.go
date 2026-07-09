@@ -20,9 +20,9 @@ import (
 type ClaimType string
 
 const (
-	ClaimTypeDentalInjury    ClaimType = "dental_injury"     // ACC45 for dental injury
-	ClaimTypeTreatmentInjury ClaimType = "treatment_injury"  // ACC6 for dental treatment injury
-	ClaimTypeTMJ            ClaimType = "tmj_injury"        // TMJ/dental accident claim
+	ClaimTypeDentalInjury    ClaimType = "dental_injury"    // ACC45 for dental injury
+	ClaimTypeTreatmentInjury ClaimType = "treatment_injury" // ACC6 for dental treatment injury
+	ClaimTypeTMJ             ClaimType = "tmj_injury"       // TMJ/dental accident claim
 )
 
 // ClaimStatus tracks the lifecycle of an ACC dental claim.
@@ -49,23 +49,23 @@ type ToothInjury struct {
 
 // DentalClaim represents an ACC dental claim for injury-related treatment.
 type DentalClaim struct {
-	ID              string        `json:"id"`
-	ClaimType       ClaimType     `json:"claimType"`
-	AccidentDate    time.Time     `json:"accidentDate"`
-	AccidentDesc    string        `json:"accidentDesc"`
-	PatientNHI      string        `json:"patientNhi"`
-	ProviderHPI     string        `json:"providerHpi"`
-	PracticeID      string        `json:"practiceId"`
-	Teeth           []ToothInjury `json:"teeth"`
-	TotalFee        int           `json:"totalFee"`
-	ACCSubsidy      int           `json:"accSubsidy"`
-	PatientCoPay    int           `json:"patientCoPay"`
-	Status          ClaimStatus   `json:"status"`
-	ACCClaimNumber  string        `json:"accClaimNumber,omitempty"`
-	ACCFormNumber   string        `json:"accFormNumber"` // ACC45 or ACC6
-	Notes           string        `json:"notes,omitempty"`
-	CreatedAt       time.Time     `json:"createdAt"`
-	UpdatedAt       time.Time     `json:"updatedAt"`
+	ID             string        `json:"id"`
+	ClaimType      ClaimType     `json:"claimType"`
+	AccidentDate   time.Time     `json:"accidentDate"`
+	AccidentDesc   string        `json:"accidentDesc"`
+	PatientNHI     string        `json:"patientNhi"`
+	ProviderHPI    string        `json:"providerHpi"`
+	PracticeID     string        `json:"practiceId"`
+	Teeth          []ToothInjury `json:"teeth"`
+	TotalFee       int           `json:"totalFee"`
+	ACCSubsidy     int           `json:"accSubsidy"`
+	PatientCoPay   int           `json:"patientCoPay"`
+	Status         ClaimStatus   `json:"status"`
+	ACCClaimNumber string        `json:"accClaimNumber,omitempty"`
+	ACCFormNumber  string        `json:"accFormNumber"` // ACC45 or ACC6
+	Notes          string        `json:"notes,omitempty"`
+	CreatedAt      time.Time     `json:"createdAt"`
+	UpdatedAt      time.Time     `json:"updatedAt"`
 }
 
 // ValidationError holds per-field validation failures.
@@ -124,16 +124,16 @@ func (c *DentalClaim) Validate() *ValidationResult {
 	for i, t := range c.Teeth {
 		if t.ToothCode == "" {
 			result.Errors = append(result.Errors, ValidationError{
-				Field: fmt.Sprintf("teeth[%d].toothCode", i),
+				Field:   fmt.Sprintf("teeth[%d].toothCode", i),
 				Message: "Tooth code is required",
-				Code: "MISSING_TOOTH_CODE",
+				Code:    "MISSING_TOOTH_CODE",
 			})
 		}
 		if t.FeeInCents <= 0 {
 			result.Errors = append(result.Errors, ValidationError{
-				Field: fmt.Sprintf("teeth[%d].feeInCents", i),
+				Field:   fmt.Sprintf("teeth[%d].feeInCents", i),
 				Message: "Fee must be greater than 0",
-				Code: "INVALID_FEE",
+				Code:    "INVALID_FEE",
 			})
 		}
 	}
@@ -183,11 +183,11 @@ func (c *DentalClaim) BuildACCClaimPayload() map[string]any {
 				},
 			},
 			"unitPrice": map[string]any{
-				"value": float64(t.FeeInCents) / 100.0,
+				"value":    float64(t.FeeInCents) / 100.0,
 				"currency": "NZD",
 			},
 			"net": map[string]any{
-				"value": float64(t.FeeInCents) / 100.0,
+				"value":    float64(t.FeeInCents) / 100.0,
 				"currency": "NZD",
 			},
 			"bodySite": map[string]any{
@@ -216,7 +216,7 @@ func (c *DentalClaim) BuildACCClaimPayload() map[string]any {
 				},
 			},
 		},
-		"use": "claim",
+		"use":     "claim",
 		"created": time.Now().UTC().Format(time.RFC3339),
 		"patient": map[string]any{
 			"identifier": map[string]any{
@@ -238,13 +238,13 @@ func (c *DentalClaim) BuildACCClaimPayload() map[string]any {
 			},
 		},
 		"accident": map[string]any{
-			"date": c.AccidentDate.Format("2006-01-02"),
+			"date":        c.AccidentDate.Format("2006-01-02"),
 			"description": c.AccidentDesc,
 		},
 		"diagnosis": diagnoses,
 		"item":      items,
 		"total": map[string]any{
-			"value": float64(c.TotalFee) / 100.0,
+			"value":    float64(c.TotalFee) / 100.0,
 			"currency": "NZD",
 		},
 		"identifier": []any{

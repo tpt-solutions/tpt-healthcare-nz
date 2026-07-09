@@ -14,8 +14,8 @@ type AssessmentType string
 
 const (
 	AssessmentFunctionalCapacity AssessmentType = "functional_capacity"
-	AssessmentADL                AssessmentType = "adl"                // Activities of Daily Living
-	AssessmentIADL               AssessmentType = "iadl"               // Instrumental ADL
+	AssessmentADL                AssessmentType = "adl"  // Activities of Daily Living
+	AssessmentIADL               AssessmentType = "iadl" // Instrumental ADL
 	AssessmentHomeSafety         AssessmentType = "home_safety"
 	AssessmentWorksite           AssessmentType = "worksite"
 	AssessmentCognitive          AssessmentType = "cognitive"
@@ -31,74 +31,74 @@ const (
 type InterventionType string
 
 const (
-	InterventionADLRetraining       InterventionType = "adl_retraining"
-	InterventionCognitiveRehab      InterventionType = "cognitive_rehab"
-	InterventionSensoryIntegration  InterventionType = "sensory_integration"
-	InterventionHomeModification    InterventionType = "home_modification"
+	InterventionADLRetraining         InterventionType = "adl_retraining"
+	InterventionCognitiveRehab        InterventionType = "cognitive_rehab"
+	InterventionSensoryIntegration    InterventionType = "sensory_integration"
+	InterventionHomeModification      InterventionType = "home_modification"
 	InterventionEquipmentPrescription InterventionType = "equipment_prescription"
-	InterventionWorkHardening       InterventionType = "work_hardening"
-	InterventionErgonomicAssessment InterventionType = "ergonomic_assessment"
-	InterventionSplinting           InterventionType = "splinting"
-	InterventionEnergyConservation  InterventionType = "energy_conservation"
-	InterventionFallsPrevention     InterventionType = "falls_prevention"
-	InterventionDriverRehab         InterventionType = "driver_rehab"
-	InterventionPaediatricPlay      InterventionType = "paediatric_play"
+	InterventionWorkHardening         InterventionType = "work_hardening"
+	InterventionErgonomicAssessment   InterventionType = "ergonomic_assessment"
+	InterventionSplinting             InterventionType = "splinting"
+	InterventionEnergyConservation    InterventionType = "energy_conservation"
+	InterventionFallsPrevention       InterventionType = "falls_prevention"
+	InterventionDriverRehab           InterventionType = "driver_rehab"
+	InterventionPaediatricPlay        InterventionType = "paediatric_play"
 )
 
 // Assessment represents an OT assessment.
 type Assessment struct {
-	ID              string            `json:"id"`
-	PatientNHI      string            `json:"patientNhi"`
-	ClinicianID     string            `json:"clinicianId"`
-	PracticeID      string            `json:"practiceId"`
-	ACCNumber       string            `json:"accNumber,omitempty"`
-	ReferralSource  string            `json:"referralSource"`
-	Type            AssessmentType    `json:"type"`
-	Date            int64             `json:"date"`
-	Reason          string            `json:"reason"`
-	Findings        string            `json:"findings"`
-	Recommendations []Recommendation  `json:"recommendations"`
-	OutcomeMeasures []OutcomeMeasure  `json:"outcomeMeasures"`
-	Status          AssessmentStatus  `json:"status"`
-	CreatedAt       int64             `json:"createdAt"`
-	UpdatedAt       int64             `json:"updatedAt"`
+	ID              string           `json:"id"`
+	PatientNHI      string           `json:"patientNhi"`
+	ClinicianID     string           `json:"clinicianId"`
+	PracticeID      string           `json:"practiceId"`
+	ACCNumber       string           `json:"accNumber,omitempty"`
+	ReferralSource  string           `json:"referralSource"`
+	Type            AssessmentType   `json:"type"`
+	Date            int64            `json:"date"`
+	Reason          string           `json:"reason"`
+	Findings        string           `json:"findings"`
+	Recommendations []Recommendation `json:"recommendations"`
+	OutcomeMeasures []OutcomeMeasure `json:"outcomeMeasures"`
+	Status          AssessmentStatus `json:"status"`
+	CreatedAt       int64            `json:"createdAt"`
+	UpdatedAt       int64            `json:"updatedAt"`
 }
 
 // AssessmentStatus tracks assessment lifecycle.
 type AssessmentStatus string
 
 const (
-	AssessmentScheduled AssessmentStatus = "scheduled"
+	AssessmentScheduled  AssessmentStatus = "scheduled"
 	AssessmentInProgress AssessmentStatus = "in_progress"
-	AssessmentCompleted AssessmentStatus = "completed"
-	AssessmentCancelled AssessmentStatus = "cancelled"
-	AssessmentOnHold    AssessmentStatus = "on_hold"
+	AssessmentCompleted  AssessmentStatus = "completed"
+	AssessmentCancelled  AssessmentStatus = "cancelled"
+	AssessmentOnHold     AssessmentStatus = "on_hold"
 )
 
 // Recommendation represents an OT recommendation.
 type Recommendation struct {
-	ID          string           `json:"id"`
-	Description string           `json:"description"`
-	Priority    RecommendationPriority `json:"priority"`
-	Type        InterventionType `json:"type,omitempty"`
-	Equipment   string           `json:"equipment,omitempty"`
-	Supplier    string           `json:"supplier,omitempty"`
-	EstimatedCost float64        `json:"estimatedCost,omitempty"`
-	FundingSource string         `json:"fundingSource,omitempty"` // ACC, MOH, private, charity
-	Status      RecommendationStatus `json:"status"`
-	CreatedAt   int64            `json:"createdAt"`
-	UpdatedAt   int64            `json:"updatedAt"`
+	ID            string                 `json:"id"`
+	Description   string                 `json:"description"`
+	Priority      RecommendationPriority `json:"priority"`
+	Type          InterventionType       `json:"type,omitempty"`
+	Equipment     string                 `json:"equipment,omitempty"`
+	Supplier      string                 `json:"supplier,omitempty"`
+	EstimatedCost float64                `json:"estimatedCost,omitempty"`
+	FundingSource string                 `json:"fundingSource,omitempty"` // ACC, MOH, private, charity
+	Status        RecommendationStatus   `json:"status"`
+	CreatedAt     int64                  `json:"createdAt"`
+	UpdatedAt     int64                  `json:"updatedAt"`
 }
 
 // RecommendationPriority indicates urgency.
 type RecommendationPriority string
 
 const (
-	PriorityUrgent   RecommendationPriority = "urgent"
-	PriorityHigh     RecommendationPriority = "high"
-	PriorityMedium   RecommendationPriority = "medium"
-	PriorityLow      RecommendationPriority = "low"
-	PriorityRoutine  RecommendationPriority = "routine"
+	PriorityUrgent  RecommendationPriority = "urgent"
+	PriorityHigh    RecommendationPriority = "high"
+	PriorityMedium  RecommendationPriority = "medium"
+	PriorityLow     RecommendationPriority = "low"
+	PriorityRoutine RecommendationPriority = "routine"
 )
 
 // RecommendationStatus tracks recommendation implementation.
@@ -115,81 +115,81 @@ const (
 
 // OutcomeMeasure represents a standardised OT outcome measure.
 type OutcomeMeasure struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`           // e.g., "COPM", "FIM", "AMPS", "MOHOST"
-	Domain        string  `json:"domain"`         // e.g., "performance", "satisfaction"
-	Score         float64 `json:"score"`
-	MaxScore      float64 `json:"maxScore"`
-	Date          int64   `json:"date"`
-	Interpretation string `json:"interpretation,omitempty"`
-	CreatedAt     int64   `json:"createdAt"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`   // e.g., "COPM", "FIM", "AMPS", "MOHOST"
+	Domain         string  `json:"domain"` // e.g., "performance", "satisfaction"
+	Score          float64 `json:"score"`
+	MaxScore       float64 `json:"maxScore"`
+	Date           int64   `json:"date"`
+	Interpretation string  `json:"interpretation,omitempty"`
+	CreatedAt      int64   `json:"createdAt"`
 }
 
 // InterventionPlan represents an OT intervention plan.
 type InterventionPlan struct {
-	ID              string            `json:"id"`
-	PatientNHI      string            `json:"patientNhi"`
-	ClinicianID     string            `json:"clinicianId"`
-	PracticeID      string            `json:"practiceId"`
-	AssessmentID    string            `json:"assessmentId,omitempty"`
-	ACCNumber       string            `json:"accNumber,omitempty"`
-	StartDate       int64             `json:"startDate"`
-	ReviewDate      int64             `json:"reviewDate"`
-	EndDate         int64             `json:"endDate,omitempty"`
-	Status          PlanStatus        `json:"status"`
-	Goals           []InterventionGoal `json:"goals"`
-	Interventions   []PlannedIntervention `json:"interventions"`
-	CreatedAt       int64             `json:"createdAt"`
-	UpdatedAt       int64             `json:"updatedAt"`
+	ID            string                `json:"id"`
+	PatientNHI    string                `json:"patientNhi"`
+	ClinicianID   string                `json:"clinicianId"`
+	PracticeID    string                `json:"practiceId"`
+	AssessmentID  string                `json:"assessmentId,omitempty"`
+	ACCNumber     string                `json:"accNumber,omitempty"`
+	StartDate     int64                 `json:"startDate"`
+	ReviewDate    int64                 `json:"reviewDate"`
+	EndDate       int64                 `json:"endDate,omitempty"`
+	Status        PlanStatus            `json:"status"`
+	Goals         []InterventionGoal    `json:"goals"`
+	Interventions []PlannedIntervention `json:"interventions"`
+	CreatedAt     int64                 `json:"createdAt"`
+	UpdatedAt     int64                 `json:"updatedAt"`
 }
 
 // PlanStatus tracks intervention plan lifecycle.
 type PlanStatus string
 
 const (
-	PlanStatusDraft       PlanStatus = "draft"
-	PlanStatusActive      PlanStatus = "active"
-	PlanStatusUnderReview PlanStatus = "under_review"
-	PlanStatusCompleted   PlanStatus = "completed"
+	PlanStatusDraft        PlanStatus = "draft"
+	PlanStatusActive       PlanStatus = "active"
+	PlanStatusUnderReview  PlanStatus = "under_review"
+	PlanStatusCompleted    PlanStatus = "completed"
 	PlanStatusDiscontinued PlanStatus = "discontinued"
-	PlanStatusOnHold      PlanStatus = "on_hold"
+	PlanStatusOnHold       PlanStatus = "on_hold"
 )
 
 // InterventionGoal represents a goal in the intervention plan.
 type InterventionGoal struct {
-	ID          string    `json:"id"`
-	Description string    `json:"description"`
-	Domain      string    `json:"domain"` // e.g., "self_care", "productivity", "leisure"
-	TargetDate  int64     `json:"targetDate"`
+	ID          string     `json:"id"`
+	Description string     `json:"description"`
+	Domain      string     `json:"domain"` // e.g., "self_care", "productivity", "leisure"
+	TargetDate  int64      `json:"targetDate"`
 	Status      GoalStatus `json:"status"`
-	Outcome     string    `json:"outcome,omitempty"`
-	CreatedAt   int64     `json:"createdAt"`
-	UpdatedAt   int64     `json:"updatedAt"`
+	Outcome     string     `json:"outcome,omitempty"`
+	CreatedAt   int64      `json:"createdAt"`
+	UpdatedAt   int64      `json:"updatedAt"`
 }
 
 // GoalStatus tracks goal progress.
 type GoalStatus string
 
 const (
-	GoalStatusNotStarted GoalStatus = "not_started"
-	GoalStatusInProgress GoalStatus = "in_progress"
-	GoalStatusAchieved   GoalStatus = "achieved"
+	GoalStatusNotStarted  GoalStatus = "not_started"
+	GoalStatusInProgress  GoalStatus = "in_progress"
+	GoalStatusAchieved    GoalStatus = "achieved"
 	GoalStatusNotAchieved GoalStatus = "not_achieved"
-	GoalStatusModified   GoalStatus = "modified"
+	GoalStatusModified    GoalStatus = "modified"
 )
 
 // PlannedIntervention represents a planned intervention.
 type PlannedIntervention struct {
-	ID              string           `json:"id"`
-	Type            InterventionType `json:"type"`
-	Description     string           `json:"description"`
-	Frequency       string           `json:"frequency"`
-	Duration        string           `json:"duration"`
-	Location        string           `json:"location"` // clinic, home, workplace, community
-	EquipmentNeeded string           `json:"equipmentNeeded,omitempty"`
+	ID              string             `json:"id"`
+	Type            InterventionType   `json:"type"`
+	Description     string             `json:"description"`
+	Frequency       string             `json:"frequency"`
+	Duration        string             `json:"duration"`
+	Location        string             `json:"location"` // clinic, home, workplace, community
+	EquipmentNeeded string             `json:"equipmentNeeded,omitempty"`
 	Status          InterventionStatus `json:"status"`
-	CreatedAt       int64            `json:"createdAt"`
-	UpdatedAt       int64            `json:"updatedAt"`
+	CreatedAt       int64              `json:"createdAt"`
+	UpdatedAt       int64              `json:"updatedAt"`
 }
 
 // InterventionStatus tracks intervention status.
@@ -205,24 +205,24 @@ const (
 
 // SessionNote represents an OT session note.
 type SessionNote struct {
-	ID              string            `json:"id"`
-	PatientNHI      string            `json:"patientNhi"`
-	ClinicianID     string            `json:"clinicianId"`
-	PracticeID      string            `json:"practiceId"`
-	InterventionPlanID string         `json:"interventionPlanId"`
-	SessionDate     int64             `json:"sessionDate"`
-	SessionNumber   int               `json:"sessionNumber"`
-	Location        string            `json:"location"`
-	Subjective      string            `json:"subjective"`
-	Objective       string            `json:"objective"`
-	Assessment      string            `json:"assessment"`
-	Plan            string            `json:"plan"`
-	Interventions   []PlannedIntervention `json:"interventions"`
-	OutcomeMeasures []OutcomeMeasure  `json:"outcomeMeasures"`
-	DurationMinutes int               `json:"durationMinutes"`
-	ChargeCode      string            `json:"chargeCode,omitempty"`
-	CreatedAt       int64             `json:"createdAt"`
-	UpdatedAt       int64             `json:"updatedAt"`
+	ID                 string                `json:"id"`
+	PatientNHI         string                `json:"patientNhi"`
+	ClinicianID        string                `json:"clinicianId"`
+	PracticeID         string                `json:"practiceId"`
+	InterventionPlanID string                `json:"interventionPlanId"`
+	SessionDate        int64                 `json:"sessionDate"`
+	SessionNumber      int                   `json:"sessionNumber"`
+	Location           string                `json:"location"`
+	Subjective         string                `json:"subjective"`
+	Objective          string                `json:"objective"`
+	Assessment         string                `json:"assessment"`
+	Plan               string                `json:"plan"`
+	Interventions      []PlannedIntervention `json:"interventions"`
+	OutcomeMeasures    []OutcomeMeasure      `json:"outcomeMeasures"`
+	DurationMinutes    int                   `json:"durationMinutes"`
+	ChargeCode         string                `json:"chargeCode,omitempty"`
+	CreatedAt          int64                 `json:"createdAt"`
+	UpdatedAt          int64                 `json:"updatedAt"`
 }
 
 // NewAssessment creates a new assessment with defaults.

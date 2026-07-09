@@ -103,12 +103,12 @@ func TestToFHIRDiagnosticReport_Minimal(t *testing.T) {
 
 func TestToFHIRDiagnosticReport_WithVisualFieldsAndOCT(t *testing.T) {
 	e := &OphthalmicExam{
-		ID:               "exam-3",
-		PatientNHI:       "ABC1235",
-		ClinicianID:      "CPN123",
-		ExamType:         ExamGlaucoma,
-		ExamDate:         1700000000000,
-		CreatedAt:        1700000000000,
+		ID:                "exam-3",
+		PatientNHI:        "ABC1235",
+		ClinicianID:       "CPN123",
+		ExamType:          ExamGlaucoma,
+		ExamDate:          1700000000000,
+		CreatedAt:         1700000000000,
 		VisualFieldsRight: "normal",
 		VisualFieldsLeft:  "constricted",
 		OCTRight:          "RNFL normal",
@@ -141,13 +141,13 @@ func TestToFHIRDiagnosticReport_WithVisualFieldsAndOCT(t *testing.T) {
 
 func TestToFHIRDiagnosticReport_WithNearVA(t *testing.T) {
 	e := &OphthalmicExam{
-		ID:            "exam-4",
-		PatientNHI:    "ABC1235",
-		ClinicianID:   "CPN123",
-		ExamDate:      1700000000000,
-		CreatedAt:     1700000000000,
-		VANearRight:   "N5",
-		VANearLeft:    "N6",
+		ID:          "exam-4",
+		PatientNHI:  "ABC1235",
+		ClinicianID: "CPN123",
+		ExamDate:    1700000000000,
+		CreatedAt:   1700000000000,
+		VANearRight: "N5",
+		VANearLeft:  "N6",
 	}
 	report := e.ToFHIRDiagnosticReport()
 	results := report["result"].([]map[string]any)
@@ -170,11 +170,11 @@ func TestToFHIRDiagnosticReport_WithNearVA(t *testing.T) {
 
 func TestToFHIRDiagnosticReport_FollowUpExtension(t *testing.T) {
 	e := &OphthalmicExam{
-		ID:          "exam-5",
-		PatientNHI:  "ABC1235",
-		ClinicianID: "CPN123",
-		ExamDate:    1700000000000,
-		CreatedAt:   1700000000000,
+		ID:           "exam-5",
+		PatientNHI:   "ABC1235",
+		ClinicianID:  "CPN123",
+		ExamDate:     1700000000000,
+		CreatedAt:    1700000000000,
 		FollowUpDays: 0,
 	}
 	report := e.ToFHIRDiagnosticReport()

@@ -102,12 +102,12 @@ type UrineScreen struct {
 	ID            string                 `json:"id"`
 	TenantID      string                 `json:"tenantId"`
 	ProgrammeID   string                 `json:"programmeId"`
-	CollectedAt   time.Time             `json:"collectedAt"`
+	CollectedAt   time.Time              `json:"collectedAt"`
 	CollectedBy   string                 `json:"collectedBy"`
 	LabName       string                 `json:"labName,omitempty"`
 	LabReference  string                 `json:"labReference,omitempty"`
 	Results       []methadone.DrugResult `json:"results"`
 	MSSAResult    string                 `json:"mssaResult"`
 	ClinicalNotes string                 `json:"clinicalNotes,omitempty"`
-	CreatedAt     time.Time             `json:"createdAt"`
+	CreatedAt     time.Time              `json:"createdAt"`
 }

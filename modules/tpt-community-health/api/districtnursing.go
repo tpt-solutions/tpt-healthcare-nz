@@ -12,29 +12,29 @@ import (
 
 // CarePlan represents a district nursing care plan.
 type CarePlan struct {
-	ID             string          `json:"id"`
-	PatientNHI     string          `json:"patientNhi"`
-	ClinicianHpi   string          `json:"clinicianHpi"`
-	PlanName       string          `json:"planName"`
-	PlanType       string          `json:"planType"`
+	ID           string `json:"id"`
+	PatientNHI   string `json:"patientNhi"`
+	ClinicianHpi string `json:"clinicianHpi"`
+	PlanName     string `json:"planName"`
+	PlanType     string `json:"planType"`
 	// wound-care | palliative | diabetes | heart-failure | copd | post-surgical | post-acute | medication-management
-	Status         string          `json:"status"`
+	Status string `json:"status"`
 	// draft | active | under-review | completed | suspended
-	RiskLevel      string          `json:"riskLevel"`
+	RiskLevel string `json:"riskLevel"`
 	// low | moderate | high | very-high
-	PrimaryNeed    string          `json:"primaryNeed"`
-	Goals          string          `json:"goals"`
-	DhbFunded      bool            `json:"dhbFunded"`
-	FundingCode    *string         `json:"fundingCode"`
-	ConsentGiven   bool            `json:"consentGiven"`
-	ConsentAt      *time.Time      `json:"consentAt"`
-	Notes          *string         `json:"notes"`
-	TenantID       string          `json:"tenantId"`
-	StartedAt      time.Time       `json:"startedAt"`
-	ReviewAt       *time.Time      `json:"reviewAt"`
-	CompletedAt    *time.Time      `json:"completedAt"`
-	CreatedAt      time.Time       `json:"createdAt"`
-	UpdatedAt      time.Time       `json:"updatedAt"`
+	PrimaryNeed  string     `json:"primaryNeed"`
+	Goals        string     `json:"goals"`
+	DhbFunded    bool       `json:"dhbFunded"`
+	FundingCode  *string    `json:"fundingCode"`
+	ConsentGiven bool       `json:"consentGiven"`
+	ConsentAt    *time.Time `json:"consentAt"`
+	Notes        *string    `json:"notes"`
+	TenantID     string     `json:"tenantId"`
+	StartedAt    time.Time  `json:"startedAt"`
+	ReviewAt     *time.Time `json:"reviewAt"`
+	CompletedAt  *time.Time `json:"completedAt"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	UpdatedAt    time.Time  `json:"updatedAt"`
 }
 
 const cpSelectCols = `id, patient_nhi, clinician_hpi, plan_name, plan_type, status,
@@ -347,13 +347,13 @@ func (h *carePlanHandler) Complete(w http.ResponseWriter, r *http.Request) {
 // NursingVisit represents a district nursing visit within a care plan.
 // vital_signs, wound_assessments, medications_administered are JSONB.
 type NursingVisit struct {
-	ID                      string          `json:"id"`
-	CarePlanID              string          `json:"carePlanId"`
-	PatientNHI              string          `json:"patientNhi"`
-	ClinicianHpi            string          `json:"clinicianHpi"`
-	VisitType               string          `json:"visitType"`
+	ID           string `json:"id"`
+	CarePlanID   string `json:"carePlanId"`
+	PatientNHI   string `json:"patientNhi"`
+	ClinicianHpi string `json:"clinicianHpi"`
+	VisitType    string `json:"visitType"`
 	// scheduled | unscheduled | urgent
-	Status                  string          `json:"status"`
+	Status string `json:"status"`
 	// scheduled | in-progress | completed | cancelled
 	VitalSigns              json.RawMessage `json:"vitalSigns,omitempty"`
 	WoundAssessments        json.RawMessage `json:"woundAssessments,omitempty"`

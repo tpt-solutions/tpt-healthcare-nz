@@ -75,10 +75,10 @@ func TestDispensingOrderValidate(t *testing.T) {
 
 func TestSubsidyEligible(t *testing.T) {
 	tests := []struct {
-		name     string
-		age      int
-		card     bool
-		want     bool
+		name string
+		age  int
+		card bool
+		want bool
 	}{
 		{"child under 16", 15, false, true},
 		{"age 16 no card", 16, false, false},

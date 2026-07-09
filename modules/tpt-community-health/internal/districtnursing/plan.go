@@ -48,54 +48,54 @@ const (
 type VisitType string
 
 const (
-	VisitScheduled    VisitType = "scheduled"
-	VisitUnscheduled  VisitType = "unscheduled"
-	VisitUrgent       VisitType = "urgent"
+	VisitScheduled   VisitType = "scheduled"
+	VisitUnscheduled VisitType = "unscheduled"
+	VisitUrgent      VisitType = "urgent"
 )
 
 // VisitStatus tracks visit lifecycle.
 type VisitStatus string
 
 const (
-	VisitStatusScheduled   VisitStatus = "scheduled"
-	VisitStatusInProgress  VisitStatus = "in_progress"
-	VisitStatusCompleted   VisitStatus = "completed"
-	VisitStatusCancelled   VisitStatus = "cancelled"
+	VisitStatusScheduled  VisitStatus = "scheduled"
+	VisitStatusInProgress VisitStatus = "in_progress"
+	VisitStatusCompleted  VisitStatus = "completed"
+	VisitStatusCancelled  VisitStatus = "cancelled"
 )
 
 // AdminRoute indicates medication administration route.
 type AdminRoute string
 
 const (
-	RouteOral        AdminRoute = "oral"
-	RouteIM          AdminRoute = "im"
-	RouteIV          AdminRoute = "iv"
-	RouteSC          AdminRoute = "sc"
-	RouteTopical     AdminRoute = "topical"
-	RouteInhalation  AdminRoute = "inhalation"
+	RouteOral       AdminRoute = "oral"
+	RouteIM         AdminRoute = "im"
+	RouteIV         AdminRoute = "iv"
+	RouteSC         AdminRoute = "sc"
+	RouteTopical    AdminRoute = "topical"
+	RouteInhalation AdminRoute = "inhalation"
 )
 
 // AdminStatus tracks medication administration status.
 type AdminStatus string
 
 const (
-	AdminScheduled  AdminStatus = "scheduled"
+	AdminScheduled    AdminStatus = "scheduled"
 	AdminAdministered AdminStatus = "administered"
-	AdminRefused    AdminStatus = "refused"
-	AdminOmitted    AdminStatus = "omitted"
-	AdminHeld       AdminStatus = "held"
+	AdminRefused      AdminStatus = "refused"
+	AdminOmitted      AdminStatus = "omitted"
+	AdminHeld         AdminStatus = "held"
 )
 
 // WoundCause categorises wound aetiology.
 type WoundCause string
 
 const (
-	WoundPressure    WoundCause = "pressure_injury"
-	WoundVenous      WoundCause = "venous"
-	WoundArterial    WoundCause = "arterial"
-	WoundDiabetic    WoundCause = "diabetic"
-	WoundSurgical    WoundCause = "surgical"
-	WoundTrauma      WoundCause = "trauma"
+	WoundPressure WoundCause = "pressure_injury"
+	WoundVenous   WoundCause = "venous"
+	WoundArterial WoundCause = "arterial"
+	WoundDiabetic WoundCause = "diabetic"
+	WoundSurgical WoundCause = "surgical"
+	WoundTrauma   WoundCause = "trauma"
 )
 
 // CarePlan represents a district nursing care plan.
@@ -122,65 +122,65 @@ type CarePlan struct {
 
 // NursingVisit represents a district nursing visit.
 type NursingVisit struct {
-	ID                   string     `json:"id"`
-	CarePlanID           string     `json:"carePlanId"`
-	PatientNHI           string     `json:"patientNhi"`
-	ClinicianID          string     `json:"clinicianId"`
-	VisitDate            int64      `json:"visitDate"`
-	VisitType            VisitType  `json:"visitType"`
-	VisitStatus          VisitStatus `json:"visitStatus"`
-	VitalSigns           *VitalSigns `json:"vitalSigns,omitempty"`
-	WoundAssessments     []WoundAssessment `json:"woundAssessments,omitempty"`
+	ID                      string            `json:"id"`
+	CarePlanID              string            `json:"carePlanId"`
+	PatientNHI              string            `json:"patientNhi"`
+	ClinicianID             string            `json:"clinicianId"`
+	VisitDate               int64             `json:"visitDate"`
+	VisitType               VisitType         `json:"visitType"`
+	VisitStatus             VisitStatus       `json:"visitStatus"`
+	VitalSigns              *VitalSigns       `json:"vitalSigns,omitempty"`
+	WoundAssessments        []WoundAssessment `json:"woundAssessments,omitempty"`
 	MedicationsAdministered []MedicationAdmin `json:"medicationsAdministered,omitempty"`
-	Observations         string     `json:"observations,omitempty"`
-	PatientEducation     []string   `json:"patientEducation,omitempty"`
-	EquipmentCheck       []string   `json:"equipmentCheck,omitempty"`
-	NextVisitDate        int64      `json:"nextVisitDate,omitempty"`
-	NextVisitReason      string     `json:"nextVisitReason,omitempty"`
-	Concerns             []string   `json:"concerns,omitempty"`
-	Escalations          string     `json:"escalations,omitempty"`
-	CreatedAt            int64      `json:"createdAt"`
-	UpdatedAt            int64      `json:"updatedAt"`
+	Observations            string            `json:"observations,omitempty"`
+	PatientEducation        []string          `json:"patientEducation,omitempty"`
+	EquipmentCheck          []string          `json:"equipmentCheck,omitempty"`
+	NextVisitDate           int64             `json:"nextVisitDate,omitempty"`
+	NextVisitReason         string            `json:"nextVisitReason,omitempty"`
+	Concerns                []string          `json:"concerns,omitempty"`
+	Escalations             string            `json:"escalations,omitempty"`
+	CreatedAt               int64             `json:"createdAt"`
+	UpdatedAt               int64             `json:"updatedAt"`
 }
 
 // VitalSigns captures standard vital measurements.
 type VitalSigns struct {
-	Temperature   float64 `json:"temperature,omitempty"`   // Celsius
-	BloodPressureSystolic  int `json:"bpSystolic,omitempty"`
-	BloodPressureDiastolic int `json:"bpDiastolic,omitempty"`
-	HeartRate     int     `json:"heartRate,omitempty"`     // bpm
-	SpO2          float64 `json:"spo2,omitempty"`          // %
-	PainScore     int     `json:"painScore,omitempty"`     // 0-10
-	WeightKg      float64 `json:"weightKg,omitempty"`
-	RespiratoryRate int   `json:"respiratoryRate,omitempty"`
-	BloodGlucose  float64 `json:"bloodGlucose,omitempty"` // mmol/L
+	Temperature            float64 `json:"temperature,omitempty"` // Celsius
+	BloodPressureSystolic  int     `json:"bpSystolic,omitempty"`
+	BloodPressureDiastolic int     `json:"bpDiastolic,omitempty"`
+	HeartRate              int     `json:"heartRate,omitempty"` // bpm
+	SpO2                   float64 `json:"spo2,omitempty"`      // %
+	PainScore              int     `json:"painScore,omitempty"` // 0-10
+	WeightKg               float64 `json:"weightKg,omitempty"`
+	RespiratoryRate        int     `json:"respiratoryRate,omitempty"`
+	BloodGlucose           float64 `json:"bloodGlucose,omitempty"` // mmol/L
 }
 
 // WoundAssessment represents a wound assessment during a visit.
 type WoundAssessment struct {
-	ID               string      `json:"id"`
-	WoundSite        string      `json:"woundSite"`
-	WoundCause       WoundCause  `json:"woundCause,omitempty"`
-	LengthCM         float64     `json:"lengthCm"`
-	WidthCM          float64     `json:"widthCm"`
-	DepthCM          float64     `json:"depthCm"`
-	UnderminingCM    float64     `json:"underminingCm,omitempty"`
-	TissueType       string      `json:"tissueType"`
-	ExudateAmount    string      `json:"exudateAmount,omitempty"`
-	ExudateType      string      `json:"exudateType,omitempty"`
-	Odour            bool        `json:"odour"`
-	SignsInfection   InfectionSigns `json:"signsInfection,omitempty"`
-	PeriwoundSkin    string      `json:"periwoundSkin,omitempty"`
-	PainScore        int         `json:"painScore,omitempty"`
-	DressingApplied  string      `json:"dressingApplied,omitempty"`
-	CleansingSolution string     `json:"cleansingSolution,omitempty"`
-	Debridement      bool        `json:"debridement"`
-	DebridementType  string      `json:"debridementType,omitempty"`
-	PhotosTaken      bool        `json:"photosTaken"`
-	PhotoURLs        []string    `json:"photoUrls,omitempty"`
-	NextReviewDate   int64       `json:"nextReviewDate,omitempty"`
-	CreatedAt        int64       `json:"createdAt"`
-	UpdatedAt        int64       `json:"updatedAt"`
+	ID                string         `json:"id"`
+	WoundSite         string         `json:"woundSite"`
+	WoundCause        WoundCause     `json:"woundCause,omitempty"`
+	LengthCM          float64        `json:"lengthCm"`
+	WidthCM           float64        `json:"widthCm"`
+	DepthCM           float64        `json:"depthCm"`
+	UnderminingCM     float64        `json:"underminingCm,omitempty"`
+	TissueType        string         `json:"tissueType"`
+	ExudateAmount     string         `json:"exudateAmount,omitempty"`
+	ExudateType       string         `json:"exudateType,omitempty"`
+	Odour             bool           `json:"odour"`
+	SignsInfection    InfectionSigns `json:"signsInfection,omitempty"`
+	PeriwoundSkin     string         `json:"periwoundSkin,omitempty"`
+	PainScore         int            `json:"painScore,omitempty"`
+	DressingApplied   string         `json:"dressingApplied,omitempty"`
+	CleansingSolution string         `json:"cleansingSolution,omitempty"`
+	Debridement       bool           `json:"debridement"`
+	DebridementType   string         `json:"debridementType,omitempty"`
+	PhotosTaken       bool           `json:"photosTaken"`
+	PhotoURLs         []string       `json:"photoUrls,omitempty"`
+	NextReviewDate    int64          `json:"nextReviewDate,omitempty"`
+	CreatedAt         int64          `json:"createdAt"`
+	UpdatedAt         int64          `json:"updatedAt"`
 }
 
 // InfectionSigns documents clinical signs of infection.
@@ -251,13 +251,13 @@ func (p *CarePlan) Validate() error {
 func NewNursingVisit() *NursingVisit {
 	now := time.Now().UnixMilli()
 	return &NursingVisit{
-		VisitStatus:          VisitStatusScheduled,
-		WoundAssessments:     []WoundAssessment{},
+		VisitStatus:             VisitStatusScheduled,
+		WoundAssessments:        []WoundAssessment{},
 		MedicationsAdministered: []MedicationAdmin{},
-		PatientEducation:     []string{},
-		Concerns:             []string{},
-		CreatedAt:            now,
-		UpdatedAt:            now,
+		PatientEducation:        []string{},
+		Concerns:                []string{},
+		CreatedAt:               now,
+		UpdatedAt:               now,
 	}
 }
 

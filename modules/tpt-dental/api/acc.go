@@ -119,10 +119,10 @@ func (h *ACCHandler) SubmitClaim(w http.ResponseWriter, r *http.Request) {
 	// Simplified stub — real implementation loads from DB, validates,
 	// submits via core/acc.Client, and records the ACC claim number.
 	claim := &dentalacc.DentalClaim{
-		ID:            claimID,
-		Status:        dentalacc.ClaimSubmitted,
+		ID:             claimID,
+		Status:         dentalacc.ClaimSubmitted,
 		ACCClaimNumber: "ACC-" + uuid.New().String()[:8],
-		UpdatedAt:     time.Now().UTC(),
+		UpdatedAt:      time.Now().UTC(),
 	}
 
 	h.logger.Info("ACC dental claim submitted",
@@ -130,9 +130,9 @@ func (h *ACCHandler) SubmitClaim(w http.ResponseWriter, r *http.Request) {
 		slog.String("acc_claim_number", claim.ACCClaimNumber))
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status":          "submitted",
-		"claimId":         claimID,
-		"accClaimNumber":  claim.ACCClaimNumber,
+		"status":         "submitted",
+		"claimId":        claimID,
+		"accClaimNumber": claim.ACCClaimNumber,
 	})
 }
 

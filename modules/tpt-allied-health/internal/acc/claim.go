@@ -13,10 +13,10 @@ import (
 type ClaimType string
 
 const (
-	ClaimTypePhysiotherapy     ClaimType = "physiotherapy"
+	ClaimTypePhysiotherapy       ClaimType = "physiotherapy"
 	ClaimTypeOccupationalTherapy ClaimType = "occupational_therapy"
-	ClaimTypeSpeechLanguage    ClaimType = "speech_language_therapy"
-	ClaimTypePodiatry          ClaimType = "podiatry"
+	ClaimTypeSpeechLanguage      ClaimType = "speech_language_therapy"
+	ClaimTypePodiatry            ClaimType = "podiatry"
 )
 
 // ClaimStatus tracks the lifecycle of an ACC claim.
@@ -45,100 +45,100 @@ const (
 
 // Claim represents an ACC claim for allied health treatment.
 type Claim struct {
-	ID              string        `json:"id"`
-	PatientNHI      string        `json:"patientNhi"`
-	ClinicianID     string        `json:"clinicianId"`
-	PracticeID      string        `json:"practiceId"`
-	ClaimType       ClaimType     `json:"claimType"`
-	ACCNumber       string        `json:"accNumber"`
-	InjuryDate      int64         `json:"injuryDate"`
-	ClaimDate       int64         `json:"claimDate"`
-	Status          ClaimStatus   `json:"status"`
-	Diagnosis       string        `json:"diagnosis"`
-	ICD10Code       string        `json:"icd10Code,omitempty"`
-	BodyRegion      string        `json:"bodyRegion"`
-	InjuryMechanism string        `json:"injuryMechanism"`
-	Referrer        string        `json:"referrer,omitempty"` // GP, specialist, self
-	ApprovedSessions int          `json:"approvedSessions"`
-	UsedSessions    int           `json:"usedSessions"`
-	StartDate       int64         `json:"startDate"`
-	ExpiryDate      int64         `json:"expiryDate"`
+	ID                string      `json:"id"`
+	PatientNHI        string      `json:"patientNhi"`
+	ClinicianID       string      `json:"clinicianId"`
+	PracticeID        string      `json:"practiceId"`
+	ClaimType         ClaimType   `json:"claimType"`
+	ACCNumber         string      `json:"accNumber"`
+	InjuryDate        int64       `json:"injuryDate"`
+	ClaimDate         int64       `json:"claimDate"`
+	Status            ClaimStatus `json:"status"`
+	Diagnosis         string      `json:"diagnosis"`
+	ICD10Code         string      `json:"icd10Code,omitempty"`
+	BodyRegion        string      `json:"bodyRegion"`
+	InjuryMechanism   string      `json:"injuryMechanism"`
+	Referrer          string      `json:"referrer,omitempty"` // GP, specialist, self
+	ApprovedSessions  int         `json:"approvedSessions"`
+	UsedSessions      int         `json:"usedSessions"`
+	StartDate         int64       `json:"startDate"`
+	ExpiryDate        int64       `json:"expiryDate"`
 	LastTreatmentDate int64       `json:"lastTreatmentDate,omitempty"`
-	NextReviewDate  int64         `json:"nextReviewDate,omitempty"`
-	ClinicalNotes   string        `json:"clinicalNotes,omitempty"`
-	CreatedAt       int64         `json:"createdAt"`
-	UpdatedAt       int64         `json:"updatedAt"`
+	NextReviewDate    int64       `json:"nextReviewDate,omitempty"`
+	ClinicalNotes     string      `json:"clinicalNotes,omitempty"`
+	CreatedAt         int64       `json:"createdAt"`
+	UpdatedAt         int64       `json:"updatedAt"`
 }
 
 // TreatmentSession represents a single treatment session under an ACC claim.
 type TreatmentSession struct {
-	ID              string            `json:"id"`
-	ClaimID         string            `json:"claimId"`
-	PatientNHI      string            `json:"patientNhi"`
-	ClinicianID     string            `json:"clinicianId"`
-	SessionDate     int64             `json:"sessionDate"`
-	SessionNumber   int               `json:"sessionNumber"`
-	DurationMinutes int               `json:"durationMinutes"`
-	ChargeCode      string            `json:"chargeCode"` // ACC charge code
-	ChargeAmount    float64           `json:"chargeAmount"`
-	TreatmentType   string            `json:"treatmentType"`
-	BodyRegion      string            `json:"bodyRegion"`
-	Subjective      string            `json:"subjective"`
-	Objective       string            `json:"objective"`
-	Assessment      string            `json:"assessment"`
-	Plan            string            `json:"plan"`
-	OutcomeMeasures []OutcomeMeasure  `json:"outcomeMeasures"`
-	Status          TreatmentStatus   `json:"status"`
-	SubmittedAt     int64             `json:"submittedAt,omitempty"`
-	PaidAt          int64             `json:"paidAt,omitempty"`
-	CreatedAt       int64             `json:"createdAt"`
-	UpdatedAt       int64             `json:"updatedAt"`
+	ID              string           `json:"id"`
+	ClaimID         string           `json:"claimId"`
+	PatientNHI      string           `json:"patientNhi"`
+	ClinicianID     string           `json:"clinicianId"`
+	SessionDate     int64            `json:"sessionDate"`
+	SessionNumber   int              `json:"sessionNumber"`
+	DurationMinutes int              `json:"durationMinutes"`
+	ChargeCode      string           `json:"chargeCode"` // ACC charge code
+	ChargeAmount    float64          `json:"chargeAmount"`
+	TreatmentType   string           `json:"treatmentType"`
+	BodyRegion      string           `json:"bodyRegion"`
+	Subjective      string           `json:"subjective"`
+	Objective       string           `json:"objective"`
+	Assessment      string           `json:"assessment"`
+	Plan            string           `json:"plan"`
+	OutcomeMeasures []OutcomeMeasure `json:"outcomeMeasures"`
+	Status          TreatmentStatus  `json:"status"`
+	SubmittedAt     int64            `json:"submittedAt,omitempty"`
+	PaidAt          int64            `json:"paidAt,omitempty"`
+	CreatedAt       int64            `json:"createdAt"`
+	UpdatedAt       int64            `json:"updatedAt"`
 }
 
 // OutcomeMeasure represents a standardised outcome measure for ACC reporting.
 type OutcomeMeasure struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`           // e.g., "NDI", "ODI", "DASH", "LEFS", "COPM", "FIM"
-	Domain        string  `json:"domain"`
-	Score         float64 `json:"score"`
-	MaxScore      float64 `json:"maxScore"`
-	Date          int64   `json:"date"`
-	Interpretation string `json:"interpretation,omitempty"`
-	CreatedAt     int64   `json:"createdAt"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"` // e.g., "NDI", "ODI", "DASH", "LEFS", "COPM", "FIM"
+	Domain         string  `json:"domain"`
+	Score          float64 `json:"score"`
+	MaxScore       float64 `json:"maxScore"`
+	Date           int64   `json:"date"`
+	Interpretation string  `json:"interpretation,omitempty"`
+	CreatedAt      int64   `json:"createdAt"`
 }
 
 // ReviewReport represents a clinical review report for ACC.
 type ReviewReport struct {
-	ID              string            `json:"id"`
-	ClaimID         string            `json:"claimId"`
-	PatientNHI      string            `json:"patientNhi"`
-	ClinicianID     string            `json:"clinicianId"`
-	ReportDate      int64             `json:"reportDate"`
-	ReportType      ReviewType        `json:"reportType"`
-	SessionsSinceLastReview int       `json:"sessionsSinceLastReview"`
-	ProgressSummary string            `json:"progressSummary"`
-	CurrentStatus   string            `json:"currentStatus"`
-	GoalsAchieved   []string          `json:"goalsAchieved"`
-	GoalsOngoing    []string          `json:"goalsOngoing"`
-	GoalsNotAchieved []string         `json:"goalsNotAchieved"`
-	OutcomeMeasures []OutcomeMeasure  `json:"outcomeMeasures"`
-	Recommendation  ReviewRecommendation `json:"recommendation"`
-	AdditionalSessionsRequested int   `json:"additionalSessionsRequested"`
-	ProposedEndDate int64             `json:"proposedEndDate,omitempty"`
-	Status          ReviewStatus      `json:"status"`
-	SubmittedAt     int64             `json:"submittedAt,omitempty"`
-	CreatedAt       int64             `json:"createdAt"`
-	UpdatedAt       int64             `json:"updatedAt"`
+	ID                          string               `json:"id"`
+	ClaimID                     string               `json:"claimId"`
+	PatientNHI                  string               `json:"patientNhi"`
+	ClinicianID                 string               `json:"clinicianId"`
+	ReportDate                  int64                `json:"reportDate"`
+	ReportType                  ReviewType           `json:"reportType"`
+	SessionsSinceLastReview     int                  `json:"sessionsSinceLastReview"`
+	ProgressSummary             string               `json:"progressSummary"`
+	CurrentStatus               string               `json:"currentStatus"`
+	GoalsAchieved               []string             `json:"goalsAchieved"`
+	GoalsOngoing                []string             `json:"goalsOngoing"`
+	GoalsNotAchieved            []string             `json:"goalsNotAchieved"`
+	OutcomeMeasures             []OutcomeMeasure     `json:"outcomeMeasures"`
+	Recommendation              ReviewRecommendation `json:"recommendation"`
+	AdditionalSessionsRequested int                  `json:"additionalSessionsRequested"`
+	ProposedEndDate             int64                `json:"proposedEndDate,omitempty"`
+	Status                      ReviewStatus         `json:"status"`
+	SubmittedAt                 int64                `json:"submittedAt,omitempty"`
+	CreatedAt                   int64                `json:"createdAt"`
+	UpdatedAt                   int64                `json:"updatedAt"`
 }
 
 // ReviewType categorises the type of review.
 type ReviewType string
 
 const (
-	ReviewTypeInitial     ReviewType = "initial"
-	ReviewTypeProgress    ReviewType = "progress"
-	ReviewTypeDischarge   ReviewType = "discharge"
-	ReviewTypeExtension   ReviewType = "extension"
+	ReviewTypeInitial      ReviewType = "initial"
+	ReviewTypeProgress     ReviewType = "progress"
+	ReviewTypeDischarge    ReviewType = "discharge"
+	ReviewTypeExtension    ReviewType = "extension"
 	ReviewTypeReassessment ReviewType = "reassessment"
 )
 
@@ -146,44 +146,44 @@ const (
 type ReviewRecommendation string
 
 const (
-	RecommendContinue     ReviewRecommendation = "continue"
-	RecommendExtend       ReviewRecommendation = "extend"
-	RecommendDischarge    ReviewRecommendation = "discharge"
-	RecommendRefer        ReviewRecommendation = "refer"
-	RecommendInvestigate  ReviewRecommendation = "investigate"
+	RecommendContinue    ReviewRecommendation = "continue"
+	RecommendExtend      ReviewRecommendation = "extend"
+	RecommendDischarge   ReviewRecommendation = "discharge"
+	RecommendRefer       ReviewRecommendation = "refer"
+	RecommendInvestigate ReviewRecommendation = "investigate"
 )
 
 // ReviewStatus tracks review report status.
 type ReviewStatus string
 
 const (
-	ReviewStatusDraft       ReviewStatus = "draft"
-	ReviewStatusSubmitted   ReviewStatus = "submitted"
-	ReviewStatusAccepted    ReviewStatus = "accepted"
-	ReviewStatusDeclined    ReviewStatus = "declined"
-	ReviewStatusMoreInfo    ReviewStatus = "more_info_required"
+	ReviewStatusDraft     ReviewStatus = "draft"
+	ReviewStatusSubmitted ReviewStatus = "submitted"
+	ReviewStatusAccepted  ReviewStatus = "accepted"
+	ReviewStatusDeclined  ReviewStatus = "declined"
+	ReviewStatusMoreInfo  ReviewStatus = "more_info_required"
 )
 
 // ChargeCode represents an ACC charge code for allied health.
 type ChargeCode struct {
-	Code        string  `json:"code"`
-	Description string  `json:"description"`
-	Profession  string  `json:"profession"` // physio, ot, speech, podiatry
-	Unit        string  `json:"unit"`       // session, 15min, 30min, 45min, 60min
-	Rate        float64 `json:"rate"`
-	EffectiveFrom int64 `json:"effectiveFrom"`
-	EffectiveTo   int64 `json:"effectiveTo,omitempty"`
-	Active      bool    `json:"active"`
+	Code          string  `json:"code"`
+	Description   string  `json:"description"`
+	Profession    string  `json:"profession"` // physio, ot, speech, podiatry
+	Unit          string  `json:"unit"`       // session, 15min, 30min, 45min, 60min
+	Rate          float64 `json:"rate"`
+	EffectiveFrom int64   `json:"effectiveFrom"`
+	EffectiveTo   int64   `json:"effectiveTo,omitempty"`
+	Active        bool    `json:"active"`
 }
 
 // NewClaim creates a new ACC claim with defaults.
 func NewClaim() *Claim {
 	now := time.Now().UnixMilli()
 	return &Claim{
-		Status:       ClaimStatusDraft,
-		ClaimDate:    now,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		Status:    ClaimStatusDraft,
+		ClaimDate: now,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 }
 
@@ -289,13 +289,13 @@ func (s *TreatmentSession) Validate() error {
 func NewReviewReport() *ReviewReport {
 	now := time.Now().UnixMilli()
 	return &ReviewReport{
-		GoalsAchieved:       []string{},
-		GoalsOngoing:        []string{},
-		GoalsNotAchieved:    []string{},
-		OutcomeMeasures:     []OutcomeMeasure{},
-		Status:              ReviewStatusDraft,
-		CreatedAt:           now,
-		UpdatedAt:           now,
+		GoalsAchieved:    []string{},
+		GoalsOngoing:     []string{},
+		GoalsNotAchieved: []string{},
+		OutcomeMeasures:  []OutcomeMeasure{},
+		Status:           ReviewStatusDraft,
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}
 }
 

@@ -11,22 +11,22 @@ import (
 
 // OutreachProgramme represents a community outreach programme.
 type OutreachProgramme struct {
-	ID               string     `json:"id"`
-	ProgrammeName    string     `json:"programmeName"`
-	ProgrammeType    string     `json:"programmeType"`
+	ID            string `json:"id"`
+	ProgrammeName string `json:"programmeName"`
+	ProgrammeType string `json:"programmeType"`
 	// mobile-clinic | health-promotion | screening | vaccination | wound-clinic | chronic-disease-support
-	Description      string     `json:"description"`
-	TargetPopulation string     `json:"targetPopulation"`
-	Status           string     `json:"status"`
+	Description      string `json:"description"`
+	TargetPopulation string `json:"targetPopulation"`
+	Status           string `json:"status"`
 	// active | paused | completed | discontinued
-	CoordinatorHpi   string     `json:"coordinatorHpi"`
-	FundingSource    *string    `json:"fundingSource"`
-	Notes            *string    `json:"notes"`
-	TenantID         string     `json:"tenantId"`
-	StartDate        time.Time  `json:"startDate"`
-	EndDate          *time.Time `json:"endDate"`
-	CreatedAt        time.Time  `json:"createdAt"`
-	UpdatedAt        time.Time  `json:"updatedAt"`
+	CoordinatorHpi string     `json:"coordinatorHpi"`
+	FundingSource  *string    `json:"fundingSource"`
+	Notes          *string    `json:"notes"`
+	TenantID       string     `json:"tenantId"`
+	StartDate      time.Time  `json:"startDate"`
+	EndDate        *time.Time `json:"endDate"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
 }
 
 const opSelectCols = `id, programme_name, programme_type, description, target_population,
@@ -223,25 +223,25 @@ func (h *outreachProgrammeHandler) Update(w http.ResponseWriter, r *http.Request
 
 // OutreachEvent represents a single outreach event within a programme.
 type OutreachEvent struct {
-	ID                string     `json:"id"`
-	ProgrammeID       string     `json:"programmeId"`
-	EventName         string     `json:"eventName"`
-	EventType         string     `json:"eventType"`
+	ID          string `json:"id"`
+	ProgrammeID string `json:"programmeId"`
+	EventName   string `json:"eventName"`
+	EventType   string `json:"eventType"`
 	// clinic | screening | education | vaccination | health-promotion
-	Location          string     `json:"location"`
-	ClinicianHpis     string     `json:"clinicianHpis"`
-	TargetAttendees   *int       `json:"targetAttendees"`
-	ActualAttendees   int        `json:"actualAttendees"`
-	Status            string     `json:"status"`
+	Location        string `json:"location"`
+	ClinicianHpis   string `json:"clinicianHpis"`
+	TargetAttendees *int   `json:"targetAttendees"`
+	ActualAttendees int    `json:"actualAttendees"`
+	Status          string `json:"status"`
 	// planned | confirmed | in-progress | completed | cancelled
-	CancellationReason *string   `json:"cancellationReason"`
-	Notes             *string    `json:"notes"`
-	TenantID          string     `json:"tenantId"`
-	ScheduledAt       time.Time  `json:"scheduledAt"`
-	StartedAt         *time.Time `json:"startedAt"`
-	CompletedAt       *time.Time `json:"completedAt"`
-	CreatedAt         time.Time  `json:"createdAt"`
-	UpdatedAt         time.Time  `json:"updatedAt"`
+	CancellationReason *string    `json:"cancellationReason"`
+	Notes              *string    `json:"notes"`
+	TenantID           string     `json:"tenantId"`
+	ScheduledAt        time.Time  `json:"scheduledAt"`
+	StartedAt          *time.Time `json:"startedAt"`
+	CompletedAt        *time.Time `json:"completedAt"`
+	CreatedAt          time.Time  `json:"createdAt"`
+	UpdatedAt          time.Time  `json:"updatedAt"`
 }
 
 const oeSelectCols = `id, programme_id, event_name, event_type, location, clinician_hpis,
@@ -448,27 +448,27 @@ func (h *outreachEventHandler) Complete(w http.ResponseWriter, r *http.Request) 
 
 // OutreachEncounter records a patient (or community member) contact at an outreach event.
 type OutreachEncounter struct {
-	ID                string     `json:"id"`
-	EventID           string     `json:"eventId"`
-	PatientNHI        string     `json:"patientNhi"`
-	ClinicianHpi      string     `json:"clinicianHpi"`
-	AttendeeType      string     `json:"attendeeType"`
+	ID           string `json:"id"`
+	EventID      string `json:"eventId"`
+	PatientNHI   string `json:"patientNhi"`
+	ClinicianHpi string `json:"clinicianHpi"`
+	AttendeeType string `json:"attendeeType"`
 	// patient | carer | community-member
-	ServicesProvided  string     `json:"servicesProvided"`
-	ScreeningType     *string    `json:"screeningType"`
+	ServicesProvided string  `json:"servicesProvided"`
+	ScreeningType    *string `json:"screeningType"`
 	// blood-pressure | diabetes | cervical | bowel | hearing | vision
-	ScreeningResult   *string    `json:"screeningResult"`
-	ReferralType      *string    `json:"referralType"`
+	ScreeningResult *string `json:"screeningResult"`
+	ReferralType    *string `json:"referralType"`
 	// gp | specialist | mental-health | social-services | housing
-	ReferralReason    *string    `json:"referralReason"`
-	FollowUpRequired  bool       `json:"followUpRequired"`
-	FollowUpDetails   *string    `json:"followUpDetails"`
-	ConsentGiven      bool       `json:"consentGiven"`
-	Notes             *string    `json:"notes"`
-	TenantID          string     `json:"tenantId"`
-	EncounteredAt     time.Time  `json:"encounteredAt"`
-	CreatedAt         time.Time  `json:"createdAt"`
-	UpdatedAt         time.Time  `json:"updatedAt"`
+	ReferralReason   *string   `json:"referralReason"`
+	FollowUpRequired bool      `json:"followUpRequired"`
+	FollowUpDetails  *string   `json:"followUpDetails"`
+	ConsentGiven     bool      `json:"consentGiven"`
+	Notes            *string   `json:"notes"`
+	TenantID         string    `json:"tenantId"`
+	EncounteredAt    time.Time `json:"encounteredAt"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 const encSelectCols = `id, event_id, patient_nhi, clinician_hpi, attendee_type,
@@ -561,21 +561,21 @@ func (h *outreachEncounterHandler) Create(w http.ResponseWriter, r *http.Request
 		     @tenant_id, COALESCE(@encountered_at, now()))
 		RETURNING `+encSelectCols,
 		pgx.NamedArgs{
-			"event_id":          eventID,
-			"patient_nhi":       nhiEnc,
-			"clinician_hpi":     req.ClinicianHpi,
-			"attendee_type":     req.AttendeeType,
-			"services_provided": req.ServicesProvided,
-			"screening_type":    req.ScreeningType,
-			"screening_result":  req.ScreeningResult,
-			"referral_type":     req.ReferralType,
-			"referral_reason":   req.ReferralReason,
+			"event_id":           eventID,
+			"patient_nhi":        nhiEnc,
+			"clinician_hpi":      req.ClinicianHpi,
+			"attendee_type":      req.AttendeeType,
+			"services_provided":  req.ServicesProvided,
+			"screening_type":     req.ScreeningType,
+			"screening_result":   req.ScreeningResult,
+			"referral_type":      req.ReferralType,
+			"referral_reason":    req.ReferralReason,
 			"follow_up_required": req.FollowUpRequired,
-			"follow_up_details": req.FollowUpDetails,
-			"consent_given":     req.ConsentGiven,
-			"notes":             req.Notes,
-			"tenant_id":         tenantID,
-			"encountered_at":    req.EncounteredAt,
+			"follow_up_details":  req.FollowUpDetails,
+			"consent_given":      req.ConsentGiven,
+			"notes":              req.Notes,
+			"tenant_id":          tenantID,
+			"encountered_at":     req.EncounteredAt,
 		}).Scan(
 		&e.ID, &e.EventID, &e.PatientNHI, &e.ClinicianHpi, &e.AttendeeType,
 		&e.ServicesProvided, &e.ScreeningType, &e.ScreeningResult,

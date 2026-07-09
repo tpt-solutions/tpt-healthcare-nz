@@ -125,8 +125,8 @@ func TestUrineScreenStruct(t *testing.T) {
 			{DrugName: "cannabis", Detected: true, Expected: false},
 			{DrugName: "amphetamines", Detected: false, Expected: false},
 		},
-		MSSAResult:    "conforming",
-		CreatedAt:     now,
+		MSSAResult: "conforming",
+		CreatedAt:  now,
 	}
 	assert.Equal(t, "us-1", us.ID)
 	assert.Len(t, us.Results, 3)

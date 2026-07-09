@@ -12,90 +12,90 @@ import (
 type ClaimType string
 
 const (
-	ClaimEyeExam        ClaimType = "eye_examination"
+	ClaimEyeExam              ClaimType = "eye_examination"
 	ClaimSpectacleAfterInjury ClaimType = "spectacle_after_injury"
-	ClaimContactLensInjury     ClaimType = "contact_lens_injury"
-	ClaimSurgicalCorrection    ClaimType = "surgical_correction"
-	ClaimFollowUp      ClaimType = "follow_up"
+	ClaimContactLensInjury    ClaimType = "contact_lens_injury"
+	ClaimSurgicalCorrection   ClaimType = "surgical_correction"
+	ClaimFollowUp             ClaimType = "follow_up"
 )
 
 // ClaimStatus tracks the lifecycle of an ACC vision claim.
 type ClaimStatus string
 
 const (
-	StatusDraft           ClaimStatus = "draft"
-	StatusReadyToSubmit   ClaimStatus = "ready_to_submit"
-	StatusSubmitted       ClaimStatus = "submitted"
-	StatusAccepted        ClaimStatus = "accepted"
-	StatusPartiallyPaid   ClaimStatus = "partially_paid"
-	StatusDeclined        ClaimStatus = "declined"
-	StatusRequiresInfo    ClaimStatus = "requires_info"
-	StatusAppealed        ClaimStatus = "appealed"
+	StatusDraft         ClaimStatus = "draft"
+	StatusReadyToSubmit ClaimStatus = "ready_to_submit"
+	StatusSubmitted     ClaimStatus = "submitted"
+	StatusAccepted      ClaimStatus = "accepted"
+	StatusPartiallyPaid ClaimStatus = "partially_paid"
+	StatusDeclined      ClaimStatus = "declined"
+	StatusRequiresInfo  ClaimStatus = "requires_info"
+	StatusAppealed      ClaimStatus = "appealed"
 )
 
 // TreatmentProvider identifies the clinician type for the ACC claim.
 type TreatmentProvider string
 
 const (
-	ProviderOptometrist     TreatmentProvider = "optometrist"
-	ProviderOphthalmologist TreatmentProvider = "ophthalmologist"
+	ProviderOptometrist      TreatmentProvider = "optometrist"
+	ProviderOphthalmologist  TreatmentProvider = "ophthalmologist"
 	ProviderOpticalDispenser TreatmentProvider = "optical_dispenser"
-	ProviderGP              TreatmentProvider = "gp"
+	ProviderGP               TreatmentProvider = "gp"
 )
 
 // InjuryDetails captures the accident/injury information for ACC.
 type InjuryDetails struct {
-	AccidentDate    int64  `json:"accidentDate"`
-	InjuryType      string `json:"injuryType"`       // e.g. "corneal abrasion", "foreign body", "blunt trauma"
-	InjuryCause     string `json:"injuryCause"`      // brief description
-	AccNumber       string `json:"accNumber,omitempty"` // ACC claim number if pre-existing
-	LodgedBy        string `json:"lodgedBy"`         // usually the GP or optometrist
+	AccidentDate int64  `json:"accidentDate"`
+	InjuryType   string `json:"injuryType"`          // e.g. "corneal abrasion", "foreign body", "blunt trauma"
+	InjuryCause  string `json:"injuryCause"`         // brief description
+	AccNumber    string `json:"accNumber,omitempty"` // ACC claim number if pre-existing
+	LodgedBy     string `json:"lodgedBy"`            // usually the GP or optometrist
 }
 
 // ClaimItem represents a single line item on the ACC claim (one procedure/visit).
 type ClaimItem struct {
-	LineNumber   int     `json:"lineNumber"`
-	ServiceDate  int64   `json:"serviceDate"`
-	ProcedureCode string `json:"procedureCode"` // NZ ACC schedule code
-	Description  string  `json:"description"`
-	Amount       float64 `json:"amount"`         // GST-exclusive
-	GSTAmount    float64 `json:"gstAmount"`
-	TotalAmount  float64 `json:"totalAmount"`
+	LineNumber    int     `json:"lineNumber"`
+	ServiceDate   int64   `json:"serviceDate"`
+	ProcedureCode string  `json:"procedureCode"` // NZ ACC schedule code
+	Description   string  `json:"description"`
+	Amount        float64 `json:"amount"` // GST-exclusive
+	GSTAmount     float64 `json:"gstAmount"`
+	TotalAmount   float64 `json:"totalAmount"`
 }
 
 // Claim is a complete ACC vision claim record.
 type Claim struct {
-	ID              string            `json:"id"`
-	PatientNHI      string            `json:"patientNhi"`
-	ClinicianID     string            `json:"clinicianId"`
-	PracticeID      string            `json:"practiceId"`
-	ClaimType       ClaimType         `json:"claimType"`
-	Status          ClaimStatus       `json:"status"`
-	Provider        TreatmentProvider `json:"provider"`
+	ID          string            `json:"id"`
+	PatientNHI  string            `json:"patientNhi"`
+	ClinicianID string            `json:"clinicianId"`
+	PracticeID  string            `json:"practiceId"`
+	ClaimType   ClaimType         `json:"claimType"`
+	Status      ClaimStatus       `json:"status"`
+	Provider    TreatmentProvider `json:"provider"`
 
 	// Linked records
-	PrescriptionID  string            `json:"prescriptionId,omitempty"`
-	ExamID          string            `json:"examId,omitempty"`
-	DispensingID    string            `json:"dispensingId,omitempty"`
+	PrescriptionID string `json:"prescriptionId,omitempty"`
+	ExamID         string `json:"examId,omitempty"`
+	DispensingID   string `json:"dispensingId,omitempty"`
 
-	Injury          InjuryDetails     `json:"injury"`
-	Items           []ClaimItem       `json:"items"`
+	Injury InjuryDetails `json:"injury"`
+	Items  []ClaimItem   `json:"items"`
 
 	// Financials
-	TotalClaimed    float64           `json:"totalClaimed"`
-	GSTTotal        float64           `json:"gstTotal"`
-	TotalIncGST     float64           `json:"totalIncGst"`
-	AmountPaid      float64           `json:"amountPaid"`
-	Outstanding     float64           `json:"outstanding"`
+	TotalClaimed float64 `json:"totalClaimed"`
+	GSTTotal     float64 `json:"gstTotal"`
+	TotalIncGST  float64 `json:"totalIncGst"`
+	AmountPaid   float64 `json:"amountPaid"`
+	Outstanding  float64 `json:"outstanding"`
 
 	// Submission tracking
-	SubmittedDate   int64             `json:"submittedDate,omitempty"`
-	ResponseDate    int64             `json:"responseDate,omitempty"`
-	DeclineReason   string            `json:"declineReason,omitempty"`
-	Notes           string            `json:"notes,omitempty"`
+	SubmittedDate int64  `json:"submittedDate,omitempty"`
+	ResponseDate  int64  `json:"responseDate,omitempty"`
+	DeclineReason string `json:"declineReason,omitempty"`
+	Notes         string `json:"notes,omitempty"`
 
-	CreatedAt       int64             `json:"createdAt"`
-	UpdatedAt       int64             `json:"updatedAt"`
+	CreatedAt int64 `json:"createdAt"`
+	UpdatedAt int64 `json:"updatedAt"`
 }
 
 // NewClaim creates a new ACC vision claim with defaults.
@@ -156,14 +156,14 @@ func (c *Claim) recalculate() {
 type ProcedureCode string
 
 const (
-	ProcComprehensiveExam  ProcedureCode = "OPT101" // Comprehensive eye examination
-	ProcIntermediateExam   ProcedureCode = "OPT102" // Intermediate eye examination
-	ProcVisualField        ProcedureCode = "OPT201" // Visual field test
-	ProcOCT                ProcedureCode = "OPT301" // OCT scan
-	ProcContactLensRemove  ProcedureCode = "OPT401" // Remove corneal foreign body
-	ProcContactLensPatch   ProcedureCode = "OPT402" // Eye patching after injury
-	ProcSpectacleReplace   ProcedureCode = "OPT501" // Spectacle replacement after injury
-	ProcCLReplace          ProcedureCode = "OPT502" // Contact lens replacement after injury
+	ProcComprehensiveExam ProcedureCode = "OPT101" // Comprehensive eye examination
+	ProcIntermediateExam  ProcedureCode = "OPT102" // Intermediate eye examination
+	ProcVisualField       ProcedureCode = "OPT201" // Visual field test
+	ProcOCT               ProcedureCode = "OPT301" // OCT scan
+	ProcContactLensRemove ProcedureCode = "OPT401" // Remove corneal foreign body
+	ProcContactLensPatch  ProcedureCode = "OPT402" // Eye patching after injury
+	ProcSpectacleReplace  ProcedureCode = "OPT501" // Spectacle replacement after injury
+	ProcCLReplace         ProcedureCode = "OPT502" // Contact lens replacement after injury
 )
 
 // ProcedureDescriptions maps codes to descriptions.
@@ -185,12 +185,12 @@ var ProcedureDescriptions = map[ProcedureCode]string{
 // ToFHIRClaim converts the ACC claim to a FHIR R5 Claim resource.
 func (c *Claim) ToFHIRClaim() map[string]any {
 	createdTime := time.UnixMilli(c.CreatedAt).Format(time.RFC3339)
-	
+
 	claim := map[string]any{
 		"resourceType": "Claim",
 		"id":           c.ID,
 		"meta": map[string]any{
-			"versionId": fmt.Sprintf("%d", 1),
+			"versionId":   fmt.Sprintf("%d", 1),
 			"lastUpdated": time.UnixMilli(c.UpdatedAt).Format(time.RFC3339),
 			"profile": []string{
 				"https://nzfhir.org/StructureDefinition/nz-acc-vision-claim",
@@ -300,44 +300,44 @@ func (c *Claim) ToFHIRClaim() map[string]any {
 	// Add NZ-specific extensions
 	claim["extension"] = []map[string]any{
 		{
-			"url": "https://nzfhir.org/StructureDefinition/nz-acc-claim-type",
+			"url":       "https://nzfhir.org/StructureDefinition/nz-acc-claim-type",
 			"valueCode": string(c.ClaimType),
 		},
 		{
-			"url": "https://nzfhir.org/StructureDefinition/nz-acc-claim-status",
+			"url":       "https://nzfhir.org/StructureDefinition/nz-acc-claim-status",
 			"valueCode": string(c.Status),
 		},
 		{
-			"url": "https://nzfhir.org/StructureDefinition/nz-acc-provider-type",
+			"url":       "https://nzfhir.org/StructureDefinition/nz-acc-provider-type",
 			"valueCode": string(c.Provider),
 		},
 		{
-			"url": "https://nzfhir.org/StructureDefinition/nz-acc-claim-number",
+			"url":         "https://nzfhir.org/StructureDefinition/nz-acc-claim-number",
 			"valueString": c.Injury.AccNumber,
 		},
 		{
-			"url": "https://nzfhir.org/StructureDefinition/nz-acc-lodged-by",
+			"url":         "https://nzfhir.org/StructureDefinition/nz-acc-lodged-by",
 			"valueString": c.Injury.LodgedBy,
 		},
 	}
 
 	if c.SubmittedDate > 0 {
 		claim["extension"] = append(claim["extension"].([]map[string]any), map[string]any{
-			"url": "https://nzfhir.org/StructureDefinition/nz-acc-submitted-date",
+			"url":           "https://nzfhir.org/StructureDefinition/nz-acc-submitted-date",
 			"valueDateTime": time.UnixMilli(c.SubmittedDate).Format(time.RFC3339),
 		})
 	}
 
 	if c.ResponseDate > 0 {
 		claim["extension"] = append(claim["extension"].([]map[string]any), map[string]any{
-			"url": "https://nzfhir.org/StructureDefinition/nz-acc-response-date",
+			"url":           "https://nzfhir.org/StructureDefinition/nz-acc-response-date",
 			"valueDateTime": time.UnixMilli(c.ResponseDate).Format(time.RFC3339),
 		})
 	}
 
 	if c.DeclineReason != "" {
 		claim["extension"] = append(claim["extension"].([]map[string]any), map[string]any{
-			"url": "https://nzfhir.org/StructureDefinition/nz-acc-decline-reason",
+			"url":         "https://nzfhir.org/StructureDefinition/nz-acc-decline-reason",
 			"valueString": c.DeclineReason,
 		})
 	}

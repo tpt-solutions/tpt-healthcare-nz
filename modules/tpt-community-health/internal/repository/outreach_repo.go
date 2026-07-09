@@ -45,13 +45,19 @@ func (r *OutreachRepository) ListPrograms(ctx context.Context, practiceID, progr
 	args := []any{}
 	idx := 1
 	if practiceID != "" {
-		where += fmt.Sprintf(" AND practice_id = $%d", idx); idx++; args = append(args, practiceID)
+		where += fmt.Sprintf(" AND practice_id = $%d", idx)
+		idx++
+		args = append(args, practiceID)
 	}
 	if programType != "" {
-		where += fmt.Sprintf(" AND program_type = $%d", idx); idx++; args = append(args, programType)
+		where += fmt.Sprintf(" AND program_type = $%d", idx)
+		idx++
+		args = append(args, programType)
 	}
 	if status != "" {
-		where += fmt.Sprintf(" AND status = $%d", idx); idx++; args = append(args, status)
+		where += fmt.Sprintf(" AND status = $%d", idx)
+		idx++
+		args = append(args, status)
 	}
 	var total int
 	if err := r.pool.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM outreach_programs %s", where), args...).Scan(&total); err != nil {
@@ -191,8 +197,11 @@ func (r *OutreachRepository) ListAttendees(ctx context.Context, eventID string, 
 		if err != nil {
 			return nil, 0, err
 		}
-		if aa != nil { a.AttendedAt = toMs(*aa) }
-		a.CreatedAt = toMs(ca); a.UpdatedAt = toMs(ua)
+		if aa != nil {
+			a.AttendedAt = toMs(*aa)
+		}
+		a.CreatedAt = toMs(ca)
+		a.UpdatedAt = toMs(ua)
 		attendees = append(attendees, &a)
 	}
 	return attendees, total, rows.Err()
@@ -229,8 +238,11 @@ func (r *OutreachRepository) ListReferrals(ctx context.Context, eventID string) 
 			return nil, err
 		}
 		ref.ReferralDate = toMs(rd)
-		if od != nil { ref.OutcomeDate = toMs(*od) }
-		ref.CreatedAt = toMs(ca); ref.UpdatedAt = toMs(ua)
+		if od != nil {
+			ref.OutcomeDate = toMs(*od)
+		}
+		ref.CreatedAt = toMs(ca)
+		ref.UpdatedAt = toMs(ua)
 		refs = append(refs, &ref)
 	}
 	return refs, rows.Err()
@@ -265,7 +277,9 @@ func (r *OutreachRepository) ListScreenings(ctx context.Context, eventID string)
 		if err != nil {
 			return nil, err
 		}
-		s.ScreeningDate = toMs(sd); s.CreatedAt = toMs(ca); s.UpdatedAt = toMs(ua)
+		s.ScreeningDate = toMs(sd)
+		s.CreatedAt = toMs(ca)
+		s.UpdatedAt = toMs(ua)
 		screenings = append(screenings, &s)
 	}
 	return screenings, rows.Err()
@@ -284,8 +298,11 @@ func scanProgram(s scanner) (*outreach.Program, error) {
 		return nil, err
 	}
 	p.StartDate = toMs(sd)
-	if e != nil && !e.IsZero() { p.EndDate = toMs(*e) }
-	p.CreatedAt = toMs(ca); p.UpdatedAt = toMs(ua)
+	if e != nil && !e.IsZero() {
+		p.EndDate = toMs(*e)
+	}
+	p.CreatedAt = toMs(ca)
+	p.UpdatedAt = toMs(ua)
 	return &p, nil
 }
 
@@ -299,10 +316,19 @@ func scanEvent(s scanner) (*outreach.Event, error) {
 		return nil, err
 	}
 	e.ScheduledDate = toMs(sd)
-	if lat != nil { e.Latitude = *lat }
-	if lon != nil { e.Longitude = *lon }
-	if ta != nil { e.TargetAttendees = *ta }
-	if aa != nil { e.ActualAttendees = *aa }
-	e.CreatedAt = toMs(ca); e.UpdatedAt = toMs(ua)
+	if lat != nil {
+		e.Latitude = *lat
+	}
+	if lon != nil {
+		e.Longitude = *lon
+	}
+	if ta != nil {
+		e.TargetAttendees = *ta
+	}
+	if aa != nil {
+		e.ActualAttendees = *aa
+	}
+	e.CreatedAt = toMs(ca)
+	e.UpdatedAt = toMs(ua)
 	return &e, nil
 }

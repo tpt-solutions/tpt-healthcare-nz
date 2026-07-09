@@ -124,9 +124,9 @@ func (h *OpticalHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		slog.String("status", string(req.Status)))
 
 	writeJSON(w, http.StatusOK, map[string]string{
-		"status":     "status_updated",
-		"orderId":    orderId,
-		"newStatus":  string(req.Status),
+		"status":    "status_updated",
+		"orderId":   orderId,
+		"newStatus": string(req.Status),
 	})
 }
 

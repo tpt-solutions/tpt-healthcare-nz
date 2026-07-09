@@ -28,44 +28,44 @@ const (
 type TonometryMethod string
 
 const (
-	TonoGoldmann  TonometryMethod = "goldmann_applanation"
+	TonoGoldmann   TonometryMethod = "goldmann_applanation"
 	TonoNonContact TonometryMethod = "non_contact" // air puff
-	TonoRebound   TonometryMethod = "rebound"      // iCare
-	TonoTonopen   TonometryMethod = "tonopen"
-	TonoDigital   TonometryMethod = "digital_palpation"
+	TonoRebound    TonometryMethod = "rebound"     // iCare
+	TonoTonopen    TonometryMethod = "tonopen"
+	TonoDigital    TonometryMethod = "digital_palpation"
 )
 
 // IOPReading holds a single intraocular pressure measurement.
 type IOPReading struct {
-	Method    TonometryMethod `json:"method"`
-	RightEye  float64         `json:"rightEye"`  // mmHg
-	LeftEye   float64         `json:"leftEye"`   // mmHg
-	Time      int64           `json:"time"`       // epoch ms
-	Notes     string          `json:"notes,omitempty"`
+	Method   TonometryMethod `json:"method"`
+	RightEye float64         `json:"rightEye"` // mmHg
+	LeftEye  float64         `json:"leftEye"`  // mmHg
+	Time     int64           `json:"time"`     // epoch ms
+	Notes    string          `json:"notes,omitempty"`
 }
 
 // GradingScale is a standard clinical grading (0–4) used for cataract, cells, flare, etc.
 type GradingScale int
 
 const (
-	GradeNone   GradingScale = 0
-	GradeTrace  GradingScale = 1
-	GradeMild   GradingScale = 2
+	GradeNone     GradingScale = 0
+	GradeTrace    GradingScale = 1
+	GradeMild     GradingScale = 2
 	GradeModerate GradingScale = 3
-	GradeSevere GradingScale = 4
+	GradeSevere   GradingScale = 4
 )
 
 // LensStatus describes the natural lens or IOL status.
 type LensStatus string
 
 const (
-	LensPhakic     LensStatus = "phakic"
-	LensPSC        LensStatus = "posterior_subcapsular"
-	LensNuclear    LensStatus = "nuclear_sclerotic"
-	LensCortical   LensStatus = "cortical"
-	LensPCIOL      LensStatus = "pc_iol"       // posterior chamber IOL
-	LensACIOL      LensStatus = "ac_iol"       // anterior chamber IOL
-	LensAphakic    LensStatus = "aphakic"
+	LensPhakic       LensStatus = "phakic"
+	LensPSC          LensStatus = "posterior_subcapsular"
+	LensNuclear      LensStatus = "nuclear_sclerotic"
+	LensCortical     LensStatus = "cortical"
+	LensPCIOL        LensStatus = "pc_iol" // posterior chamber IOL
+	LensACIOL        LensStatus = "ac_iol" // anterior chamber IOL
+	LensAphakic      LensStatus = "aphakic"
 	LensPseudophakic LensStatus = "pseudophakic"
 )
 
@@ -73,12 +73,12 @@ const (
 type OpticDiscAppearance string
 
 const (
-	DiscNormal       OpticDiscAppearance = "normal"
-	DiscCupped       OpticDiscAppearance = "cupped"
-	DiscPale         OpticDiscAppearance = "pale"
-	DiscOedematous   OpticDiscAppearance = "oedematous"
-	DiscDrusen       OpticDiscAppearance = "drusen"
-	DiscTilted       OpticDiscAppearance = "tilted"
+	DiscNormal     OpticDiscAppearance = "normal"
+	DiscCupped     OpticDiscAppearance = "cupped"
+	DiscPale       OpticDiscAppearance = "pale"
+	DiscOedematous OpticDiscAppearance = "oedematous"
+	DiscDrusen     OpticDiscAppearance = "drusen"
+	DiscTilted     OpticDiscAppearance = "tilted"
 )
 
 // CupDiscRatio expresses the vertical cup-to-disc ratio (0.0 to 1.0).
@@ -88,75 +88,75 @@ type CupDiscRatio float64
 type MacularStatus string
 
 const (
-	MaculaNormal    MacularStatus = "normal"
-	MaculaOedema    MacularStatus = "macular_oedema"
-	MaculaDrusen    MacularStatus = "macular_drusen"
-	MaculaCNV       MacularStatus = "choroidal_neovascularisation"
-	MaculaHole      MacularStatus = "macular_hole"
-	MaculaPucker    MacularStatus = "epiretinal_membrane"
-	MaculaScar      MacularStatus = "macular_scar"
+	MaculaNormal MacularStatus = "normal"
+	MaculaOedema MacularStatus = "macular_oedema"
+	MaculaDrusen MacularStatus = "macular_drusen"
+	MaculaCNV    MacularStatus = "choroidal_neovascularisation"
+	MaculaHole   MacularStatus = "macular_hole"
+	MaculaPucker MacularStatus = "epiretinal_membrane"
+	MaculaScar   MacularStatus = "macular_scar"
 )
 
 // OphthalmicExam captures a complete ophthalmic examination record.
 type OphthalmicExam struct {
-	ID             string            `json:"id"`
-	TenantID       string            `json:"tenantId"`
-	PatientNHI     string            `json:"patientNhi"`
-	ClinicianID    string            `json:"clinicianId"`
-	PracticeID     string            `json:"practiceId"`
-	ExamType       ExamType          `json:"examType"`
-	ExamDate       int64             `json:"examDate"`
-	FHIRResource   json.RawMessage   `json:"fhirResource,omitempty"`
-	FHIRVersion    int               `json:"fhirVersion,omitempty"`
+	ID           string          `json:"id"`
+	TenantID     string          `json:"tenantId"`
+	PatientNHI   string          `json:"patientNhi"`
+	ClinicianID  string          `json:"clinicianId"`
+	PracticeID   string          `json:"practiceId"`
+	ExamType     ExamType        `json:"examType"`
+	ExamDate     int64           `json:"examDate"`
+	FHIRResource json.RawMessage `json:"fhirResource,omitempty"`
+	FHIRVersion  int             `json:"fhirVersion,omitempty"`
 
 	// Visual acuity — recorded as Snellen fractions per eye
-	VADistanceRight string             `json:"vaDistanceRight,omitempty"` // e.g. "6/6"
-	VADistanceLeft  string             `json:"vaDistanceLeft,omitempty"`
-	VANearRight     string             `json:"vaNearRight,omitempty"`     // e.g. "N5"
-	VANearLeft      string             `json:"vaNearLeft,omitempty"`
-	PinholeRight    string             `json:"pinholeRight,omitempty"`
-	PinholeLeft     string             `json:"pinholeLeft,omitempty"`
+	VADistanceRight string `json:"vaDistanceRight,omitempty"` // e.g. "6/6"
+	VADistanceLeft  string `json:"vaDistanceLeft,omitempty"`
+	VANearRight     string `json:"vaNearRight,omitempty"` // e.g. "N5"
+	VANearLeft      string `json:"vaNearLeft,omitempty"`
+	PinholeRight    string `json:"pinholeRight,omitempty"`
+	PinholeLeft     string `json:"pinholeLeft,omitempty"`
 
 	// Refraction (autorefractor or retinoscopy findings before subjective)
-	AutoRefractionRight string          `json:"autoRefractionRight,omitempty"`
-	AutoRefractionLeft  string          `json:"autoRefractionLeft,omitempty"`
+	AutoRefractionRight string `json:"autoRefractionRight,omitempty"`
+	AutoRefractionLeft  string `json:"autoRefractionLeft,omitempty"`
 
 	// Tonometry / IOP
-	IOP              []IOPReading       `json:"iop,omitempty"`
+	IOP []IOPReading `json:"iop,omitempty"`
 
 	// Anterior segment
-	LensRight        LensStatus         `json:"lensRight"`
-	LensLeft         LensStatus         `json:"lensLeft"`
-	CataractGrade    GradingScale       `json:"cataractGrade"`
-	CorneaClear      bool               `json:"corneaClear"`
-	AnteriorChamber  string             `json:"anteriorChamber,omitempty"` // depth descriptor
+	LensRight       LensStatus   `json:"lensRight"`
+	LensLeft        LensStatus   `json:"lensLeft"`
+	CataractGrade   GradingScale `json:"cataractGrade"`
+	CorneaClear     bool         `json:"corneaClear"`
+	AnteriorChamber string       `json:"anteriorChamber,omitempty"` // depth descriptor
 
 	// Posterior segment
-	DiscRight        OpticDiscAppearance `json:"discRight"`
-	DiscLeft         OpticDiscAppearance `json:"discLeft"`
-	CDRatioRight     CupDiscRatio       `json:"cdRatioRight"`     // cup-to-disc ratio
-	CDRatioLeft      CupDiscRatio       `json:"cdRatioLeft"`
-	MaculaRight      MacularStatus      `json:"maculaRight"`
-	MaculaLeft       MacularStatus      `json:"maculaLeft"`
+	DiscRight    OpticDiscAppearance `json:"discRight"`
+	DiscLeft     OpticDiscAppearance `json:"discLeft"`
+	CDRatioRight CupDiscRatio        `json:"cdRatioRight"` // cup-to-disc ratio
+	CDRatioLeft  CupDiscRatio        `json:"cdRatioLeft"`
+	MaculaRight  MacularStatus       `json:"maculaRight"`
+	MaculaLeft   MacularStatus       `json:"maculaLeft"`
 
 	// Visual fields (normal, constricted, hemianopia, etc.)
-	VisualFieldsRight string           `json:"visualFieldsRight,omitempty"`
-	VisualFieldsLeft  string           `json:"visualFieldsLeft,omitempty"`
+	VisualFieldsRight string `json:"visualFieldsRight,omitempty"`
+	VisualFieldsLeft  string `json:"visualFieldsLeft,omitempty"`
 
 	// OCT imaging report summary
-	OCTRight         string             `json:"octRight,omitempty"`
-	OCTLeft          string             `json:"octLeft,omitempty"`
+	OCTRight string `json:"octRight,omitempty"`
+	OCTLeft  string `json:"octLeft,omitempty"`
 
 	// Diagnosis / impression
-	Diagnosis        string             `json:"diagnosis,omitempty"`
-	Plan             string             `json:"plan,omitempty"`
-	ReferralRequired bool               `json:"referralRequired"`
+	Diagnosis        string `json:"diagnosis,omitempty"`
+	Plan             string `json:"plan,omitempty"`
+	ReferralRequired bool   `json:"referralRequired"`
 
 	// Follow-up
-	FollowUpDays     int                `json:"followUpDays,omitempty"`
+	FollowUpDays int `json:"followUpDays,omitempty"`
 
-	CreatedAt        int64              `json:"createdAt"`
-	UpdatedAt        int64              `json:"updatedAt"`
+	CreatedAt int64 `json:"createdAt"`
+	UpdatedAt int64 `json:"updatedAt"`
 }
 
 // NewExam creates a new OphthalmicExam with timestamps initialised.
@@ -191,12 +191,12 @@ func (e *OphthalmicExam) Validate() error {
 // for ophthalmic examination findings.
 func (e *OphthalmicExam) ToFHIRDiagnosticReport() map[string]any {
 	examTime := time.UnixMilli(e.ExamDate).Format(time.RFC3339)
-	
+
 	report := map[string]any{
 		"resourceType": "DiagnosticReport",
 		"id":           e.ID,
 		"meta": map[string]any{
-			"versionId": fmt.Sprintf("%d", e.FHIRVersion),
+			"versionId":   fmt.Sprintf("%d", e.FHIRVersion),
 			"lastUpdated": time.UnixMilli(e.UpdatedAt).Format(time.RFC3339),
 			"profile": []string{
 				"https://nzfhir.org/StructureDefinition/nz-ophthalmic-exam",
@@ -246,8 +246,8 @@ func (e *OphthalmicExam) ToFHIRDiagnosticReport() map[string]any {
 				"reference": fmt.Sprintf("Practitioner/%s", e.ClinicianID),
 			},
 		},
-		"result": []map[string]any{},
-		"conclusion": e.Diagnosis,
+		"result":         []map[string]any{},
+		"conclusion":     e.Diagnosis,
 		"conclusionCode": []map[string]any{},
 	}
 
@@ -304,17 +304,17 @@ func (e *OphthalmicExam) ToFHIRDiagnosticReport() map[string]any {
 	// Add extensions for NZ-specific data
 	report["extension"] = []map[string]any{
 		{
-			"url": "https://nzfhir.org/StructureDefinition/nz-ophthalmic-exam-type",
+			"url":       "https://nzfhir.org/StructureDefinition/nz-ophthalmic-exam-type",
 			"valueCode": string(e.ExamType),
 		},
 		{
-			"url": "https://nzfhir.org/StructureDefinition/nz-ophthalmic-exam-referral-required",
+			"url":          "https://nzfhir.org/StructureDefinition/nz-ophthalmic-exam-referral-required",
 			"valueBoolean": e.ReferralRequired,
 		},
 	}
 	if e.FollowUpDays > 0 {
 		report["extension"] = append(report["extension"].([]map[string]any), map[string]any{
-			"url": "https://nzfhir.org/StructureDefinition/nz-ophthalmic-exam-followup-days",
+			"url":          "https://nzfhir.org/StructureDefinition/nz-ophthalmic-exam-followup-days",
 			"valueInteger": e.FollowUpDays,
 		})
 	}

@@ -28,12 +28,12 @@ func TestDentalClaimValidate_EmptyClaim(t *testing.T) {
 
 func TestDentalClaimValidate_FutureDate(t *testing.T) {
 	c := &DentalClaim{
-		PatientNHI:     "ZAB000H",
-		ProviderHPI:    "1234567",
-		PracticeID:     "P001",
-		AccidentDate:   time.Now().Add(24 * time.Hour),
-		ACCFormNumber:  "ACC45",
-		Teeth:          []ToothInjury{{ToothCode: "11", FeeInCents: 1000}},
+		PatientNHI:    "ZAB000H",
+		ProviderHPI:   "1234567",
+		PracticeID:    "P001",
+		AccidentDate:  time.Now().Add(24 * time.Hour),
+		ACCFormNumber: "ACC45",
+		Teeth:         []ToothInjury{{ToothCode: "11", FeeInCents: 1000}},
 	}
 	result := c.Validate()
 	assert.False(t, result.Valid)

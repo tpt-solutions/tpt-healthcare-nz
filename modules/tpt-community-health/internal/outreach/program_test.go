@@ -59,12 +59,12 @@ func TestNewProgram(t *testing.T) {
 func TestEventValidate(t *testing.T) {
 	valid := func() *Event {
 		return &Event{
-			ProgramID:      "prog-1",
-			EventName:      "Free Health Screening",
-			EventType:      EventScreening,
-			ScheduledDate:  1700000000000,
+			ProgramID:       "prog-1",
+			EventName:       "Free Health Screening",
+			EventType:       EventScreening,
+			ScheduledDate:   1700000000000,
 			LocationAddress: "Community Centre, Wellington",
-			Clinicians:     []string{"CPN123"},
+			Clinicians:      []string{"CPN123"},
 		}
 	}
 

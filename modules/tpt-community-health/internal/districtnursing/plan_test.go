@@ -195,15 +195,15 @@ func TestDistrictNursingConstants(t *testing.T) {
 
 func TestVitalSignsStruct(t *testing.T) {
 	vs := VitalSigns{
-		Temperature:           36.8,
+		Temperature:            36.8,
 		BloodPressureSystolic:  120,
 		BloodPressureDiastolic: 80,
-		HeartRate:             72,
-		SpO2:                  98.5,
-		PainScore:             2,
-		WeightKg:              75.5,
-		RespiratoryRate:       16,
-		BloodGlucose:          5.6,
+		HeartRate:              72,
+		SpO2:                   98.5,
+		PainScore:              2,
+		WeightKg:               75.5,
+		RespiratoryRate:        16,
+		BloodGlucose:           5.6,
 	}
 	assert.Equal(t, 36.8, vs.Temperature)
 	assert.Equal(t, 120, vs.BloodPressureSystolic)
@@ -218,16 +218,16 @@ func TestVitalSignsStruct(t *testing.T) {
 
 func TestWoundAssessmentStruct(t *testing.T) {
 	wa := WoundAssessment{
-		WoundSite:    "left ankle",
-		WoundCause:   WoundVenous,
-		LengthCM:     3.5,
-		WidthCM:      2.0,
-		DepthCM:      0.5,
-		TissueType:   "granulating",
+		WoundSite:     "left ankle",
+		WoundCause:    WoundVenous,
+		LengthCM:      3.5,
+		WidthCM:       2.0,
+		DepthCM:       0.5,
+		TissueType:    "granulating",
 		ExudateAmount: "moderate",
-		Odour:        false,
-		Debridement:  false,
-		PhotosTaken:  true,
+		Odour:         false,
+		Debridement:   false,
+		PhotosTaken:   true,
 	}
 	assert.Equal(t, "left ankle", wa.WoundSite)
 	assert.Equal(t, WoundVenous, wa.WoundCause)

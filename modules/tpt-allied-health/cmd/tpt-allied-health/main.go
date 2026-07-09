@@ -183,12 +183,12 @@ func loadConfig(configFile string) Config {
 	}
 
 	return Config{
-		DatabaseURL:    viper.GetString("database_url"),
-		ServerAddr:     viper.GetString("server_addr"),
-		ReadTimeout:    readTimeout,
-		WriteTimeout:   writeTimeout,
-		IdleTimeout:    idleTimeout,
-		AllowedOrigins: allowedOrigins,
+		DatabaseURL:       viper.GetString("database_url"),
+		ServerAddr:        viper.GetString("server_addr"),
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
+		AllowedOrigins:    allowedOrigins,
 		AuthMode:          viper.GetString("auth_mode"),
 		Auth0Domain:       viper.GetString("auth0_domain"),
 		Auth0Audience:     viper.GetString("auth0_audience"),

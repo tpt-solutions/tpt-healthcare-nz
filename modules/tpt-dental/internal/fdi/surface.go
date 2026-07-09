@@ -28,16 +28,16 @@ type SurfaceCode string
 
 // Standard single-surface codes.
 const (
-	SurfaceMesial    SurfaceCode = "M"
-	SurfaceDistal    SurfaceCode = "D"
-	SurfaceOcclusal  SurfaceCode = "O"
-	SurfaceIncisal   SurfaceCode = "I"
-	SurfaceBuccal    SurfaceCode = "B"
-	SurfaceLingual   SurfaceCode = "L"
-	SurfacePalatal   SurfaceCode = "P"
-	SurfaceLabial    SurfaceCode = "La"
+	SurfaceMesial     SurfaceCode = "M"
+	SurfaceDistal     SurfaceCode = "D"
+	SurfaceOcclusal   SurfaceCode = "O"
+	SurfaceIncisal    SurfaceCode = "I"
+	SurfaceBuccal     SurfaceCode = "B"
+	SurfaceLingual    SurfaceCode = "L"
+	SurfacePalatal    SurfaceCode = "P"
+	SurfaceLabial     SurfaceCode = "La"
 	SurfaceVestibular SurfaceCode = "V"
-	SurfaceCervical  SurfaceCode = "C"
+	SurfaceCervical   SurfaceCode = "C"
 )
 
 // SurfaceName returns the full name of a surface code.
@@ -70,12 +70,12 @@ func SurfaceName(code SurfaceCode) string {
 
 // ToothSurfaceRecord records the status of a specific surface on a tooth.
 type ToothSurfaceRecord struct {
-	ToothCode string     `json:"toothCode"` // FDI two-digit code
-	Surface   string     `json:"surface"`   // surface code (possibly multi-surface e.g. "MOD")
-	Status    string     `json:"status"`    // healthy, carious, filled, missing, fissure_sealant, crown, bridge_abutment, implant, etc.
-	Note      string     `json:"note,omitempty"`
-	Timestamp int64      `json:"timestamp"` // unix epoch ms
-	Clinician string     `json:"clinician,omitempty"` // HPI CPN of the recording clinician
+	ToothCode string `json:"toothCode"` // FDI two-digit code
+	Surface   string `json:"surface"`   // surface code (possibly multi-surface e.g. "MOD")
+	Status    string `json:"status"`    // healthy, carious, filled, missing, fissure_sealant, crown, bridge_abutment, implant, etc.
+	Note      string `json:"note,omitempty"`
+	Timestamp int64  `json:"timestamp"`           // unix epoch ms
+	Clinician string `json:"clinician,omitempty"` // HPI CPN of the recording clinician
 }
 
 // ChartCellStatus represents the clinical status of a tooth in dental charting.
@@ -103,23 +103,23 @@ const (
 
 // ToothChartEntry is the complete charting state for one tooth.
 type ToothChartEntry struct {
-	ToothCode string           `json:"toothCode"`
-	Status    ChartCellStatus  `json:"status"`
-	Surfaces  []string         `json:"surfaces,omitempty"` // affected surfaces
-	Mobility  int              `json:"mobility,omitempty"` // 0-3 Miller classification
-	Note      string           `json:"note,omitempty"`
-	UpdatedAt int64            `json:"updatedAt"`
+	ToothCode string          `json:"toothCode"`
+	Status    ChartCellStatus `json:"status"`
+	Surfaces  []string        `json:"surfaces,omitempty"` // affected surfaces
+	Mobility  int             `json:"mobility,omitempty"` // 0-3 Miller classification
+	Note      string          `json:"note,omitempty"`
+	UpdatedAt int64           `json:"updatedAt"`
 }
 
 // DentalChart represents the full dental chart for a patient at a point in time.
 type DentalChart struct {
-	PatientNHI  string             `json:"patientNhi"`
-	Dentition   DentitionType      `json:"dentition"` // which set is being charted
-	Entries     []ToothChartEntry  `json:"entries"`
-	ChartDate   int64              `json:"chartDate"`
-	ClinicianID string             `json:"clinicianId"`
-	PracticeID  string             `json:"practiceId"`
-	VisitID     string             `json:"visitId,omitempty"` // FHIR Encounter ID
+	PatientNHI  string            `json:"patientNhi"`
+	Dentition   DentitionType     `json:"dentition"` // which set is being charted
+	Entries     []ToothChartEntry `json:"entries"`
+	ChartDate   int64             `json:"chartDate"`
+	ClinicianID string            `json:"clinicianId"`
+	PracticeID  string            `json:"practiceId"`
+	VisitID     string            `json:"visitId,omitempty"` // FHIR Encounter ID
 }
 
 // ParseSurfaceCombination parses a multi-surface string (e.g. "MOD", "MOB")

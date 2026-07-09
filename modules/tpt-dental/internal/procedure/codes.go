@@ -12,42 +12,42 @@ import (
 type CodeSystem string
 
 const (
-	CodeSystemDCNZ    CodeSystem = "dcnz"    // Dental Council NZ procedure codes
-	CodeSystemACC     CodeSystem = "acc"     // ACC dental treatment codes
-	CodeSystemSNOMED  CodeSystem = "snomed"  // SNOMED CT
-	CodeSystemNZULM   CodeSystem = "nzulm"   // NZ Medicines Terminology
+	CodeSystemDCNZ   CodeSystem = "dcnz"   // Dental Council NZ procedure codes
+	CodeSystemACC    CodeSystem = "acc"    // ACC dental treatment codes
+	CodeSystemSNOMED CodeSystem = "snomed" // SNOMED CT
+	CodeSystemNZULM  CodeSystem = "nzulm"  // NZ Medicines Terminology
 )
 
 // ProcedureCategory groups dental procedures by type.
 type ProcedureCategory string
 
 const (
-	CategoryExamination     ProcedureCategory = "examination"
-	CategoryRadiology       ProcedureCategory = "radiology"
-	CategoryPreventive      ProcedureCategory = "preventive"
-	CategoryRestorative     ProcedureCategory = "restorative"
-	CategoryEndodontics     ProcedureCategory = "endodontics"
-	CategoryPeriodontics    ProcedureCategory = "periodontics"
-	CategoryProsthodontics  ProcedureCategory = "prosthodontics" // crowns, bridges, dentures
-	CategoryOralSurgery     ProcedureCategory = "oral_surgery"
-	CategoryOrthodontics    ProcedureCategory = "orthodontics"
-	CategoryPaedodontics    ProcedureCategory = "paedodontics"
-	CategorySedation        ProcedureCategory = "sedation"
-	CategoryACC             ProcedureCategory = "acc" // ACC-funded dental treatment
-	CategoryGeneral         ProcedureCategory = "general"
-	CategoryOther           ProcedureCategory = "other"
+	CategoryExamination    ProcedureCategory = "examination"
+	CategoryRadiology      ProcedureCategory = "radiology"
+	CategoryPreventive     ProcedureCategory = "preventive"
+	CategoryRestorative    ProcedureCategory = "restorative"
+	CategoryEndodontics    ProcedureCategory = "endodontics"
+	CategoryPeriodontics   ProcedureCategory = "periodontics"
+	CategoryProsthodontics ProcedureCategory = "prosthodontics" // crowns, bridges, dentures
+	CategoryOralSurgery    ProcedureCategory = "oral_surgery"
+	CategoryOrthodontics   ProcedureCategory = "orthodontics"
+	CategoryPaedodontics   ProcedureCategory = "paedodontics"
+	CategorySedation       ProcedureCategory = "sedation"
+	CategoryACC            ProcedureCategory = "acc" // ACC-funded dental treatment
+	CategoryGeneral        ProcedureCategory = "general"
+	CategoryOther          ProcedureCategory = "other"
 )
 
 // ProcedureCode defines a dental procedure code with associated metadata.
 type ProcedureCode struct {
-	Code       string             `json:"code"`
-	System     CodeSystem         `json:"system"`
-	Category   ProcedureCategory  `json:"category"`
-	ShortName  string             `json:"shortName"`
-	FullName   string             `json:"fullName"`
-	Fee        int                `json:"fee"` // standard fee in NZ cents, 0 = variable
-	RequiresXRay bool             `json:"requiresXRay"`
-	IsACCClaimable bool           `json:"isAccClaimable"` // eligible for ACC subsidy
+	Code           string            `json:"code"`
+	System         CodeSystem        `json:"system"`
+	Category       ProcedureCategory `json:"category"`
+	ShortName      string            `json:"shortName"`
+	FullName       string            `json:"fullName"`
+	Fee            int               `json:"fee"` // standard fee in NZ cents, 0 = variable
+	RequiresXRay   bool              `json:"requiresXRay"`
+	IsACCClaimable bool              `json:"isAccClaimable"` // eligible for ACC subsidy
 }
 
 // ---------------------------------------------------------------------------

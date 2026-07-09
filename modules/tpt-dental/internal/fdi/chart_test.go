@@ -75,11 +75,11 @@ func TestLookupTooth(t *testing.T) {
 
 func TestQuadrantMethods(t *testing.T) {
 	tests := []struct {
-		q         Quadrant
-		perm      bool
-		decid     bool
-		arch      string
-		side      string
+		q     Quadrant
+		perm  bool
+		decid bool
+		arch  string
+		side  string
 	}{
 		{1, true, false, "upper", "right"},
 		{2, true, false, "upper", "left"},

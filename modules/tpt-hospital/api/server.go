@@ -122,6 +122,7 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	coding := &CodingHandler{pool: s.pool, auditTrail: s.auditTrail, logger: s.logger}
 	billing := &BillingHandler{pool: s.pool, auditTrail: s.auditTrail, logger: s.logger}
 	pharmacy := &PharmacyHandler{pool: s.pool, enc: s.enc, hpiClient: s.hpiClient, auditTrail: s.auditTrail, logger: s.logger}
+	cpoe := &CPOEHandler{pool: s.pool, hpiClient: s.hpiClient, auditTrail: s.auditTrail, logger: s.logger}
 	infectionControl := &InfectionControlHandler{pool: s.pool, enc: s.enc, auditTrail: s.auditTrail, logger: s.logger}
 	outpatient := &OutpatientHandler{pool: s.pool, enc: s.enc, hpiClient: s.hpiClient, auditTrail: s.auditTrail, logger: s.logger}
 	hith := &HITHHandler{pool: s.pool, enc: s.enc, hpiClient: s.hpiClient, auditTrail: s.auditTrail, logger: s.logger}
@@ -225,6 +226,16 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.Handle("POST /api/v1/admissions/{admissionId}/medications/{medId}/cease", chain(http.HandlerFunc(pharmacy.Cease)))
 	mux.Handle("GET /api/v1/admissions/{admissionId}/medications/reconciliation", chain(http.HandlerFunc(pharmacy.GetReconciliation)))
 	mux.Handle("POST /api/v1/admissions/{admissionId}/medications/reconciliation", chain(http.HandlerFunc(pharmacy.ReconcileMedications)))
+
+	// ── CPOE — Computerised Provider Order Entry (lab/imaging/consult orders) ─
+	mux.Handle("GET /api/v1/admissions/{admissionId}/orders", chain(http.HandlerFunc(cpoe.List)))
+	mux.Handle("POST /api/v1/admissions/{admissionId}/orders", chain(http.HandlerFunc(cpoe.Create)))
+	mux.Handle("GET /api/v1/admissions/{admissionId}/orders/{orderId}", chain(http.HandlerFunc(cpoe.Get)))
+	mux.Handle("PUT /api/v1/admissions/{admissionId}/orders/{orderId}", chain(http.HandlerFunc(cpoe.Update)))
+	mux.Handle("POST /api/v1/admissions/{admissionId}/orders/{orderId}/cancel", chain(http.HandlerFunc(cpoe.Cancel)))
+	mux.Handle("POST /api/v1/admissions/{admissionId}/orders/{orderId}/complete", chain(http.HandlerFunc(cpoe.Complete)))
+	mux.Handle("POST /api/v1/admissions/{admissionId}/orders/{orderId}/dispatch", chain(http.HandlerFunc(cpoe.Dispatch)))
+	mux.Handle("POST /api/v1/orders/result-callback", chain(http.HandlerFunc(cpoe.ResultCallback)))
 
 	// ── Infection control (HAI surveillance, isolation precautions) ───────────
 	mux.Handle("GET /api/v1/infection-control/alerts", chain(http.HandlerFunc(infectionControl.ListAlerts)))

@@ -35,9 +35,9 @@ const (
 
 // ToothCode represents an FDI two-digit tooth notation.
 type ToothCode struct {
-	Quadrant Quadrant      `json:"quadrant"`
-	Number   int           `json:"number"` // 1-8 permanent, 1-5 deciduous
-	Raw      string        `json:"raw"`    // original two-digit string e.g. "18"
+	Quadrant Quadrant `json:"quadrant"`
+	Number   int      `json:"number"` // 1-8 permanent, 1-5 deciduous
+	Raw      string   `json:"raw"`    // original two-digit string e.g. "18"
 }
 
 // Tooth contains full identification and metadata for a tooth.

@@ -108,10 +108,14 @@ func (r *CarePlanRepository) ListNursingVisits(ctx context.Context, patientNHI, 
 	args := []any{}
 	argIdx := 1
 	if patientNHI != "" {
-		where += fmt.Sprintf(" AND patient_nhi = $%d", argIdx); argIdx++; args = append(args, patientNHI)
+		where += fmt.Sprintf(" AND patient_nhi = $%d", argIdx)
+		argIdx++
+		args = append(args, patientNHI)
 	}
 	if carePlanID != "" {
-		where += fmt.Sprintf(" AND care_plan_id = $%d", argIdx); argIdx++; args = append(args, carePlanID)
+		where += fmt.Sprintf(" AND care_plan_id = $%d", argIdx)
+		argIdx++
+		args = append(args, carePlanID)
 	}
 	var total int
 	if err := r.pool.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM district_nursing_visits %s", where), args...).Scan(&total); err != nil {
@@ -138,8 +142,11 @@ func (r *CarePlanRepository) ListNursingVisits(ctx context.Context, patientNHI, 
 			return nil, 0, err
 		}
 		v.VisitDate = toMs(vd)
-		if !nvd.IsZero() { v.NextVisitDate = toMs(nvd) }
-		v.CreatedAt = toMs(ca); v.UpdatedAt = toMs(ua)
+		if !nvd.IsZero() {
+			v.NextVisitDate = toMs(nvd)
+		}
+		v.CreatedAt = toMs(ca)
+		v.UpdatedAt = toMs(ua)
 		visits = append(visits, &v)
 	}
 	return visits, total, rows.Err()
@@ -158,9 +165,16 @@ func scanCarePlan(s scanner) (*districtnursing.CarePlan, error) {
 	if err != nil {
 		return nil, err
 	}
-	p.StartDate = toMs(sd); p.ReviewDate = toMs(rd); p.CreatedAt = toMs(ca); p.UpdatedAt = toMs(ua)
-	if !cd.IsZero() { p.ConsentDate = toMs(cd) }
-	if e != nil && !e.IsZero() { p.EndDate = toMs(*e) }
+	p.StartDate = toMs(sd)
+	p.ReviewDate = toMs(rd)
+	p.CreatedAt = toMs(ca)
+	p.UpdatedAt = toMs(ua)
+	if !cd.IsZero() {
+		p.ConsentDate = toMs(cd)
+	}
+	if e != nil && !e.IsZero() {
+		p.EndDate = toMs(*e)
+	}
 	return &p, nil
 }
 
@@ -169,16 +183,24 @@ func buildWhere(base, patientNHI, clinicianID, typeFilter, status string) (strin
 	args := []any{}
 	idx := 1
 	if patientNHI != "" {
-		where += fmt.Sprintf(" AND patient_nhi = $%d", idx); idx++; args = append(args, patientNHI)
+		where += fmt.Sprintf(" AND patient_nhi = $%d", idx)
+		idx++
+		args = append(args, patientNHI)
 	}
 	if clinicianID != "" {
-		where += fmt.Sprintf(" AND clinician_id = $%d", idx); idx++; args = append(args, clinicianID)
+		where += fmt.Sprintf(" AND clinician_id = $%d", idx)
+		idx++
+		args = append(args, clinicianID)
 	}
 	if typeFilter != "" {
-		where += fmt.Sprintf(" AND plan_type = $%d", idx); idx++; args = append(args, typeFilter)
+		where += fmt.Sprintf(" AND plan_type = $%d", idx)
+		idx++
+		args = append(args, typeFilter)
 	}
 	if status != "" {
-		where += fmt.Sprintf(" AND status = $%d", idx); idx++; args = append(args, status)
+		where += fmt.Sprintf(" AND status = $%d", idx)
+		idx++
+		args = append(args, status)
 	}
 	return where, args, idx
 }

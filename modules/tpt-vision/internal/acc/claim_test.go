@@ -153,19 +153,19 @@ func TestToFHIRClaim(t *testing.T) {
 
 func TestToFHIRClaim_WithOptionalExtensions(t *testing.T) {
 	c := &Claim{
-		ID:             "claim-2",
-		PatientNHI:     "ABC1235",
-		ClinicianID:    "CPN123",
-		ClaimType:      ClaimSpectacleAfterInjury,
-		Status:         StatusSubmitted,
-		Provider:       ProviderOphthalmologist,
-		Injury:         InjuryDetails{AccidentDate: 1700000000000, InjuryType: "blunt trauma", AccNumber: "ACC999", LodgedBy: "GP"},
-		Items:          []ClaimItem{{LineNumber: 1, Amount: 200, GSTAmount: 30, TotalAmount: 230}},
-		SubmittedDate:  1700100000000,
-		ResponseDate:   1700200000000,
-		DeclineReason:  "insufficient evidence",
-		CreatedAt:      1700000000000,
-		UpdatedAt:      1700000000000,
+		ID:            "claim-2",
+		PatientNHI:    "ABC1235",
+		ClinicianID:   "CPN123",
+		ClaimType:     ClaimSpectacleAfterInjury,
+		Status:        StatusSubmitted,
+		Provider:      ProviderOphthalmologist,
+		Injury:        InjuryDetails{AccidentDate: 1700000000000, InjuryType: "blunt trauma", AccNumber: "ACC999", LodgedBy: "GP"},
+		Items:         []ClaimItem{{LineNumber: 1, Amount: 200, GSTAmount: 30, TotalAmount: 230}},
+		SubmittedDate: 1700100000000,
+		ResponseDate:  1700200000000,
+		DeclineReason: "insufficient evidence",
+		CreatedAt:     1700000000000,
+		UpdatedAt:     1700000000000,
 	}
 	c.TotalIncGST = 230.0
 	claim := c.ToFHIRClaim()

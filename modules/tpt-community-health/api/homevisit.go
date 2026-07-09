@@ -13,32 +13,32 @@ import (
 // HomeVisit represents a scheduled community home visit.
 // vital_signs and wound_assessments are stored as JSONB; clients send/receive raw JSON.
 type HomeVisit struct {
-	ID                  string          `json:"id"`
-	PatientNHI          string          `json:"patientNhi"`
-	ClinicianHpi        string          `json:"clinicianHpi"`
-	VisitType           string          `json:"visitType"`
+	ID           string `json:"id"`
+	PatientNHI   string `json:"patientNhi"`
+	ClinicianHpi string `json:"clinicianHpi"`
+	VisitType    string `json:"visitType"`
 	// wound-care | medication-review | assessment | follow-up | palliative | post-acute | diabetes-care | respiratory | rehabilitation | postnatal
-	Priority            string          `json:"priority"`
+	Priority string `json:"priority"`
 	// urgent | high | routine | low
-	Status              string          `json:"status"`
+	Status string `json:"status"`
 	// scheduled | in-transit | arrived | in-progress | completed | cancelled | rescheduled | dna
-	Address             string          `json:"address"`
-	SafetyNotes         *string         `json:"safetyNotes"`
-	AccessInstructions  *string         `json:"accessInstructions"`
-	VitalSigns          json.RawMessage `json:"vitalSigns,omitempty"`
-	WoundAssessments    json.RawMessage `json:"woundAssessments,omitempty"`
-	Observations        *string         `json:"observations"`
-	Concerns            *string         `json:"concerns"`
-	Escalations         *string         `json:"escalations"`
-	CancellationReason  *string         `json:"cancellationReason"`
-	FollowUpRequired    bool            `json:"followUpRequired"`
-	FollowUpDetails     *string         `json:"followUpDetails"`
-	TenantID            string          `json:"tenantId"`
-	ScheduledAt         time.Time       `json:"scheduledAt"`
-	ActualStartAt       *time.Time      `json:"actualStartAt"`
-	ActualEndAt         *time.Time      `json:"actualEndAt"`
-	CreatedAt           time.Time       `json:"createdAt"`
-	UpdatedAt           time.Time       `json:"updatedAt"`
+	Address            string          `json:"address"`
+	SafetyNotes        *string         `json:"safetyNotes"`
+	AccessInstructions *string         `json:"accessInstructions"`
+	VitalSigns         json.RawMessage `json:"vitalSigns,omitempty"`
+	WoundAssessments   json.RawMessage `json:"woundAssessments,omitempty"`
+	Observations       *string         `json:"observations"`
+	Concerns           *string         `json:"concerns"`
+	Escalations        *string         `json:"escalations"`
+	CancellationReason *string         `json:"cancellationReason"`
+	FollowUpRequired   bool            `json:"followUpRequired"`
+	FollowUpDetails    *string         `json:"followUpDetails"`
+	TenantID           string          `json:"tenantId"`
+	ScheduledAt        time.Time       `json:"scheduledAt"`
+	ActualStartAt      *time.Time      `json:"actualStartAt"`
+	ActualEndAt        *time.Time      `json:"actualEndAt"`
+	CreatedAt          time.Time       `json:"createdAt"`
+	UpdatedAt          time.Time       `json:"updatedAt"`
 }
 
 const hvSelectCols = `id, patient_nhi, clinician_hpi, visit_type, priority, status,

@@ -108,3 +108,4 @@ logs/
 # Generated FHIR types (regenerated via make generate)
 core/fhir/r5/generated_*.go
 .mimocode/.cron-lock
+.mimocode/plans/1783603208806-curious-lagoon.md
