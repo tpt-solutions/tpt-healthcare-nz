@@ -25,53 +25,53 @@
   - [x] Write test file
   - [x] Run & verify all pass
 - [ ] **tpt-vision** — refraction/prescription_test.go (~22 tests)
-  - [ ] Write test file
-  - [ ] Run & verify all pass
+  - [x] Write test file
+  - [x] Run & verify all pass
 - [ ] **tpt-vision** — optical/dispensing_test.go (~8 tests)
-  - [ ] Write test file
-  - [ ] Run & verify all pass
+  - [x] Write test file
+  - [x] Run & verify all pass
 - [ ] **tpt-vision** — ophthalmology/exam_test.go (~5 tests)
-  - [ ] Write test file
-  - [ ] Run & verify all pass
+  - [x] Write test file
+  - [x] Run & verify all pass
 - [ ] **tpt-vision** — acc/claim_test.go (~10 tests)
-  - [ ] Write test file
-  - [ ] Run & verify all pass
+  - [x] Write test file
+  - [x] Run & verify all pass
 - [ ] **tpt-allied-health** — acc/claim_test.go (~19 tests)
-  - [ ] Write test file
-  - [ ] Run & verify all pass
+  - [x] Write test file
+  - [x] Run & verify all pass
 
 ### Tier 1 — Sub-discipline Tests (Repeated Patterns)
 
 - [ ] **tpt-allied-health** — speech/therapy_test.go (~10 tests)
-  - [ ] Write test file
-  - [ ] Run & verify all pass
+  - [x] Write test file
+  - [x] Run & verify all pass
 - [ ] **tpt-allied-health** — physio/treatment_test.go (~8 tests)
-  - [ ] Write test file
-  - [ ] Run & verify all pass
+  - [x] Write test file
+  - [x] Run & verify all pass
 - [ ] **tpt-allied-health** — ot/assessment_test.go (~8 tests)
-  - [ ] Write test file
-  - [ ] Run & verify all pass
+  - [x] Write test file
+  - [x] Run & verify all pass
 - [ ] **tpt-allied-health** — podiatry/care_test.go (~10 tests)
-  - [ ] Write test file
-  - [ ] Run & verify all pass
+  - [x] Write test file
+  - [x] Run & verify all pass
 
 ### Tier 2 — Community Health
 
 - [ ] **tpt-community-health** — homevisit/visit_test.go (~12 tests)
-  - [ ] Write test file
-  - [ ] Run & verify all pass
+  - [x] Write test file
+  - [x] Run & verify all pass
 - [ ] **tpt-community-health** — outreach/program_test.go (~12 tests)
-  - [ ] Write test file
-  - [ ] Run & verify all pass
+  - [x] Write test file
+  - [x] Run & verify all pass
 - [ ] **tpt-community-health** — districtnursing/plan_test.go (~8 tests)
-  - [ ] Write test file
-  - [ ] Run & verify all pass
+  - [x] Write test file
+  - [x] Run & verify all pass
 
 ### Tier 2 — Addiction
 
 - [ ] **tpt-addiction** — methadone/programme_test.go (~7 tests)
-  - [ ] Write test file
-  - [ ] Run & verify all pass
+  - [x] Write test file
+  - [x] Run & verify all pass
 
 ## Skipped
 
@@ -141,9 +141,9 @@ See plan `lets-say-auckland-city-jolly-pinwheel.md` for full detail.
 
 ### Missing/broken migrations
 
-- [ ] **tpt-aged-care** — Handlers issue real SQL against `aged_care_plans`, `aged_care_funded_hours_allocations`, `aged_care_interrai_assessments`, `aged_care_nasc_referrals`, `aged_care_nasc_service_plans`, but no migration anywhere creates these tables
-- [ ] **tpt-blood-bank** — Real query code (crossmatch/donors/inventory) but no `db/migrate` directory (also hit by the `Migrate()` bug above)
-- [ ] **tpt-practice** — Real query code (rostering/settings) but no `db/migrate` directory
+- [x] **tpt-aged-care** — Handlers issue real SQL against `aged_care_plans`, `aged_care_funded_hours_allocations`, `aged_care_interrai_assessments`, `aged_care_nasc_referrals`, `aged_care_nasc_service_plans` — added `modules/tpt-aged-care/db/migrations` + `embed.go`, wired via `migrate.New(agedcaredb.Migrations, pool)` in `RunMigrations`
+- [x] **tpt-blood-bank** — Real query code (crossmatch/donors/inventory) — added `modules/tpt-blood-bank/db/migrations/001_blood_bank_tables.sql` + `embed.go`, wired via `migrate.New(bloodbankdb.Migrations, pool)` in `RunMigrations`
+- [x] **tpt-practice** — Real query code (rostering/settings) — tables already exist in `core/db/migrate/007_practice_management.sql`; fixed the broken `db.Migrate(ctx, pool, "")` call site to use `migrate.New(migrate.MigrationsFS, pool)`
 
 ### Partial stubs in otherwise-real modules
 
@@ -169,11 +169,12 @@ real facilities are combinations (e.g. one campus with both adult and paediatric
 that a hard-coded template can't cleanly represent. See `core/tenant` for the existing
 generic `Tenant` model this would extend.
 
-- [ ] **core/tenant** — Design a service-line profile: tenant selects which service lines it runs (ED, ICU, NICU/PICU, theatre, oncology, etc.) at onboarding
-  - [ ] Define the service-line catalogue/schema
-  - [ ] Wire service-line selection to toggle relevant modules/routes per tenant
-  - [ ] Seed sensible defaults per service line (ward-type list, triage scale, relevant formulary subset)
-  - [ ] Support facilities with multiple/mixed service lines (no forking or per-site hard-coded templates)
+- [x] **core/tenant** — Design a service-line profile: tenant selects which service lines it runs (ED, ICU, NICU/PICU, theatre, oncology, etc.) at onboarding
+  - [x] Define the service-line catalogue/schema — `core/servicelines/catalogue.go`, 16 service lines, each with modules/ward-types/triage-scale/formulary; persisted per-tenant in `tenant_service_lines` (`core/db/migrate/013_tenant_service_lines.sql`)
+  - [x] Wire service-line selection to toggle relevant modules/routes per tenant — `PUT /api/v1/practice/service-lines` unions resolved modules into the existing `tenants.settings.activeModules` (additive; manually-enabled modules are preserved)
+  - [x] Seed sensible defaults per service line (ward-type list, triage scale, relevant formulary subset) — exposed via `GET /api/v1/practice/service-lines` and `core/servicelines.Resolve{Modules,WardTypes,FormularySubset,TriageScales}`
+  - [x] Support facilities with multiple/mixed service lines (no forking or per-site hard-coded templates) — a tenant selects any subset of the catalogue; defaults are unioned, not templated
+  - [ ] Frontend: admin UI for selecting service lines during onboarding (backend/API complete; no UI wired yet)
 
 ## Final Verification
 

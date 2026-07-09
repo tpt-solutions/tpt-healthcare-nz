@@ -13,10 +13,12 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/auth"
 	"github.com/PhillipC05/tpt-healthcare/core/auth/auth0"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
+	"github.com/PhillipC05/tpt-healthcare/core/db/migrate"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	"github.com/PhillipC05/tpt-healthcare/core/hl7"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 	"github.com/PhillipC05/tpt-healthcare/core/subscription"
+	pathologydb "github.com/PhillipC05/tpt-healthcare/modules/tpt-pathology/db"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -200,17 +202,14 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 }
 
 // RunMigrations runs database migrations for the tpt-pathology module.
-func RunMigrations(ctx context.Context, databaseURL string, logger *slog.Logger) error {
+func RunMigrations(ctx context.Context, databaseURL string) error {
 	pool, err := db.Connect(ctx, databaseURL)
 	if err != nil {
 		return fmt.Errorf("connect for migrations: %w", err)
 	}
 	defer pool.Close()
-
-	if err := db.Migrate(ctx, pool, logger); err != nil {
-		return fmt.Errorf("run migrations: %w", err)
-	}
-	return nil
+	r := migrate.New(pathologydb.Migrations, pool)
+	return r.Up(ctx)
 }
 
 // ValidateConnectivity checks that the database is reachable.

@@ -99,7 +99,7 @@ func (s *Server) buildRoutes() *http.ServeMux {
 		return auth.RequireAuth(s.auth)(middleware.TenantExtraction()(h))
 	}
 
-	physioHandler := NewPhysioHandler(s.hpiClient, s.consentStore)
+	physioHandler := NewPhysioHandler(s.hpiClient, s.consentStore, s.pool, s.logger)
 	physioHandler.RegisterRoutes(mux, p)
 
 	otHandler := NewOTHandler(s.hpiClient, s.consentStore)

@@ -11,7 +11,6 @@ import (
 
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-allied-health/internal/physio"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -71,7 +70,7 @@ func (h *PhysioHandler) CreateTreatmentPlan(w http.ResponseWriter, r *http.Reque
 
 // GetTreatmentPlan retrieves a treatment plan by ID.
 func (h *PhysioHandler) GetTreatmentPlan(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 	ctx := r.Context()
 
 	var plan physio.TreatmentPlan
@@ -223,7 +222,7 @@ func (h *PhysioHandler) UpdateTreatmentPlan(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 
 	var plan physio.TreatmentPlan
 	if err := json.NewDecoder(r.Body).Decode(&plan); err != nil {
@@ -248,6 +247,6 @@ func (h *PhysioHandler) DeleteTreatmentPlan(w http.ResponseWriter, r *http.Reque
 	if !requireAPC(w, r, h.hpiClient) {
 		return
 	}
-	_ = mux.Vars(r)["id"]
+	_ = r.PathValue("id")
 	w.WriteHeader(http.StatusNoContent)
 }

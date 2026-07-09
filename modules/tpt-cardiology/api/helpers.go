@@ -7,6 +7,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/auth"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
+	"github.com/jackc/pgx/v5"
 )
 
 // encryptNHI encrypts a plaintext NHI for storage. Empty string is returned unchanged.
@@ -45,7 +46,6 @@ func (h *handlerDeps) validateHPI(w http.ResponseWriter, r *http.Request, cpn st
 
 // recordAudit emits a synchronous audit event per HIPC Rules 10/11.
 // patientNHIEnc must be the already-encrypted NHI value (or empty string).
-// TODO: wrap inside the DB transaction that performs the clinical write for atomicity.
 func (h *handlerDeps) recordAudit(r *http.Request, action, resourceType, resourceID, patientNHIEnc string) {
 	tenantID, _ := middleware.TenantFromContext(r.Context())
 	principal, _ := auth.PrincipalFromContext(r.Context())
@@ -63,6 +63,29 @@ func (h *handlerDeps) recordAudit(r *http.Request, action, resourceType, resourc
 		ev.PrincipalID = principal.ID
 	}
 	if err := h.auditTrail.Record(r.Context(), ev); err != nil {
+		h.logger.Error("audit trail write failed", "error", err, "action", action, "resource_type", resourceType, "resource_id", resourceID)
+	}
+}
+
+// recordAuditTx writes the audit event inside an existing transaction for atomicity
+// with the clinical write. Use this instead of recordAudit when the caller holds a pgx.Tx.
+func (h *handlerDeps) recordAuditTx(r *http.Request, tx pgx.Tx, action, resourceType, resourceID, patientNHIEnc string) {
+	tenantID, _ := middleware.TenantFromContext(r.Context())
+	principal, _ := auth.PrincipalFromContext(r.Context())
+	ev := audit.Event{
+		TenantID:     tenantID,
+		Action:       action,
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
+		PatientNHI:   patientNHIEnc,
+		IPAddress:    r.RemoteAddr,
+		UserAgent:    r.Header.Get("User-Agent"),
+		OccurredAt:   time.Now().UTC(),
+	}
+	if principal != nil {
+		ev.PrincipalID = principal.ID
+	}
+	if err := h.auditTrail.RecordTx(r.Context(), ev, tx); err != nil {
 		h.logger.Error("audit trail write failed", "error", err, "action", action, "resource_type", resourceType, "resource_id", resourceID)
 	}
 }

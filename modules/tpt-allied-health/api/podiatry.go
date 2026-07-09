@@ -10,7 +10,6 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-allied-health/internal/podiatry"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 )
 
 // PodiatryHandler handles podiatry API endpoints.
@@ -25,29 +24,29 @@ func NewPodiatryHandler(hpiClient *hpi.Client, consentStore *consent.Store) *Pod
 }
 
 // RegisterRoutes registers podiatry routes.
-func (h *PodiatryHandler) RegisterRoutes(r *mux.Router) {
-	r.HandleFunc("/api/v1/podiatry/assessments", h.CreateAssessment).Methods("POST")
-	r.HandleFunc("/api/v1/podiatry/assessments", h.ListAssessments).Methods("GET")
-	r.HandleFunc("/api/v1/podiatry/assessments/{id}", h.GetAssessment).Methods("GET")
-	r.HandleFunc("/api/v1/podiatry/assessments/{id}", h.UpdateAssessment).Methods("PUT")
-	r.HandleFunc("/api/v1/podiatry/assessments/{id}", h.DeleteAssessment).Methods("DELETE")
+func (h *PodiatryHandler) RegisterRoutes(mux *http.ServeMux, protect func(http.HandlerFunc) http.Handler) {
+	mux.Handle("POST /api/v1/podiatry/assessments", protect(h.CreateAssessment))
+	mux.Handle("GET /api/v1/podiatry/assessments", protect(h.ListAssessments))
+	mux.Handle("GET /api/v1/podiatry/assessments/{id}", protect(h.GetAssessment))
+	mux.Handle("PUT /api/v1/podiatry/assessments/{id}", protect(h.UpdateAssessment))
+	mux.Handle("DELETE /api/v1/podiatry/assessments/{id}", protect(h.DeleteAssessment))
 
-	r.HandleFunc("/api/v1/podiatry/treatment-plans", h.CreateTreatmentPlan).Methods("POST")
-	r.HandleFunc("/api/v1/podiatry/treatment-plans", h.ListTreatmentPlans).Methods("GET")
-	r.HandleFunc("/api/v1/podiatry/treatment-plans/{id}", h.GetTreatmentPlan).Methods("GET")
-	r.HandleFunc("/api/v1/podiatry/treatment-plans/{id}", h.UpdateTreatmentPlan).Methods("PUT")
+	mux.Handle("POST /api/v1/podiatry/treatment-plans", protect(h.CreateTreatmentPlan))
+	mux.Handle("GET /api/v1/podiatry/treatment-plans", protect(h.ListTreatmentPlans))
+	mux.Handle("GET /api/v1/podiatry/treatment-plans/{id}", protect(h.GetTreatmentPlan))
+	mux.Handle("PUT /api/v1/podiatry/treatment-plans/{id}", protect(h.UpdateTreatmentPlan))
 
-	r.HandleFunc("/api/v1/podiatry/session-notes", h.CreateSessionNote).Methods("POST")
-	r.HandleFunc("/api/v1/podiatry/session-notes", h.ListSessionNotes).Methods("GET")
-	r.HandleFunc("/api/v1/podiatry/session-notes/{id}", h.GetSessionNote).Methods("GET")
-	r.HandleFunc("/api/v1/podiatry/session-notes/{id}", h.UpdateSessionNote).Methods("PUT")
+	mux.Handle("POST /api/v1/podiatry/session-notes", protect(h.CreateSessionNote))
+	mux.Handle("GET /api/v1/podiatry/session-notes", protect(h.ListSessionNotes))
+	mux.Handle("GET /api/v1/podiatry/session-notes/{id}", protect(h.GetSessionNote))
+	mux.Handle("PUT /api/v1/podiatry/session-notes/{id}", protect(h.UpdateSessionNote))
 
-	r.HandleFunc("/api/v1/podiatry/wound-assessments", h.CreateWoundAssessment).Methods("POST")
-	r.HandleFunc("/api/v1/podiatry/wound-assessments", h.ListWoundAssessments).Methods("GET")
-	r.HandleFunc("/api/v1/podiatry/wound-assessments/{id}", h.GetWoundAssessment).Methods("GET")
-	r.HandleFunc("/api/v1/podiatry/wound-assessments/{id}", h.UpdateWoundAssessment).Methods("PUT")
+	mux.Handle("POST /api/v1/podiatry/wound-assessments", protect(h.CreateWoundAssessment))
+	mux.Handle("GET /api/v1/podiatry/wound-assessments", protect(h.ListWoundAssessments))
+	mux.Handle("GET /api/v1/podiatry/wound-assessments/{id}", protect(h.GetWoundAssessment))
+	mux.Handle("PUT /api/v1/podiatry/wound-assessments/{id}", protect(h.UpdateWoundAssessment))
 
-	r.HandleFunc("/api/v1/podiatry/outcome-measures", h.ListOutcomeMeasures).Methods("GET")
+	mux.Handle("GET /api/v1/podiatry/outcome-measures", protect(h.ListOutcomeMeasures))
 }
 
 // CreateAssessment creates a new podiatry assessment.
@@ -79,8 +78,7 @@ func (h *PodiatryHandler) CreateAssessment(w http.ResponseWriter, r *http.Reques
 
 // GetAssessment retrieves an assessment by ID.
 func (h *PodiatryHandler) GetAssessment(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	// TODO: fetch from database; stub returns placeholder data.
 	assessment := podiatry.Assessment{
@@ -138,8 +136,7 @@ func (h *PodiatryHandler) UpdateAssessment(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	var assessment podiatry.Assessment
 	if err := json.NewDecoder(r.Body).Decode(&assessment); err != nil {
@@ -164,7 +161,7 @@ func (h *PodiatryHandler) DeleteAssessment(w http.ResponseWriter, r *http.Reques
 	if !requireAPC(w, r, h.hpiClient) {
 		return
 	}
-	_ = mux.Vars(r)["id"]
+	_ = r.PathValue("id")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -197,8 +194,7 @@ func (h *PodiatryHandler) CreateTreatmentPlan(w http.ResponseWriter, r *http.Req
 
 // GetTreatmentPlan retrieves a treatment plan by ID.
 func (h *PodiatryHandler) GetTreatmentPlan(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	// TODO: fetch from database; stub returns placeholder data.
 	plan := podiatry.TreatmentPlan{
@@ -250,8 +246,7 @@ func (h *PodiatryHandler) UpdateTreatmentPlan(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	var plan podiatry.TreatmentPlan
 	if err := json.NewDecoder(r.Body).Decode(&plan); err != nil {
@@ -300,8 +295,7 @@ func (h *PodiatryHandler) CreateSessionNote(w http.ResponseWriter, r *http.Reque
 
 // GetSessionNote retrieves a session note by ID.
 func (h *PodiatryHandler) GetSessionNote(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	// TODO: fetch from database; stub returns placeholder data.
 	note := podiatry.SessionNote{
@@ -358,8 +352,7 @@ func (h *PodiatryHandler) UpdateSessionNote(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	var note podiatry.SessionNote
 	if err := json.NewDecoder(r.Body).Decode(&note); err != nil {
@@ -408,8 +401,7 @@ func (h *PodiatryHandler) CreateWoundAssessment(w http.ResponseWriter, r *http.R
 
 // GetWoundAssessment retrieves a wound assessment by ID.
 func (h *PodiatryHandler) GetWoundAssessment(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	// TODO: fetch from database; stub returns placeholder data.
 	assessment := podiatry.WoundAssessment{
@@ -465,8 +457,7 @@ func (h *PodiatryHandler) UpdateWoundAssessment(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	var assessment podiatry.WoundAssessment
 	if err := json.NewDecoder(r.Body).Decode(&assessment); err != nil {

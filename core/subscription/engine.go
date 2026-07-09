@@ -226,8 +226,7 @@ func (e *Engine) handleRedisMessage(ctx context.Context, raw string) {
 		return
 	}
 
-	// Build a minimal FHIR notification bundle.
-	bundle := buildNotificationBundle(ev)
+	// Build per-subscription FHIR notification bundles with correct subscription references.
 
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -236,6 +235,7 @@ func (e *Engine) handleRedisMessage(ctx context.Context, raw string) {
 		if !sub.Active || sub.Topic != ev.Topic {
 			continue
 		}
+		bundle := buildNotificationBundle(ev, sub.ID)
 		s := sub // capture
 		go func() {
 			var dispErr error
@@ -346,10 +346,10 @@ func (e *Engine) loadFromRedis(ctx context.Context) error {
 	return nil
 }
 
-// buildNotificationBundle constructs a minimal FHIR R5 notification Bundle
-// wrapping the event payload. In production this should build a full
-// SubscriptionNotification bundle per the FHIR R5 specification.
-func buildNotificationBundle(ev eventPayload) json.RawMessage {
+// buildNotificationBundle constructs a FHIR R5 notification Bundle
+// wrapping the event payload. The subscriptionID is used to set the
+// correct Subscription reference in the SubscriptionStatus resource.
+func buildNotificationBundle(ev eventPayload, subscriptionID uuid.UUID) json.RawMessage {
 	bundle := map[string]interface{}{
 		"resourceType": "Bundle",
 		"type":         "subscription-notification",
@@ -361,7 +361,7 @@ func buildNotificationBundle(ev eventPayload) json.RawMessage {
 					"status":       "active",
 					"type":         "event-notification",
 					"subscription": map[string]string{
-						"reference": "Subscription/unknown",
+						"reference": "Subscription/" + subscriptionID.String(),
 					},
 					"notificationEvent": []map[string]interface{}{
 						{

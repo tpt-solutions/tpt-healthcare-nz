@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/PhillipC05/tpt-healthcare/core/db"
+	"github.com/PhillipC05/tpt-healthcare/core/db/migrate"
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-practice/api"
 )
 
@@ -71,7 +72,8 @@ func migrateCmd() *cobra.Command {
 				return fmt.Errorf("db connect: %w", err)
 			}
 			defer pool.Close()
-			return db.Migrate(ctx, pool, "")
+			r := migrate.New(migrate.MigrationsFS, pool)
+			return r.Up(ctx)
 		},
 	}
 }

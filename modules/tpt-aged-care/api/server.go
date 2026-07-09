@@ -23,6 +23,8 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/auth"
 	"github.com/PhillipC05/tpt-healthcare/core/auth/auth0"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
+	"github.com/PhillipC05/tpt-healthcare/core/db/migrate"
+	agedcaredb "github.com/PhillipC05/tpt-healthcare/modules/tpt-aged-care/db"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
@@ -244,17 +246,14 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 }
 
 // RunMigrations applies database migrations for the tpt-aged-care module.
-func RunMigrations(ctx context.Context, databaseURL string, logger *slog.Logger) error {
-	pool, err := db.New(ctx, db.Config{DSN: databaseURL})
+func RunMigrations(ctx context.Context, databaseURL string) error {
+	pool, err := db.Connect(ctx, databaseURL)
 	if err != nil {
 		return fmt.Errorf("connect for migrations: %w", err)
 	}
 	defer pool.Close()
-
-	if err := db.Migrate(ctx, pool, logger); err != nil {
-		return fmt.Errorf("run migrations: %w", err)
-	}
-	return nil
+	r := migrate.New(agedcaredb.Migrations, pool)
+	return r.Up(ctx)
 }
 
 // apiError is the standard error response envelope.

@@ -15,6 +15,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/inventory"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 	"github.com/PhillipC05/tpt-healthcare/core/rbac"
+	"github.com/PhillipC05/tpt-healthcare/core/servicelines"
 )
 
 // Config holds dependencies for the API server.
@@ -27,12 +28,13 @@ type Config struct {
 
 // Server is the HTTP multiplexer for tpt-practice.
 type Server struct {
-	mux          *http.ServeMux
-	cfg          Config
-	rbacRepo     rbac.Repository
-	inventoryRepo inventory.Repository
-	inventorySvc  *inventory.Service
-	accountsRepo  accounts.Repository
+	mux               *http.ServeMux
+	cfg               Config
+	rbacRepo          rbac.Repository
+	inventoryRepo     inventory.Repository
+	inventorySvc      *inventory.Service
+	accountsRepo      accounts.Repository
+	serviceLinesStore servicelines.Store
 }
 
 // NewServer constructs and configures the API server.
@@ -41,12 +43,13 @@ func NewServer(cfg Config) *Server {
 	invBus := events.New()
 	invSvc := inventory.NewService(invRepo, invBus, cfg.Logger)
 	s := &Server{
-		mux:          http.NewServeMux(),
-		cfg:          cfg,
-		rbacRepo:     rbac.NewPostgresRepository(cfg.Pool),
-		inventoryRepo: invRepo,
-		inventorySvc:  invSvc,
-		accountsRepo:  accounts.NewPostgresRepository(cfg.Pool),
+		mux:               http.NewServeMux(),
+		cfg:               cfg,
+		rbacRepo:          rbac.NewPostgresRepository(cfg.Pool),
+		inventoryRepo:     invRepo,
+		inventorySvc:      invSvc,
+		accountsRepo:      accounts.NewPostgresRepository(cfg.Pool),
+		serviceLinesStore: servicelines.NewStore(cfg.Pool),
 	}
 	s.routes()
 	return s
@@ -83,6 +86,11 @@ func (s *Server) routes() {
 	// Onboarding wizard
 	s.mux.Handle("GET /api/v1/practice/onboarding", chain(http.HandlerFunc(s.getOnboardingWizard)))
 	s.mux.Handle("PUT /api/v1/practice/onboarding/step/{step}", chain(http.HandlerFunc(s.updateWizardStep)))
+
+	// Service-line profile (which clinical service lines this tenant runs)
+	s.mux.Handle("GET /api/v1/practice/service-lines/catalogue", open(http.HandlerFunc(s.listServiceLineCatalogue)))
+	s.mux.Handle("GET /api/v1/practice/service-lines", chain(http.HandlerFunc(s.getServiceLineProfile)))
+	s.mux.Handle("PUT /api/v1/practice/service-lines", chain(http.HandlerFunc(s.putServiceLineProfile)))
 
 	// Departments
 	s.mux.Handle("GET /api/v1/practice/departments", chain(http.HandlerFunc(s.listDepartments)))

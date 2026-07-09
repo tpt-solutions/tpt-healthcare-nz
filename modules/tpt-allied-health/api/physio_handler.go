@@ -11,7 +11,6 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
-	"github.com/gorilla/mux"
 )
 
 // PhysioHandler handles physiotherapy API endpoints.
@@ -39,19 +38,19 @@ func nullStr(s string) interface{} {
 }
 
 // RegisterRoutes registers physio routes.
-func (h *PhysioHandler) RegisterRoutes(r *mux.Router) {
-	r.HandleFunc("/api/v1/physio/treatment-plans", h.CreateTreatmentPlan).Methods("POST")
-	r.HandleFunc("/api/v1/physio/treatment-plans", h.ListTreatmentPlans).Methods("GET")
-	r.HandleFunc("/api/v1/physio/treatment-plans/{id}", h.GetTreatmentPlan).Methods("GET")
-	r.HandleFunc("/api/v1/physio/treatment-plans/{id}", h.UpdateTreatmentPlan).Methods("PUT")
-	r.HandleFunc("/api/v1/physio/treatment-plans/{id}", h.DeleteTreatmentPlan).Methods("DELETE")
+func (h *PhysioHandler) RegisterRoutes(mux *http.ServeMux, protect func(http.HandlerFunc) http.Handler) {
+	mux.Handle("POST /api/v1/physio/treatment-plans", protect(h.CreateTreatmentPlan))
+	mux.Handle("GET /api/v1/physio/treatment-plans", protect(h.ListTreatmentPlans))
+	mux.Handle("GET /api/v1/physio/treatment-plans/{id}", protect(h.GetTreatmentPlan))
+	mux.Handle("PUT /api/v1/physio/treatment-plans/{id}", protect(h.UpdateTreatmentPlan))
+	mux.Handle("DELETE /api/v1/physio/treatment-plans/{id}", protect(h.DeleteTreatmentPlan))
 
-	r.HandleFunc("/api/v1/physio/session-notes", h.CreateSessionNote).Methods("POST")
-	r.HandleFunc("/api/v1/physio/session-notes", h.ListSessionNotes).Methods("GET")
-	r.HandleFunc("/api/v1/physio/session-notes/{id}", h.GetSessionNote).Methods("GET")
-	r.HandleFunc("/api/v1/physio/session-notes/{id}", h.UpdateSessionNote).Methods("PUT")
+	mux.Handle("POST /api/v1/physio/session-notes", protect(h.CreateSessionNote))
+	mux.Handle("GET /api/v1/physio/session-notes", protect(h.ListSessionNotes))
+	mux.Handle("GET /api/v1/physio/session-notes/{id}", protect(h.GetSessionNote))
+	mux.Handle("PUT /api/v1/physio/session-notes/{id}", protect(h.UpdateSessionNote))
 
-	r.HandleFunc("/api/v1/physio/outcome-measures", h.ListOutcomeMeasures).Methods("GET")
+	mux.Handle("GET /api/v1/physio/outcome-measures", protect(h.ListOutcomeMeasures))
 }
 
 // requireAPC validates that the authenticated clinician holds a current APC.

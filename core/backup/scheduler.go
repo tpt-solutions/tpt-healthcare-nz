@@ -86,10 +86,10 @@ func (w *TriggerWorker) Work(ctx context.Context, job *river.Job[TriggerArgs]) e
 		return w.recordSuccess(ctx, runID, storageKey, result.SizeBytes)
 	}
 
-	// No storage provider: record a zero-byte placeholder for test/dev environments.
+	// No storage provider: record a failed backup so the dashboard reflects the gap.
 	_, _ = bytes.NewReader([]byte{}), storageKey
-	w.logger.Warn("backup: no storage provider configured; skipping upload", "id", runID)
-	return w.recordSuccess(ctx, runID, storageKey, 0)
+	w.logger.Warn("backup: no storage provider configured; recording as failed", "id", runID)
+	return w.recordFailure(ctx, runID, "no storage provider configured")
 }
 
 func (w *TriggerWorker) recordStart(ctx context.Context, id, label string) error {

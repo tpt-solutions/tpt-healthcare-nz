@@ -10,7 +10,6 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-allied-health/internal/ot"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 )
 
 // OTHandler handles occupational therapy API endpoints.
@@ -25,24 +24,24 @@ func NewOTHandler(hpiClient *hpi.Client, consentStore *consent.Store) *OTHandler
 }
 
 // RegisterRoutes registers OT routes.
-func (h *OTHandler) RegisterRoutes(r *mux.Router) {
-	r.HandleFunc("/api/v1/ot/assessments", h.CreateAssessment).Methods("POST")
-	r.HandleFunc("/api/v1/ot/assessments", h.ListAssessments).Methods("GET")
-	r.HandleFunc("/api/v1/ot/assessments/{id}", h.GetAssessment).Methods("GET")
-	r.HandleFunc("/api/v1/ot/assessments/{id}", h.UpdateAssessment).Methods("PUT")
-	r.HandleFunc("/api/v1/ot/assessments/{id}", h.DeleteAssessment).Methods("DELETE")
+func (h *OTHandler) RegisterRoutes(mux *http.ServeMux, protect func(http.HandlerFunc) http.Handler) {
+	mux.Handle("POST /api/v1/ot/assessments", protect(h.CreateAssessment))
+	mux.Handle("GET /api/v1/ot/assessments", protect(h.ListAssessments))
+	mux.Handle("GET /api/v1/ot/assessments/{id}", protect(h.GetAssessment))
+	mux.Handle("PUT /api/v1/ot/assessments/{id}", protect(h.UpdateAssessment))
+	mux.Handle("DELETE /api/v1/ot/assessments/{id}", protect(h.DeleteAssessment))
 
-	r.HandleFunc("/api/v1/ot/intervention-plans", h.CreateInterventionPlan).Methods("POST")
-	r.HandleFunc("/api/v1/ot/intervention-plans", h.ListInterventionPlans).Methods("GET")
-	r.HandleFunc("/api/v1/ot/intervention-plans/{id}", h.GetInterventionPlan).Methods("GET")
-	r.HandleFunc("/api/v1/ot/intervention-plans/{id}", h.UpdateInterventionPlan).Methods("PUT")
+	mux.Handle("POST /api/v1/ot/intervention-plans", protect(h.CreateInterventionPlan))
+	mux.Handle("GET /api/v1/ot/intervention-plans", protect(h.ListInterventionPlans))
+	mux.Handle("GET /api/v1/ot/intervention-plans/{id}", protect(h.GetInterventionPlan))
+	mux.Handle("PUT /api/v1/ot/intervention-plans/{id}", protect(h.UpdateInterventionPlan))
 
-	r.HandleFunc("/api/v1/ot/session-notes", h.CreateSessionNote).Methods("POST")
-	r.HandleFunc("/api/v1/ot/session-notes", h.ListSessionNotes).Methods("GET")
-	r.HandleFunc("/api/v1/ot/session-notes/{id}", h.GetSessionNote).Methods("GET")
-	r.HandleFunc("/api/v1/ot/session-notes/{id}", h.UpdateSessionNote).Methods("PUT")
+	mux.Handle("POST /api/v1/ot/session-notes", protect(h.CreateSessionNote))
+	mux.Handle("GET /api/v1/ot/session-notes", protect(h.ListSessionNotes))
+	mux.Handle("GET /api/v1/ot/session-notes/{id}", protect(h.GetSessionNote))
+	mux.Handle("PUT /api/v1/ot/session-notes/{id}", protect(h.UpdateSessionNote))
 
-	r.HandleFunc("/api/v1/ot/outcome-measures", h.ListOutcomeMeasures).Methods("GET")
+	mux.Handle("GET /api/v1/ot/outcome-measures", protect(h.ListOutcomeMeasures))
 }
 
 // CreateAssessment creates a new OT assessment.
@@ -74,8 +73,7 @@ func (h *OTHandler) CreateAssessment(w http.ResponseWriter, r *http.Request) {
 
 // GetAssessment retrieves an assessment by ID.
 func (h *OTHandler) GetAssessment(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	// TODO: fetch from database; stub returns placeholder data.
 	assessment := ot.Assessment{
@@ -130,8 +128,7 @@ func (h *OTHandler) UpdateAssessment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	var assessment ot.Assessment
 	if err := json.NewDecoder(r.Body).Decode(&assessment); err != nil {
@@ -156,7 +153,7 @@ func (h *OTHandler) DeleteAssessment(w http.ResponseWriter, r *http.Request) {
 	if !requireAPC(w, r, h.hpiClient) {
 		return
 	}
-	_ = mux.Vars(r)["id"]
+	_ = r.PathValue("id")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -189,8 +186,7 @@ func (h *OTHandler) CreateInterventionPlan(w http.ResponseWriter, r *http.Reques
 
 // GetInterventionPlan retrieves an intervention plan by ID.
 func (h *OTHandler) GetInterventionPlan(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	// TODO: fetch from database; stub returns placeholder data.
 	plan := ot.InterventionPlan{
@@ -242,8 +238,7 @@ func (h *OTHandler) UpdateInterventionPlan(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	var plan ot.InterventionPlan
 	if err := json.NewDecoder(r.Body).Decode(&plan); err != nil {
@@ -292,8 +287,7 @@ func (h *OTHandler) CreateSessionNote(w http.ResponseWriter, r *http.Request) {
 
 // GetSessionNote retrieves a session note by ID.
 func (h *OTHandler) GetSessionNote(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	// TODO: fetch from database; stub returns placeholder data.
 	note := ot.SessionNote{
@@ -350,8 +344,7 @@ func (h *OTHandler) UpdateSessionNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	var note ot.SessionNote
 	if err := json.NewDecoder(r.Body).Decode(&note); err != nil {

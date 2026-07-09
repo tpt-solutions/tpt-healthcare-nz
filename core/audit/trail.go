@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -55,6 +56,44 @@ func (t *Trail) Record(ctx context.Context, e Event) error {
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
 	_, err := t.pool.Exec(ctx, q,
+		e.TenantID,
+		e.PrincipalID,
+		e.Action,
+		e.ResourceType,
+		e.ResourceID,
+		e.PatientNHI,
+		e.Details,
+		e.IPAddress,
+		e.UserAgent,
+		e.OccurredAt,
+	)
+	return err
+}
+
+// Execer is the interface satisfied by pgx.Tx, allowing RecordTx to write
+// audit events inside an existing transaction.
+type Execer interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
+
+// RecordTx inserts an audit event using the provided Execer (typically a pgx.Tx),
+// allowing the audit write to participate in the caller's transaction.
+func (t *Trail) RecordTx(ctx context.Context, e Event, ex Execer) error {
+	const q = `
+		INSERT INTO audit_events (
+			tenant_id,
+			principal_id,
+			action,
+			resource_type,
+			resource_id,
+			patient_nhi,
+			details,
+			ip_address,
+			user_agent,
+			occurred_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+
+	_, err := ex.Exec(ctx, q,
 		e.TenantID,
 		e.PrincipalID,
 		e.Action,

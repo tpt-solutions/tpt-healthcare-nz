@@ -10,7 +10,6 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-allied-health/internal/speech"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 )
 
 // SpeechHandler handles speech-language therapy API endpoints.
@@ -25,29 +24,29 @@ func NewSpeechHandler(hpiClient *hpi.Client, consentStore *consent.Store) *Speec
 }
 
 // RegisterRoutes registers speech therapy routes.
-func (h *SpeechHandler) RegisterRoutes(r *mux.Router) {
-	r.HandleFunc("/api/v1/speech/assessments", h.CreateAssessment).Methods("POST")
-	r.HandleFunc("/api/v1/speech/assessments", h.ListAssessments).Methods("GET")
-	r.HandleFunc("/api/v1/speech/assessments/{id}", h.GetAssessment).Methods("GET")
-	r.HandleFunc("/api/v1/speech/assessments/{id}", h.UpdateAssessment).Methods("PUT")
-	r.HandleFunc("/api/v1/speech/assessments/{id}", h.DeleteAssessment).Methods("DELETE")
+func (h *SpeechHandler) RegisterRoutes(mux *http.ServeMux, protect func(http.HandlerFunc) http.Handler) {
+	mux.Handle("POST /api/v1/speech/assessments", protect(h.CreateAssessment))
+	mux.Handle("GET /api/v1/speech/assessments", protect(h.ListAssessments))
+	mux.Handle("GET /api/v1/speech/assessments/{id}", protect(h.GetAssessment))
+	mux.Handle("PUT /api/v1/speech/assessments/{id}", protect(h.UpdateAssessment))
+	mux.Handle("DELETE /api/v1/speech/assessments/{id}", protect(h.DeleteAssessment))
 
-	r.HandleFunc("/api/v1/speech/therapy-plans", h.CreateTherapyPlan).Methods("POST")
-	r.HandleFunc("/api/v1/speech/therapy-plans", h.ListTherapyPlans).Methods("GET")
-	r.HandleFunc("/api/v1/speech/therapy-plans/{id}", h.GetTherapyPlan).Methods("GET")
-	r.HandleFunc("/api/v1/speech/therapy-plans/{id}", h.UpdateTherapyPlan).Methods("PUT")
+	mux.Handle("POST /api/v1/speech/therapy-plans", protect(h.CreateTherapyPlan))
+	mux.Handle("GET /api/v1/speech/therapy-plans", protect(h.ListTherapyPlans))
+	mux.Handle("GET /api/v1/speech/therapy-plans/{id}", protect(h.GetTherapyPlan))
+	mux.Handle("PUT /api/v1/speech/therapy-plans/{id}", protect(h.UpdateTherapyPlan))
 
-	r.HandleFunc("/api/v1/speech/session-notes", h.CreateSessionNote).Methods("POST")
-	r.HandleFunc("/api/v1/speech/session-notes", h.ListSessionNotes).Methods("GET")
-	r.HandleFunc("/api/v1/speech/session-notes/{id}", h.GetSessionNote).Methods("GET")
-	r.HandleFunc("/api/v1/speech/session-notes/{id}", h.UpdateSessionNote).Methods("PUT")
+	mux.Handle("POST /api/v1/speech/session-notes", protect(h.CreateSessionNote))
+	mux.Handle("GET /api/v1/speech/session-notes", protect(h.ListSessionNotes))
+	mux.Handle("GET /api/v1/speech/session-notes/{id}", protect(h.GetSessionNote))
+	mux.Handle("PUT /api/v1/speech/session-notes/{id}", protect(h.UpdateSessionNote))
 
-	r.HandleFunc("/api/v1/speech/swallowing-assessments", h.CreateSwallowingAssessment).Methods("POST")
-	r.HandleFunc("/api/v1/speech/swallowing-assessments", h.ListSwallowingAssessments).Methods("GET")
-	r.HandleFunc("/api/v1/speech/swallowing-assessments/{id}", h.GetSwallowingAssessment).Methods("GET")
-	r.HandleFunc("/api/v1/speech/swallowing-assessments/{id}", h.UpdateSwallowingAssessment).Methods("PUT")
+	mux.Handle("POST /api/v1/speech/swallowing-assessments", protect(h.CreateSwallowingAssessment))
+	mux.Handle("GET /api/v1/speech/swallowing-assessments", protect(h.ListSwallowingAssessments))
+	mux.Handle("GET /api/v1/speech/swallowing-assessments/{id}", protect(h.GetSwallowingAssessment))
+	mux.Handle("PUT /api/v1/speech/swallowing-assessments/{id}", protect(h.UpdateSwallowingAssessment))
 
-	r.HandleFunc("/api/v1/speech/outcome-measures", h.ListOutcomeMeasures).Methods("GET")
+	mux.Handle("GET /api/v1/speech/outcome-measures", protect(h.ListOutcomeMeasures))
 }
 
 // CreateAssessment creates a new speech-language assessment.
@@ -79,8 +78,7 @@ func (h *SpeechHandler) CreateAssessment(w http.ResponseWriter, r *http.Request)
 
 // GetAssessment retrieves an assessment by ID.
 func (h *SpeechHandler) GetAssessment(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	// TODO: fetch from database; stub returns placeholder data.
 	assessment := speech.Assessment{
@@ -135,8 +133,7 @@ func (h *SpeechHandler) UpdateAssessment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	var assessment speech.Assessment
 	if err := json.NewDecoder(r.Body).Decode(&assessment); err != nil {
@@ -161,7 +158,7 @@ func (h *SpeechHandler) DeleteAssessment(w http.ResponseWriter, r *http.Request)
 	if !requireAPC(w, r, h.hpiClient) {
 		return
 	}
-	_ = mux.Vars(r)["id"]
+	_ = r.PathValue("id")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -194,8 +191,7 @@ func (h *SpeechHandler) CreateTherapyPlan(w http.ResponseWriter, r *http.Request
 
 // GetTherapyPlan retrieves a therapy plan by ID.
 func (h *SpeechHandler) GetTherapyPlan(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	// TODO: fetch from database; stub returns placeholder data.
 	plan := speech.TherapyPlan{
@@ -247,8 +243,7 @@ func (h *SpeechHandler) UpdateTherapyPlan(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	var plan speech.TherapyPlan
 	if err := json.NewDecoder(r.Body).Decode(&plan); err != nil {
@@ -297,8 +292,7 @@ func (h *SpeechHandler) CreateSessionNote(w http.ResponseWriter, r *http.Request
 
 // GetSessionNote retrieves a session note by ID.
 func (h *SpeechHandler) GetSessionNote(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	// TODO: fetch from database; stub returns placeholder data.
 	note := speech.SessionNote{
@@ -355,8 +349,7 @@ func (h *SpeechHandler) UpdateSessionNote(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	var note speech.SessionNote
 	if err := json.NewDecoder(r.Body).Decode(&note); err != nil {
@@ -405,8 +398,7 @@ func (h *SpeechHandler) CreateSwallowingAssessment(w http.ResponseWriter, r *htt
 
 // GetSwallowingAssessment retrieves a swallowing assessment by ID.
 func (h *SpeechHandler) GetSwallowingAssessment(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	// TODO: fetch from database; stub returns placeholder data.
 	assessment := speech.SwallowingAssessment{
@@ -458,8 +450,7 @@ func (h *SpeechHandler) UpdateSwallowingAssessment(w http.ResponseWriter, r *htt
 		return
 	}
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	var assessment speech.SwallowingAssessment
 	if err := json.NewDecoder(r.Body).Decode(&assessment); err != nil {

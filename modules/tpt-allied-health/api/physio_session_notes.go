@@ -11,7 +11,6 @@ import (
 
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-allied-health/internal/physio"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -44,7 +43,7 @@ func (h *PhysioHandler) CreateSessionNote(w http.ResponseWriter, r *http.Request
 
 // GetSessionNote retrieves a session note by ID.
 func (h *PhysioHandler) GetSessionNote(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 	ctx := r.Context()
 
 	var note physio.SessionNote
@@ -152,8 +151,8 @@ func (h *PhysioHandler) ListSessionNotes(w http.ResponseWriter, r *http.Request)
 		n.SessionDate = sessionDate.UnixMilli()
 		n.CreatedAt = createdAt.UnixMilli()
 		n.UpdatedAt = updatedAt.UnixMilli()
-		n.Interventions = []physio.SessionIntervention{}
-		n.OutcomeMeasures = []physio.SessionOutcomeMeasure{}
+		n.Interventions = []physio.Intervention{}
+		n.OutcomeMeasures = []physio.OutcomeMeasure{}
 		notes = append(notes, n)
 	}
 
@@ -176,7 +175,7 @@ func (h *PhysioHandler) UpdateSessionNote(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 
 	var note physio.SessionNote
 	if err := json.NewDecoder(r.Body).Decode(&note); err != nil {

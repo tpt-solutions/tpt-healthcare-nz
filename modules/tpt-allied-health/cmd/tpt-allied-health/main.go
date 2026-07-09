@@ -4,6 +4,8 @@ package main
 import (
 	"context"
 	"flag"
+	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,8 +19,6 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-allied-health/api"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 )
 
@@ -30,33 +30,37 @@ func main() {
 	)
 	flag.Parse()
 
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	slog.SetDefault(logger)
 
 	if *version {
-		log.Info().Msg("tpt-allied-health v0.1.0")
+		logger.Info("tpt-allied-health v0.1.0")
 		os.Exit(0)
 	}
 
 	cfg := loadConfig(*configFile)
+	ctx := context.Background()
 
-	dbPool, err := db.Connect(cfg.DatabaseURL)
+	dbPool, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to connect to database")
+		logger.Error("failed to connect to database", slog.Any("error", err))
+		os.Exit(1)
 	}
 	defer dbPool.Close()
 
 	if *migrate {
-		if err := db.Migrate(dbPool, "modules/tpt-allied-health/db/migrate"); err != nil {
-			log.Fatal().Err(err).Msg("Failed to run migrations")
+		if err := db.Migrate(ctx, dbPool, "modules/tpt-allied-health/db/migrate"); err != nil {
+			logger.Error("failed to run migrations", slog.Any("error", err))
+			os.Exit(1)
 		}
-		log.Info().Msg("Migrations completed successfully")
+		logger.Info("migrations completed successfully")
 		os.Exit(0)
 	}
 
 	authProvider, err := initAuthProvider(cfg)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize auth provider")
+		logger.Error("failed to initialize auth provider", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	auditTrail := audit.New(dbPool)
@@ -71,36 +75,47 @@ func main() {
 			return "", nil
 		}, nil)
 	} else {
-		log.Warn().Msg("HPI_BASE_URL not set — APC validation is disabled; do not use in production")
+		logger.Warn("HPI_BASE_URL not set — APC validation is disabled; do not use in production")
 	}
 
 	serverCfg := api.Config{
 		Addr:           cfg.ServerAddr,
-		ReadTimeout:    cfg.ReadTimeout,
-		WriteTimeout:   cfg.WriteTimeout,
-		IdleTimeout:    cfg.IdleTimeout,
+		ReadTimeout:    int(cfg.ReadTimeout.Seconds()),
+		WriteTimeout:   int(cfg.WriteTimeout.Seconds()),
+		IdleTimeout:    int(cfg.IdleTimeout.Seconds()),
 		AllowedOrigins: cfg.AllowedOrigins,
+		Logger:         logger,
 	}
 
 	server := api.NewServer(dbPool, authProvider, auditTrail, hpiClient, consentStore, serverCfg)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	httpSrv := &http.Server{
+		Addr:         cfg.ServerAddr,
+		Handler:      server.Handler(),
+		ReadTimeout:  cfg.ReadTimeout,
+		WriteTimeout: cfg.WriteTimeout,
+		IdleTimeout:  cfg.IdleTimeout,
+	}
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 		<-sigCh
-		log.Info().Msg("Shutdown signal received")
-		cancel()
+		logger.Info("shutdown signal received")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
+			logger.Error("server shutdown error", slog.Any("error", err))
+		}
 	}()
 
-	if err := server.Start(); err != nil {
-		log.Fatal().Err(err).Msg("Server failed")
+	logger.Info("tpt-allied-health server starting", slog.String("addr", cfg.ServerAddr))
+	if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logger.Error("server failed", slog.Any("error", err))
+		os.Exit(1)
 	}
 
-	<-ctx.Done()
-	log.Info().Msg("tpt-allied-health stopped")
+	logger.Info("tpt-allied-health stopped")
 }
 
 // Config holds application configuration.
@@ -112,12 +127,12 @@ type Config struct {
 	IdleTimeout    time.Duration
 	AllowedOrigins []string
 
-	AuthMode      string
-	Auth0Domain   string
-	Auth0Audience string
-	JWTSecret     string
-	JWTIssuer     string
-	OIDCIssuer    string
+	AuthMode          string
+	Auth0Domain       string
+	Auth0Audience     string
+	JWTPrivateKeyPath string
+	JWTPublicKeyPath  string
+	OIDCIssuer        string
 
 	HPIBaseURL string
 }
@@ -140,8 +155,8 @@ func loadConfig(configFile string) Config {
 	viper.BindEnv("auth_mode", "AUTH_MODE")
 	viper.BindEnv("auth0_domain", "AUTH0_DOMAIN")
 	viper.BindEnv("auth0_audience", "AUTH0_AUDIENCE")
-	viper.BindEnv("jwt_secret", "JWT_SECRET")
-	viper.BindEnv("jwt_issuer", "JWT_ISSUER")
+	viper.BindEnv("jwt_private_key_path", "JWT_PRIVATE_KEY_PATH")
+	viper.BindEnv("jwt_public_key_path", "JWT_PUBLIC_KEY_PATH")
 	viper.BindEnv("oidc_issuer", "OIDC_ISSUER")
 	viper.BindEnv("hpi_base_url", "HPI_BASE_URL")
 	viper.BindEnv("allowed_origins", "ALLOWED_ORIGINS")
@@ -154,7 +169,7 @@ func loadConfig(configFile string) Config {
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			log.Warn().Err(err).Msg("Error reading config file, using defaults and env vars")
+			slog.Default().Warn("error reading config file, using defaults and env vars", slog.Any("error", err))
 		}
 	}
 
@@ -174,13 +189,13 @@ func loadConfig(configFile string) Config {
 		WriteTimeout:   writeTimeout,
 		IdleTimeout:    idleTimeout,
 		AllowedOrigins: allowedOrigins,
-		AuthMode:       viper.GetString("auth_mode"),
-		Auth0Domain:    viper.GetString("auth0_domain"),
-		Auth0Audience:  viper.GetString("auth0_audience"),
-		JWTSecret:      viper.GetString("jwt_secret"),
-		JWTIssuer:      viper.GetString("jwt_issuer"),
-		OIDCIssuer:     viper.GetString("oidc_issuer"),
-		HPIBaseURL:     viper.GetString("hpi_base_url"),
+		AuthMode:          viper.GetString("auth_mode"),
+		Auth0Domain:       viper.GetString("auth0_domain"),
+		Auth0Audience:     viper.GetString("auth0_audience"),
+		JWTPrivateKeyPath: viper.GetString("jwt_private_key_path"),
+		JWTPublicKeyPath:  viper.GetString("jwt_public_key_path"),
+		OIDCIssuer:        viper.GetString("oidc_issuer"),
+		HPIBaseURL:        viper.GetString("hpi_base_url"),
 	}
 }
 
@@ -194,10 +209,10 @@ func initAuthProvider(cfg Config) (auth.Provider, error) {
 		return auth0.NewProvider(cfg.Auth0Domain, cfg.Auth0Audience)
 
 	case "jwt":
-		if cfg.JWTSecret == "" {
+		if cfg.JWTPrivateKeyPath == "" || cfg.JWTPublicKeyPath == "" {
 			return nil, auth.ErrInvalidConfig
 		}
-		return jwt.NewProvider(cfg.JWTSecret, cfg.JWTIssuer)
+		return jwt.NewFromFiles(cfg.JWTPrivateKeyPath, cfg.JWTPublicKeyPath)
 
 	case "oidc":
 		if cfg.OIDCIssuer == "" {

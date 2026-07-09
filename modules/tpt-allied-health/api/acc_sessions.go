@@ -9,7 +9,6 @@ import (
 
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-allied-health/internal/acc"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -61,7 +60,7 @@ func (h *ACCHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claimID := mux.Vars(r)["id"]
+	claimID := r.PathValue("id")
 
 	var session acc.TreatmentSession
 	if err := json.NewDecoder(r.Body).Decode(&session); err != nil {
@@ -179,7 +178,7 @@ func (h *ACCHandler) createSessionTx(ctx context.Context, session *acc.Treatment
 
 // ListSessions lists treatment sessions for a claim.
 func (h *ACCHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
-	claimID := mux.Vars(r)["id"]
+	claimID := r.PathValue("id")
 	limit, offset := parsePagination(r)
 
 	sessions := []acc.TreatmentSession{}

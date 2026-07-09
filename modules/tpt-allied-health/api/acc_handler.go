@@ -9,7 +9,6 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/modules/tpt-allied-health/internal/acc"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -26,20 +25,20 @@ func NewACCHandler(hpiClient *hpi.Client, consentStore *consent.Store, pool *pgx
 }
 
 // RegisterRoutes registers ACC routes.
-func (h *ACCHandler) RegisterRoutes(r *mux.Router) {
-	r.HandleFunc("/api/v1/allied-health/acc/claims", h.CreateClaim).Methods("POST")
-	r.HandleFunc("/api/v1/allied-health/acc/claims", h.ListClaims).Methods("GET")
-	r.HandleFunc("/api/v1/allied-health/acc/claims/{id}", h.GetClaim).Methods("GET")
-	r.HandleFunc("/api/v1/allied-health/acc/claims/{id}", h.UpdateClaim).Methods("PUT")
+func (h *ACCHandler) RegisterRoutes(mux *http.ServeMux, protect func(http.HandlerFunc) http.Handler) {
+	mux.Handle("POST /api/v1/allied-health/acc/claims", protect(h.CreateClaim))
+	mux.Handle("GET /api/v1/allied-health/acc/claims", protect(h.ListClaims))
+	mux.Handle("GET /api/v1/allied-health/acc/claims/{id}", protect(h.GetClaim))
+	mux.Handle("PUT /api/v1/allied-health/acc/claims/{id}", protect(h.UpdateClaim))
 
-	r.HandleFunc("/api/v1/allied-health/acc/claims/{id}/sessions", h.CreateSession).Methods("POST")
-	r.HandleFunc("/api/v1/allied-health/acc/claims/{id}/sessions", h.ListSessions).Methods("GET")
+	mux.Handle("POST /api/v1/allied-health/acc/claims/{id}/sessions", protect(h.CreateSession))
+	mux.Handle("GET /api/v1/allied-health/acc/claims/{id}/sessions", protect(h.ListSessions))
 
-	r.HandleFunc("/api/v1/allied-health/acc/claims/{id}/reviews", h.CreateReview).Methods("POST")
-	r.HandleFunc("/api/v1/allied-health/acc/claims/{id}/reviews", h.ListReviews).Methods("GET")
+	mux.Handle("POST /api/v1/allied-health/acc/claims/{id}/reviews", protect(h.CreateReview))
+	mux.Handle("GET /api/v1/allied-health/acc/claims/{id}/reviews", protect(h.ListReviews))
 
-	r.HandleFunc("/api/v1/allied-health/acc/charge-codes", h.ListChargeCodes).Methods("GET")
-	r.HandleFunc("/api/v1/allied-health/acc/charge-codes/{profession}", h.GetChargeCodesByProfession).Methods("GET")
+	mux.Handle("GET /api/v1/allied-health/acc/charge-codes", protect(h.ListChargeCodes))
+	mux.Handle("GET /api/v1/allied-health/acc/charge-codes/{profession}", protect(h.GetChargeCodesByProfession))
 }
 
 // CreateClaim creates a new ACC claim.
@@ -71,7 +70,7 @@ func (h *ACCHandler) CreateClaim(w http.ResponseWriter, r *http.Request) {
 
 // GetClaim retrieves an ACC claim by ID.
 func (h *ACCHandler) GetClaim(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 
 	// TODO: fetch from database; stub returns placeholder data.
 	claim := acc.Claim{
@@ -131,7 +130,7 @@ func (h *ACCHandler) UpdateClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 
 	var claim acc.Claim
 	if err := json.NewDecoder(r.Body).Decode(&claim); err != nil {
@@ -157,7 +156,7 @@ func (h *ACCHandler) CreateReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claimID := mux.Vars(r)["id"]
+	claimID := r.PathValue("id")
 
 	var review acc.ReviewReport
 	if err := json.NewDecoder(r.Body).Decode(&review); err != nil {
@@ -183,7 +182,7 @@ func (h *ACCHandler) CreateReview(w http.ResponseWriter, r *http.Request) {
 
 // ListReviews lists review reports for a claim.
 func (h *ACCHandler) ListReviews(w http.ResponseWriter, r *http.Request) {
-	claimID := mux.Vars(r)["id"]
+	claimID := r.PathValue("id")
 
 	reviews := []acc.ReviewReport{}
 
@@ -202,7 +201,7 @@ func (h *ACCHandler) ListChargeCodes(w http.ResponseWriter, r *http.Request) {
 
 // GetChargeCodesByProfession returns charge codes for a profession.
 func (h *ACCHandler) GetChargeCodesByProfession(w http.ResponseWriter, r *http.Request) {
-	profession := mux.Vars(r)["profession"]
+	profession := r.PathValue("profession")
 	codes := acc.GetChargeCodesByProfession(profession)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(codes)

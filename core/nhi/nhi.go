@@ -13,8 +13,6 @@ import (
 	"strings"
 	"time"
 
-	// TODO: replace with proper FHIR R4 types once
-	// github.com/PhillipC05/tpt-healthcare/core/fhir/r4 is implemented.
 	fhirr4 "github.com/PhillipC05/tpt-healthcare/core/fhir/r4"
 )
 

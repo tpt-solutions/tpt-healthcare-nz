@@ -96,8 +96,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 }
 
 func runMigrate(_ *cobra.Command, _ []string) error {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	return api.RunMigrations(context.Background(), mustEnv("DATABASE_URL"), logger)
+	return api.RunMigrations(context.Background(), mustEnv("DATABASE_URL"))
 }
 
 func mustEnv(key string) string {
