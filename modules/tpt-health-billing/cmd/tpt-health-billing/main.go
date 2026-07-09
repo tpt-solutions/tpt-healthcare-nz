@@ -45,12 +45,12 @@ func newServeCmd() *cobra.Command {
 			viper.AutomaticEnv()
 
 			cfg := api.Config{
-				Host:          viper.GetString("host"),
-				Port:          viper.GetInt("port"),
-				DatabaseURL:   viper.GetString("DATABASE_URL"),
-				RedisURL:      viper.GetString("REDIS_URL"),
-				EncryptionKey: viper.GetString("ENCRYPTION_KEY"),
-				ACCBaseURL:    viper.GetString("ACC_BASE_URL"),
+				Host:           viper.GetString("host"),
+				Port:           viper.GetInt("port"),
+				DatabaseURL:    viper.GetString("DATABASE_URL"),
+				RedisURL:       viper.GetString("REDIS_URL"),
+				EncryptionKey:  viper.GetString("ENCRYPTION_KEY"),
+				ACCBaseURL:     viper.GetString("ACC_BASE_URL"),
 				PHARMACBaseURL: viper.GetString("PHARMAC_BASE_URL"),
 			}
 
@@ -86,12 +86,12 @@ func newValidateCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			viper.AutomaticEnv()
 			cfg := api.Config{
-				Host:          viper.GetString("host"),
-				Port:          viper.GetInt("port"),
-				DatabaseURL:   viper.GetString("DATABASE_URL"),
-				RedisURL:      viper.GetString("REDIS_URL"),
-				EncryptionKey: viper.GetString("ENCRYPTION_KEY"),
-				ACCBaseURL:    viper.GetString("ACC_BASE_URL"),
+				Host:           viper.GetString("host"),
+				Port:           viper.GetInt("port"),
+				DatabaseURL:    viper.GetString("DATABASE_URL"),
+				RedisURL:       viper.GetString("REDIS_URL"),
+				EncryptionKey:  viper.GetString("ENCRYPTION_KEY"),
+				ACCBaseURL:     viper.GetString("ACC_BASE_URL"),
 				PHARMACBaseURL: viper.GetString("PHARMAC_BASE_URL"),
 			}
 			return api.Validate(context.Background(), cfg)

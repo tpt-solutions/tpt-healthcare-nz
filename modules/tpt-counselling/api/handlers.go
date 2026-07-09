@@ -153,10 +153,9 @@ func (s *Server) handleEAPCreateClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	claim.ID = uuid.New().String()
-	claim.CounsellorID = principal.PractitionerID
-	now := time.Now().UnixMilli()
-	claim.CreatedAt = now
-	claim.UpdatedAt = now
+	claim.ProviderHPI = principal.PractitionerID
+	claim.CreatedAt = time.Now().UTC()
+	claim.UpdatedAt = claim.CreatedAt
 	s.recordEvent(r, principal, "create", "EAPClaim", claim.ID, claim.ClientNHI)
 	writeJSON(w, http.StatusCreated, claim)
 }
@@ -186,8 +185,8 @@ func (s *Server) handleEAPUpdateClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	claim.ID = claimID
-	claim.CounsellorID = principal.PractitionerID
-	claim.UpdatedAt = time.Now().UnixMilli()
+	claim.ProviderHPI = principal.PractitionerID
+	claim.UpdatedAt = time.Now().UTC()
 	s.recordEvent(r, principal, "update", "EAPClaim", claimID, claim.ClientNHI)
 	writeJSON(w, http.StatusOK, claim)
 }

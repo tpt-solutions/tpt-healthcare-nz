@@ -45,10 +45,10 @@ func newServeCmd() *cobra.Command {
 			viper.AutomaticEnv()
 
 			cfg := api.Config{
-				Host: viper.GetString("host"),
-				Port: viper.GetInt("port"),
-				DatabaseURL: viper.GetString("DATABASE_URL"),
-				RedisURL:    viper.GetString("REDIS_URL"),
+				Host:          viper.GetString("host"),
+				Port:          viper.GetInt("port"),
+				DatabaseURL:   viper.GetString("DATABASE_URL"),
+				RedisURL:      viper.GetString("REDIS_URL"),
 				EncryptionKey: viper.GetString("ENCRYPTION_KEY"),
 			}
 

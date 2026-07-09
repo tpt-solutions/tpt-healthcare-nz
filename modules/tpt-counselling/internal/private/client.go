@@ -23,16 +23,16 @@ type PrivateClientRequest struct {
 // PrivateClient stores a counselling client with PHI fields encrypted at rest.
 // Encrypted fields hold the AES-256-GCM ciphertext produced by core/encryption.
 type PrivateClient struct {
-	ID           string `json:"id"`
-	NameEnc      []byte `json:"-"`      // encrypted: client name
-	EmailEnc     []byte `json:"-"`      // encrypted: email address
-	PhoneEnc     []byte `json:"-"`      // encrypted: phone number
-	NHIEnc       []byte `json:"-"`      // encrypted: NHI identifier
-	Employer     string `json:"employer,omitempty"`
-	Notes        string `json:"notes,omitempty"`
-	Active       bool   `json:"active"`
-	CreatedAt    int64  `json:"createdAt"`
-	UpdatedAt    int64  `json:"updatedAt"`
+	ID        string `json:"id"`
+	NameEnc   []byte `json:"-"` // encrypted: client name
+	EmailEnc  []byte `json:"-"` // encrypted: email address
+	PhoneEnc  []byte `json:"-"` // encrypted: phone number
+	NHIEnc    []byte `json:"-"` // encrypted: NHI identifier
+	Employer  string `json:"employer,omitempty"`
+	Notes     string `json:"notes,omitempty"`
+	Active    bool   `json:"active"`
+	CreatedAt int64  `json:"createdAt"`
+	UpdatedAt int64  `json:"updatedAt"`
 }
 
 // PrivateClientResponse is the API response — PHI is decrypted for authorised callers.

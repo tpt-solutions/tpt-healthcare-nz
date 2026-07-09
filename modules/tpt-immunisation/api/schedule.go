@@ -165,11 +165,11 @@ func DueVaccines(ageMonths int) []VaccineScheduleEntry {
 // Outbreak data is used to generate immunisation recall lists for under-immunised
 // patients in the affected area.
 type DiseaseOutbreak struct {
-	ID           string    `json:"id"`
-	Disease      string    `json:"disease"` // e.g., "measles", "pertussis", "meningococcal"
+	ID      string `json:"id"`
+	Disease string `json:"disease"` // e.g., "measles", "pertussis", "meningococcal"
 	// SNOMEDCode is the SNOMED CT code for the disease.
 	SNOMEDCode   string    `json:"snomedCode"`
-	Region       string    `json:"region"`      // DHB/locality region
+	Region       string    `json:"region"` // DHB/locality region
 	ReportedAt   time.Time `json:"reportedAt"`
 	ActiveUntil  time.Time `json:"activeUntil"` // Estimated end of outbreak window
 	CasesCount   int       `json:"casesCount"`
@@ -181,12 +181,12 @@ type DiseaseOutbreak struct {
 // RecallEntry identifies a patient who should be recalled for immunisation
 // based on an active outbreak and their immunisation history.
 type RecallEntry struct {
-	PatientNHI      string    `json:"patientNhi"` // Encrypted in storage; decrypted for authorised users
-	OutbreakID      string    `json:"outbreakId"`
-	Disease         string    `json:"disease"`
-	MissingVaccines []string  `json:"missingVaccines"`
+	PatientNHI      string     `json:"patientNhi"` // Encrypted in storage; decrypted for authorised users
+	OutbreakID      string     `json:"outbreakId"`
+	Disease         string     `json:"disease"`
+	MissingVaccines []string   `json:"missingVaccines"`
 	LastContactDate *time.Time `json:"lastContactDate,omitempty"`
-	Priority        string    `json:"priority"` // "high" | "medium" | "low"
+	Priority        string     `json:"priority"` // "high" | "medium" | "low"
 }
 
 // OutbreakHandler handles /api/v1/outbreaks and /api/v1/recalls.
@@ -279,8 +279,8 @@ func (h *OutbreakHandler) Recalls(w http.ResponseWriter, r *http.Request) {
 	)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"recalls":    []RecallEntry{},
-		"total":      0,
+		"recalls":     []RecallEntry{},
+		"total":       0,
 		"generatedAt": time.Now().UTC(),
 	})
 }

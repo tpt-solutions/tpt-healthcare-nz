@@ -16,11 +16,11 @@ import (
 
 // Config holds all runtime configuration for the tpt-immunisation service.
 type Config struct {
-	Host            string
-	Port            int
-	DatabaseURL     string
-	RedisURL        string
-	EncryptionKey   string
+	Host          string
+	Port          int
+	DatabaseURL   string
+	RedisURL      string
+	EncryptionKey string
 	// NIR (National Immunisation Register) — Te Whatu Ora FHIR API credentials.
 	NIRBaseURL      string
 	NIRTokenURL     string

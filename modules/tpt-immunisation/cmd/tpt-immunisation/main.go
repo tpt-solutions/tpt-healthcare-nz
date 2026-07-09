@@ -45,14 +45,14 @@ func newServeCmd() *cobra.Command {
 			viper.AutomaticEnv()
 
 			cfg := api.Config{
-				Host:          viper.GetString("host"),
-				Port:          viper.GetInt("port"),
-				DatabaseURL:   viper.GetString("DATABASE_URL"),
-				RedisURL:      viper.GetString("REDIS_URL"),
-				EncryptionKey: viper.GetString("ENCRYPTION_KEY"),
-				NIRBaseURL:    viper.GetString("NIR_BASE_URL"),
-				NIRTokenURL:   viper.GetString("NIR_TOKEN_URL"),
-				NIRClientID:   viper.GetString("NIR_CLIENT_ID"),
+				Host:            viper.GetString("host"),
+				Port:            viper.GetInt("port"),
+				DatabaseURL:     viper.GetString("DATABASE_URL"),
+				RedisURL:        viper.GetString("REDIS_URL"),
+				EncryptionKey:   viper.GetString("ENCRYPTION_KEY"),
+				NIRBaseURL:      viper.GetString("NIR_BASE_URL"),
+				NIRTokenURL:     viper.GetString("NIR_TOKEN_URL"),
+				NIRClientID:     viper.GetString("NIR_CLIENT_ID"),
 				NIRClientSecret: viper.GetString("NIR_CLIENT_SECRET"),
 			}
 

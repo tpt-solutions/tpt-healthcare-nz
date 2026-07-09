@@ -236,16 +236,16 @@ func (s *Server) handleUpdateRemedy(w http.ResponseWriter, r *http.Request) {
 
 // Consultation is an inline type for naturopathy consultations.
 type Consultation struct {
-	ID           string `json:"id"`
-	PatientNHI   string `json:"patientNhi"`
-	ClinicianID  string `json:"clinicianId"`
-	ConsultDate  int64  `json:"consultDate"`
+	ID             string `json:"id"`
+	PatientNHI     string `json:"patientNhi"`
+	ClinicianID    string `json:"clinicianId"`
+	ConsultDate    int64  `json:"consultDate"`
 	ChiefComplaint string `json:"chiefComplaint"`
-	History      string `json:"history"`
-	Assessment   string `json:"assessment"`
-	Plan         string `json:"plan"`
-	CreatedAt    int64  `json:"createdAt"`
-	UpdatedAt    int64  `json:"updatedAt"`
+	History        string `json:"history"`
+	Assessment     string `json:"assessment"`
+	Plan           string `json:"plan"`
+	CreatedAt      int64  `json:"createdAt"`
+	UpdatedAt      int64  `json:"updatedAt"`
 }
 
 func (s *Server) handleListConsultations(w http.ResponseWriter, r *http.Request) {

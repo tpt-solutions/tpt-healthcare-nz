@@ -54,17 +54,27 @@ type Server struct {
 
 // NewServer constructs and configures a Server.
 func NewServer(cfg Config) (*Server, error) {
-	if cfg.Logger == nil { cfg.Logger = slog.Default() }
-	if cfg.TenantHeader == "" { cfg.TenantHeader = "X-Tenant-ID" }
+	if cfg.Logger == nil {
+		cfg.Logger = slog.Default()
+	}
+	if cfg.TenantHeader == "" {
+		cfg.TenantHeader = "X-Tenant-ID"
+	}
 
 	pool, err := db.Connect(context.Background(), cfg.DatabaseURL)
-	if err != nil { return nil, fmt.Errorf("connect to database: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("connect to database: %w", err)
+	}
 
 	enc, err := encryption.NewCipher(cfg.EncryptionKey)
-	if err != nil { return nil, fmt.Errorf("init encryption cipher: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("init encryption cipher: %w", err)
+	}
 
 	authProvider, err := auth0.NewProvider(cfg.Auth0Domain, cfg.Auth0Audience)
-	if err != nil { return nil, fmt.Errorf("init auth0 provider: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("init auth0 provider: %w", err)
+	}
 
 	trail := audit.NewTrail(pool)
 
@@ -145,7 +155,9 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 // RunMigrations runs database migrations.
 func RunMigrations(ctx context.Context, databaseURL string, logger *slog.Logger) error {
 	pool, err := db.Connect(ctx, databaseURL)
-	if err != nil { return fmt.Errorf("connect for migrations: %w", err) }
+	if err != nil {
+		return fmt.Errorf("connect for migrations: %w", err)
+	}
 	defer pool.Close()
 	r := migrate.New(acudb.Migrations, pool)
 	return r.Up(ctx)
@@ -154,9 +166,13 @@ func RunMigrations(ctx context.Context, databaseURL string, logger *slog.Logger)
 // ValidateConnectivity checks that the database is reachable.
 func ValidateConnectivity(ctx context.Context, cfg Config) error {
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
-	if err != nil { return fmt.Errorf("database connection failed: %w", err) }
+	if err != nil {
+		return fmt.Errorf("database connection failed: %w", err)
+	}
 	defer pool.Close()
-	if err := pool.Ping(ctx); err != nil { return fmt.Errorf("database ping failed: %w", err) }
+	if err := pool.Ping(ctx); err != nil {
+		return fmt.Errorf("database ping failed: %w", err)
+	}
 	cfg.Logger.Info("connectivity validation complete")
 	return nil
 }
@@ -170,11 +186,15 @@ type apiError struct {
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(v); err != nil { slog.Error("writeJSON encode error", slog.Any("error", err)) }
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		slog.Error("writeJSON encode error", slog.Any("error", err))
+	}
 }
 
 func decodeJSON(r *http.Request, v any) error {
 	defer r.Body.Close()
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil { return fmt.Errorf("decode request body: %w", err) }
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		return fmt.Errorf("decode request body: %w", err)
+	}
 	return nil
 }

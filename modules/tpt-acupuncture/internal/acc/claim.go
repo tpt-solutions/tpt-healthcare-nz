@@ -19,22 +19,22 @@ const (
 
 // Claim represents an ACC acupuncture claim.
 type Claim struct {
-	ID              string       `json:"id"`
-	PatientNHI      string       `json:"patientNhi"`
-	ProviderHPI     string       `json:"providerHpi"`
-	PracticeID      string       `json:"practiceId"`
-	AccidentDate    time.Time    `json:"accidentDate"`
-	AccidentDesc    string       `json:"accidentDesc"`
-	InjuryType      string       `json:"injuryType"`      // ACC injury classification code
-	Diagnosis       string       `json:"diagnosis"`
-	BodyRegion      string       `json:"bodyRegion"`      // affected body region for acupuncture
-	SessionCount    int          `json:"sessionCount"`     // number of acupuncture sessions
-	TotalFee        int          `json:"totalFee"`         // NZ cents
-	Status          ClaimStatus  `json:"status"`
-	ACCClaimNumber  string       `json:"accClaimNumber,omitempty"`
-	Notes           string       `json:"notes,omitempty"`
-	CreatedAt       time.Time    `json:"createdAt"`
-	UpdatedAt       time.Time    `json:"updatedAt"`
+	ID             string      `json:"id"`
+	PatientNHI     string      `json:"patientNhi"`
+	ProviderHPI    string      `json:"providerHpi"`
+	PracticeID     string      `json:"practiceId"`
+	AccidentDate   time.Time   `json:"accidentDate"`
+	AccidentDesc   string      `json:"accidentDesc"`
+	InjuryType     string      `json:"injuryType"` // ACC injury classification code
+	Diagnosis      string      `json:"diagnosis"`
+	BodyRegion     string      `json:"bodyRegion"`   // affected body region for acupuncture
+	SessionCount   int         `json:"sessionCount"` // number of acupuncture sessions
+	TotalFee       int         `json:"totalFee"`     // NZ cents
+	Status         ClaimStatus `json:"status"`
+	ACCClaimNumber string      `json:"accClaimNumber,omitempty"`
+	Notes          string      `json:"notes,omitempty"`
+	CreatedAt      time.Time   `json:"createdAt"`
+	UpdatedAt      time.Time   `json:"updatedAt"`
 }
 
 // ValidationError holds per-field validation failures.

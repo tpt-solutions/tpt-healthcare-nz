@@ -162,11 +162,11 @@ func (s *Server) handleGetSpine(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, spine.SpinalChart{
-		PatientNHI:  patientNHI,
-		Entries:     entries,
-		ChartDate:   createdAt,
-		CreatedAt:   createdAt,
-		UpdatedAt:   updatedAt,
+		PatientNHI: patientNHI,
+		Entries:    entries,
+		ChartDate:  createdAt,
+		CreatedAt:  createdAt,
+		UpdatedAt:  updatedAt,
 	})
 }
 

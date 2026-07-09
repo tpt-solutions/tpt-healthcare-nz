@@ -114,7 +114,7 @@ func (s *Server) handleListDiaryEntries(w http.ResponseWriter, r *http.Request) 
 	if !s.checkConsent(w, r, patientNHI) {
 		return
 	}
-	writeJSON(w, http.StatusOK, []fooddiary.Entry{})
+	writeJSON(w, http.StatusOK, []fooddiary.FoodDiaryEntry{})
 }
 
 func (s *Server) handleCreateDiaryEntry(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +126,7 @@ func (s *Server) handleCreateDiaryEntry(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	var entry fooddiary.Entry
+	var entry fooddiary.FoodDiaryEntry
 	if err := decodeJSON(r, &entry); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_JSON", Message: err.Error()})
 		return
@@ -174,7 +174,7 @@ func (s *Server) handleUpdateDiaryEntry(w http.ResponseWriter, r *http.Request) 
 	}
 	entryID := r.PathValue("entryId")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	var entry fooddiary.Entry
+	var entry fooddiary.FoodDiaryEntry
 	if err := decodeJSON(r, &entry); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_JSON", Message: err.Error()})
 		return
@@ -200,7 +200,7 @@ func (s *Server) handleListMealPlans(w http.ResponseWriter, r *http.Request) {
 	if !s.checkConsent(w, r, patientNHI) {
 		return
 	}
-	writeJSON(w, http.StatusOK, []mealplan.Plan{})
+	writeJSON(w, http.StatusOK, []mealplan.MealPlan{})
 }
 
 func (s *Server) handleCreateMealPlan(w http.ResponseWriter, r *http.Request) {
@@ -212,7 +212,7 @@ func (s *Server) handleCreateMealPlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	var plan mealplan.Plan
+	var plan mealplan.MealPlan
 	if err := decodeJSON(r, &plan); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_JSON", Message: err.Error()})
 		return
@@ -222,7 +222,7 @@ func (s *Server) handleCreateMealPlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	plan.ID = uuid.New().String()
-	plan.CreatedBy = principal.PractitionerID
+	plan.ClinicianID = principal.PractitionerID
 	now := time.Now().UnixMilli()
 	plan.CreatedAt = now
 	plan.UpdatedAt = now
@@ -261,14 +261,14 @@ func (s *Server) handleUpdateMealPlan(w http.ResponseWriter, r *http.Request) {
 	}
 	planID := r.PathValue("planId")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	var plan mealplan.Plan
+	var plan mealplan.MealPlan
 	if err := decodeJSON(r, &plan); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_JSON", Message: err.Error()})
 		return
 	}
 	plan.ID = planID
 	plan.PatientNHI = patientNHI
-	plan.CreatedBy = principal.PractitionerID
+	plan.ClinicianID = principal.PractitionerID
 	plan.UpdatedAt = time.Now().UnixMilli()
 	s.recordEvent(r, principal, "update", "MealPlan", planID, patientNHI)
 	writeJSON(w, http.StatusOK, plan)
@@ -311,7 +311,7 @@ func (s *Server) handleCreateBodyComp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bc.ID = uuid.New().String()
-	bc.MeasuredBy = principal.PractitionerID
+	bc.ClinicianID = principal.PractitionerID
 	now := time.Now().UnixMilli()
 	bc.CreatedAt = now
 	bc.UpdatedAt = now

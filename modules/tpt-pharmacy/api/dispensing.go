@@ -18,18 +18,18 @@ import (
 type DispensingStatus string
 
 const (
-	DispensingStatusPending    DispensingStatus = "pending"
-	DispensingStatusDispensed  DispensingStatus = "dispensed"
-	DispensingStatusOnHold     DispensingStatus = "on-hold"
-	DispensingStatusCancelled  DispensingStatus = "cancelled"
+	DispensingStatusPending   DispensingStatus = "pending"
+	DispensingStatusDispensed DispensingStatus = "dispensed"
+	DispensingStatusOnHold    DispensingStatus = "on-hold"
+	DispensingStatusCancelled DispensingStatus = "cancelled"
 )
 
 // MedicationRequest is a simplified FHIR MedicationRequest received from a GP.
 type MedicationRequest struct {
-	ResourceType  string `json:"resourceType"`
-	ID            string `json:"id"`
-	Status        string `json:"status"`
-	Intent        string `json:"intent"`
+	ResourceType   string `json:"resourceType"`
+	ID             string `json:"id"`
+	Status         string `json:"status"`
+	Intent         string `json:"intent"`
 	MedicationCode struct {
 		Coding []struct {
 			System  string `json:"system"`
@@ -37,13 +37,13 @@ type MedicationRequest struct {
 			Display string `json:"display"`
 		} `json:"coding"`
 	} `json:"medicationCodeableConcept"`
-	SubjectNHI       string    `json:"subjectNHI"` // NHI extracted from subject.identifier
-	AuthoredOn       time.Time `json:"authoredOn"`
-	RequesterHPICPN  string    `json:"requesterHpiCpn"` // GP's HPI CPN
+	SubjectNHI        string    `json:"subjectNHI"` // NHI extracted from subject.identifier
+	AuthoredOn        time.Time `json:"authoredOn"`
+	RequesterHPICPN   string    `json:"requesterHpiCpn"` // GP's HPI CPN
 	DosageInstruction []struct {
 		Text string `json:"text"`
 	} `json:"dosageInstruction"`
-	IsSchedule2      bool   `json:"isSchedule2"`
+	IsSchedule2          bool   `json:"isSchedule2"`
 	PharmacFormularyCode string `json:"pharmacFormularyCode"`
 }
 
@@ -62,18 +62,18 @@ type DispensingRecord struct {
 
 // MedicationDispense is a simplified FHIR MedicationDispense resource.
 type MedicationDispense struct {
-	ResourceType       string    `json:"resourceType"`
-	ID                 string    `json:"id"`
-	Status             string    `json:"status"`
-	MedicationRequestID string   `json:"medicationRequestId"`
-	PatientNHI         string    `json:"patientNhi"`
-	PharmacistHPICPN   string    `json:"pharmacistHpiCpn"`
-	SecondPharmacistID string    `json:"secondPharmacistId,omitempty"`
-	WhenHandedOver     time.Time `json:"whenHandedOver"`
-	Quantity           float64   `json:"quantity"`
-	Unit               string    `json:"unit"`
-	LotNumber          string    `json:"lotNumber,omitempty"`
-	ExpiryDate         string    `json:"expiryDate,omitempty"`
+	ResourceType        string    `json:"resourceType"`
+	ID                  string    `json:"id"`
+	Status              string    `json:"status"`
+	MedicationRequestID string    `json:"medicationRequestId"`
+	PatientNHI          string    `json:"patientNhi"`
+	PharmacistHPICPN    string    `json:"pharmacistHpiCpn"`
+	SecondPharmacistID  string    `json:"secondPharmacistId,omitempty"`
+	WhenHandedOver      time.Time `json:"whenHandedOver"`
+	Quantity            float64   `json:"quantity"`
+	Unit                string    `json:"unit"`
+	LotNumber           string    `json:"lotNumber,omitempty"`
+	ExpiryDate          string    `json:"expiryDate,omitempty"`
 }
 
 // DispenseRequest is the body for POST /api/v1/dispensing/{id}/dispense.

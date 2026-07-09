@@ -22,14 +22,14 @@ type Immunisation struct {
 	// VaccineCode is an NZMT-coded vaccine reference.
 	VaccineCode struct {
 		Coding []struct {
-			System  string `json:"system"`  // https://www.nzmt.org.nz/
-			Code    string `json:"code"`    // NZMT CT code
+			System  string `json:"system"` // https://www.nzmt.org.nz/
+			Code    string `json:"code"`   // NZMT CT code
 			Display string `json:"display"`
 		} `json:"coding"`
 		Text string `json:"text"`
 	} `json:"vaccineCode"`
 
-	PatientNHI string    `json:"patientNhi"` // NHI extracted from patient.identifier
+	PatientNHI         string    `json:"patientNhi"` // NHI extracted from patient.identifier
 	OccurrenceDateTime time.Time `json:"occurrenceDateTime"`
 
 	// Site is where on the body the vaccine was given (SNOMED CT).
@@ -279,7 +279,7 @@ func (h *ImmunisationHandler) Schedule(w http.ResponseWriter, r *http.Request) {
 		"request_id", r.Context().Value(requestIDKey))
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ageMonths": ageMonths,
+		"ageMonths":   ageMonths,
 		"dueVaccines": entries,
 	})
 }

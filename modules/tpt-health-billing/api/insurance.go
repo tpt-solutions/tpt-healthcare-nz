@@ -52,23 +52,23 @@ const (
 //   - nib, AIA: Online provider portals
 //   - Most others: PDF/fax or patient self-submission
 type InsuranceClaim struct {
-	ID                    string               `json:"id"`
-	TenantID              string               `json:"tenantId"`
-	InvoiceID             string               `json:"invoiceId,omitempty"`
-	PatientNHI            string               `json:"patientNhi"`   // encrypted at rest
-	Insurer               Insurer              `json:"insurer"`
-	PolicyNumber          string               `json:"policyNumber"`
-	MemberID              string               `json:"memberId"`
-	Status                InsuranceClaimStatus `json:"status"`
-	ClaimedAmountNZD      float64              `json:"claimedAmountNzd"`
-	ApprovedAmountNZD     float64              `json:"approvedAmountNzd,omitempty"`
-	InsurerReference      string               `json:"insurerReference,omitempty"`
-	SubmittedAt           *time.Time           `json:"submittedAt,omitempty"`
-	DecisionAt            *time.Time           `json:"decisionAt,omitempty"`
-	PaidAt                *time.Time           `json:"paidAt,omitempty"`
-	DeclineReason         string               `json:"declineReason,omitempty"`
-	CreatedAt             time.Time            `json:"createdAt"`
-	UpdatedAt             time.Time            `json:"updatedAt"`
+	ID                string               `json:"id"`
+	TenantID          string               `json:"tenantId"`
+	InvoiceID         string               `json:"invoiceId,omitempty"`
+	PatientNHI        string               `json:"patientNhi"` // encrypted at rest
+	Insurer           Insurer              `json:"insurer"`
+	PolicyNumber      string               `json:"policyNumber"`
+	MemberID          string               `json:"memberId"`
+	Status            InsuranceClaimStatus `json:"status"`
+	ClaimedAmountNZD  float64              `json:"claimedAmountNzd"`
+	ApprovedAmountNZD float64              `json:"approvedAmountNzd,omitempty"`
+	InsurerReference  string               `json:"insurerReference,omitempty"`
+	SubmittedAt       *time.Time           `json:"submittedAt,omitempty"`
+	DecisionAt        *time.Time           `json:"decisionAt,omitempty"`
+	PaidAt            *time.Time           `json:"paidAt,omitempty"`
+	DeclineReason     string               `json:"declineReason,omitempty"`
+	CreatedAt         time.Time            `json:"createdAt"`
+	UpdatedAt         time.Time            `json:"updatedAt"`
 }
 
 // CreateInsuranceClaimRequest is the body for POST /api/v1/insurance/claims.

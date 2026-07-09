@@ -13,11 +13,11 @@ import (
 type ACCClaimStatus string
 
 const (
-	ACCClaimStatusPending   ACCClaimStatus = "pending"   // submitted, awaiting ACC assessment
-	ACCClaimStatusActive    ACCClaimStatus = "active"    // accepted, ongoing treatment authorised
-	ACCClaimStatusDeclined  ACCClaimStatus = "declined"  // assessed and declined
-	ACCClaimStatusComplete  ACCClaimStatus = "complete"  // fully resolved and paid
-	ACCClaimStatusDisputed  ACCClaimStatus = "disputed"  // under review or appeal
+	ACCClaimStatusPending  ACCClaimStatus = "pending"  // submitted, awaiting ACC assessment
+	ACCClaimStatusActive   ACCClaimStatus = "active"   // accepted, ongoing treatment authorised
+	ACCClaimStatusDeclined ACCClaimStatus = "declined" // assessed and declined
+	ACCClaimStatusComplete ACCClaimStatus = "complete" // fully resolved and paid
+	ACCClaimStatusDisputed ACCClaimStatus = "disputed" // under review or appeal
 )
 
 // ACCDiscipline identifies the treatment discipline for purchase order management.
@@ -26,13 +26,13 @@ const (
 type ACCDiscipline string
 
 const (
-	ACCDisciplineGP            ACCDiscipline = "GP"
-	ACCDisciplinePhysio        ACCDiscipline = "PHYSIO"
-	ACCDisciplineAcupuncture   ACCDiscipline = "ACUPUNCTURE"
-	ACCDisciplineChiropractic  ACCDiscipline = "CHIROPRACTIC"
-	ACCDisciplineMassage       ACCDiscipline = "MASSAGE"
-	ACCDisciplineOsteopathy    ACCDiscipline = "OSTEOPATHY"
-	ACCDisciplineCounselling   ACCDiscipline = "COUNSELLING"
+	ACCDisciplineGP             ACCDiscipline = "GP"
+	ACCDisciplinePhysio         ACCDiscipline = "PHYSIO"
+	ACCDisciplineAcupuncture    ACCDiscipline = "ACUPUNCTURE"
+	ACCDisciplineChiropractic   ACCDiscipline = "CHIROPRACTIC"
+	ACCDisciplineMassage        ACCDiscipline = "MASSAGE"
+	ACCDisciplineOsteopathy     ACCDiscipline = "OSTEOPATHY"
+	ACCDisciplineCounselling    ACCDiscipline = "COUNSELLING"
 	ACCDisciplineRehabilitation ACCDiscipline = "REHABILITATION"
 )
 
@@ -40,10 +40,10 @@ const (
 type ACCClaim struct {
 	ID                  string         `json:"id"`
 	TenantID            string         `json:"tenantId"`
-	SourceModule        string         `json:"sourceModule"`        // e.g. "tpt-doctor", "tpt-acupuncture"
+	SourceModule        string         `json:"sourceModule"` // e.g. "tpt-doctor", "tpt-acupuncture"
 	ACCClaimNumber      string         `json:"accClaimNumber,omitempty"`
 	PurchaseOrderNumber string         `json:"purchaseOrderNumber,omitempty"`
-	PatientNHI          string         `json:"patientNhi"`          // encrypted at rest; returned masked to non-privileged callers
+	PatientNHI          string         `json:"patientNhi"` // encrypted at rest; returned masked to non-privileged callers
 	ProviderHPI         string         `json:"providerHpi"`
 	DateOfAccident      time.Time      `json:"dateOfAccident"`
 	InjuryDescription   string         `json:"injuryDescription"`
@@ -178,18 +178,18 @@ func (h *ACCHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now().UTC()
 	claim := ACCClaim{
-		ID:              fmt.Sprintf("acc-%d", now.UnixNano()),
-		TenantID:        req.TenantID,
-		SourceModule:    req.SourceModule,
-		PatientNHI:      req.PatientNHI,
-		ProviderHPI:     req.ProviderHPI,
-		DateOfAccident:  req.DateOfAccident,
+		ID:                fmt.Sprintf("acc-%d", now.UnixNano()),
+		TenantID:          req.TenantID,
+		SourceModule:      req.SourceModule,
+		PatientNHI:        req.PatientNHI,
+		ProviderHPI:       req.ProviderHPI,
+		DateOfAccident:    req.DateOfAccident,
 		InjuryDescription: req.InjuryDescription,
-		DiagnosisCodes:  req.DiagnosisCodes,
-		Discipline:      req.Discipline,
-		Status:          ACCClaimStatusPending,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		DiagnosisCodes:    req.DiagnosisCodes,
+		Discipline:        req.Discipline,
+		Status:            ACCClaimStatusPending,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 
 	h.logger.Info("ACC claim created",
@@ -249,9 +249,9 @@ func (h *ACCHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	)
 
 	writeJSON(w, http.StatusAccepted, map[string]any{
-		"claimId":    id,
-		"status":     string(ACCClaimStatusActive),
-		"lodgedAt":   now,
+		"claimId":  id,
+		"status":   string(ACCClaimStatusActive),
+		"lodgedAt": now,
 	})
 }
 

@@ -11,7 +11,7 @@ import (
 
 // ReconciliationSummary provides an accounts-receivable snapshot for a tenant.
 type ReconciliationSummary struct {
-	TenantID string `json:"tenantId"`
+	TenantID string    `json:"tenantId"`
 	AsAt     time.Time `json:"asAt"`
 
 	// TotalOutstandingNZD is the sum of all issued+overdue invoice patient amounts
@@ -48,12 +48,12 @@ type AgingBuckets struct {
 
 // ImportBatch is a bank statement or funder payment batch uploaded for matching.
 type ImportBatch struct {
-	ID          string          `json:"id"`
-	TenantID    string          `json:"tenantId"`
-	Source      string          `json:"source"` // "BANK_STATEMENT", "ACC_REMITTANCE", "PHARMAC_REMITTANCE", "INSURANCE_EOB"
-	ImportedAt  time.Time       `json:"importedAt"`
-	RecordCount int             `json:"recordCount"`
-	Records     []ImportRecord  `json:"records"`
+	ID          string         `json:"id"`
+	TenantID    string         `json:"tenantId"`
+	Source      string         `json:"source"` // "BANK_STATEMENT", "ACC_REMITTANCE", "PHARMAC_REMITTANCE", "INSURANCE_EOB"
+	ImportedAt  time.Time      `json:"importedAt"`
+	RecordCount int            `json:"recordCount"`
+	Records     []ImportRecord `json:"records"`
 }
 
 // ImportRecord is a single line from a bank statement or remittance advice.
@@ -70,8 +70,8 @@ type ImportRecord struct {
 
 // ImportBatchRequest is the body for POST /api/v1/reconciliation/import.
 type ImportBatchRequest struct {
-	TenantID string        `json:"tenantId"`
-	Source   string        `json:"source"`
+	TenantID string         `json:"tenantId"`
+	Source   string         `json:"source"`
 	Records  []ImportRecord `json:"records"`
 }
 

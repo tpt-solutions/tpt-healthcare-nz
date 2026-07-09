@@ -28,17 +28,17 @@ const (
 // PHARMACClaim represents a single PHARMAC subsidy claim generated from one or
 // more MedicationDispense records.
 type PHARMACClaim struct {
-	ID                   string             `json:"id"`
-	Status               PHARMACClaimStatus `json:"status"`
-	PharmacyHSPNo        string             `json:"pharmacyHspNo"` // Health Service Provider number
-	ClaimPeriodStart     time.Time          `json:"claimPeriodStart"`
-	ClaimPeriodEnd       time.Time          `json:"claimPeriodEnd"`
-	DispenseIDs          []string           `json:"dispenseIds"`
-	TotalSubsidyAmountNZD float64           `json:"totalSubsidyAmountNzd"`
-	SubmittedAt          *time.Time         `json:"submittedAt,omitempty"`
-	PHARMACReferenceNo   string             `json:"pharmacReferenceNo,omitempty"`
-	CreatedAt            time.Time          `json:"createdAt"`
-	UpdatedAt            time.Time          `json:"updatedAt"`
+	ID                    string             `json:"id"`
+	Status                PHARMACClaimStatus `json:"status"`
+	PharmacyHSPNo         string             `json:"pharmacyHspNo"` // Health Service Provider number
+	ClaimPeriodStart      time.Time          `json:"claimPeriodStart"`
+	ClaimPeriodEnd        time.Time          `json:"claimPeriodEnd"`
+	DispenseIDs           []string           `json:"dispenseIds"`
+	TotalSubsidyAmountNZD float64            `json:"totalSubsidyAmountNzd"`
+	SubmittedAt           *time.Time         `json:"submittedAt,omitempty"`
+	PHARMACReferenceNo    string             `json:"pharmacReferenceNo,omitempty"`
+	CreatedAt             time.Time          `json:"createdAt"`
+	UpdatedAt             time.Time          `json:"updatedAt"`
 }
 
 // CreateClaimRequest is the body for POST /api/v1/claims.
@@ -53,7 +53,7 @@ type CreateClaimRequest struct {
 // HSD (Health Survey and Dispensing) reporting is mandated by the Ministry of Health
 // to provide aggregate dispensing data for medicines utilisation analysis.
 type HSDReportRequest struct {
-	PharmacyHSPNo    string    `json:"pharmacyHspNo"`
+	PharmacyHSPNo     string    `json:"pharmacyHspNo"`
 	ReportPeriodStart time.Time `json:"reportPeriodStart"`
 	ReportPeriodEnd   time.Time `json:"reportPeriodEnd"`
 	// IncludeAnonymised controls whether the report includes de-identified patient records.
@@ -78,16 +78,16 @@ type HSDReport struct {
 // HSDRecord is a single de-identified dispensing row for HSD reporting.
 type HSDRecord struct {
 	// PatientToken is a HMAC-SHA256 of the patient NHI, keyed per pharmacy.
-	PatientToken   string  `json:"patientToken"`
-	AgeGroupBand   string  `json:"ageGroupBand"` // e.g. "65-74"
-	Gender         string  `json:"gender"`       // "M", "F", "U"
-	NZMTCode       string  `json:"nzmtCode"`
-	FormularyCode  string  `json:"formularyCode"`
-	Quantity       float64 `json:"quantity"`
-	Unit           string  `json:"unit"`
+	PatientToken     string  `json:"patientToken"`
+	AgeGroupBand     string  `json:"ageGroupBand"` // e.g. "65-74"
+	Gender           string  `json:"gender"`       // "M", "F", "U"
+	NZMTCode         string  `json:"nzmtCode"`
+	FormularyCode    string  `json:"formularyCode"`
+	Quantity         float64 `json:"quantity"`
+	Unit             string  `json:"unit"`
 	SubsidyAmountNZD float64 `json:"subsidyAmountNzd"`
-	DispensedDate  string  `json:"dispensedDate"` // YYYY-MM (month granularity, not day)
-	IsSchedule2    bool    `json:"isSchedule2"`
+	DispensedDate    string  `json:"dispensedDate"` // YYYY-MM (month granularity, not day)
+	IsSchedule2      bool    `json:"isSchedule2"`
 }
 
 // ClaimsHandler handles all /api/v1/claims and /api/v1/reports/hsd routes.
@@ -188,15 +188,15 @@ func (h *ClaimsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	claim := PHARMACClaim{
-		ID:                   claimID,
-		Status:               PHARMACClaimStatusDraft,
-		PharmacyHSPNo:        req.PharmacyHSPNo,
-		ClaimPeriodStart:     req.ClaimPeriodStart,
-		ClaimPeriodEnd:       req.ClaimPeriodEnd,
-		DispenseIDs:          req.DispenseIDs,
+		ID:                    claimID,
+		Status:                PHARMACClaimStatusDraft,
+		PharmacyHSPNo:         req.PharmacyHSPNo,
+		ClaimPeriodStart:      req.ClaimPeriodStart,
+		ClaimPeriodEnd:        req.ClaimPeriodEnd,
+		DispenseIDs:           req.DispenseIDs,
 		TotalSubsidyAmountNZD: 0,
-		CreatedAt:            now,
-		UpdatedAt:            now,
+		CreatedAt:             now,
+		UpdatedAt:             now,
 	}
 
 	h.logger.Info("claim created",
