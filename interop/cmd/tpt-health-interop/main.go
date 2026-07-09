@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"text/tabwriter"
 
+	"github.com/PhillipC05/tpt-healthcare/core/terminology"
 	"github.com/PhillipC05/tpt-healthcare/interop/api"
 	"github.com/PhillipC05/tpt-healthcare/interop/mdns"
 	"github.com/spf13/cobra"
@@ -69,7 +70,7 @@ var serveCmd = &cobra.Command{
 			cfg.RateLimit = 100
 		}
 
-		srv := api.New(cfg)
+		srv := api.New(cfg, loadTerminologyStores()...)
 
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
@@ -214,4 +215,25 @@ func firstNonEmpty(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+// loadTerminologyStores loads terminology data files configured via viper
+// and returns a WithTermStore option. Returns nil if no data files are configured.
+func loadTerminologyStores() []api.ServerOption {
+	snomed, _ := terminology.LoadSNOMEDCSV(viper.GetString("snomed_csv"))
+	loinc, _ := terminology.LoadLOINC(viper.GetString("loinc_csv"))
+	icd10, _ := terminology.LoadICD10AM(viper.GetString("icd10_csv"))
+	nzmt, _ := terminology.LoadNZMT(viper.GetString("nzmt_csv"))
+
+	if snomed == nil && loinc == nil && icd10 == nil && nzmt == nil {
+		return nil
+	}
+
+	slog.Info("loaded terminology stores",
+		"snomed", snomed != nil,
+		"loinc", loinc != nil,
+		"icd10", icd10 != nil,
+		"nzmt", nzmt != nil,
+	)
+	return []api.ServerOption{api.WithTermStore(api.NewCoreTermStore(snomed, loinc, icd10, nzmt))}
 }

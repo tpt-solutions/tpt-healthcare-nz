@@ -84,7 +84,6 @@ var migrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Run database migrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-		return api.RunMigrations(context.Background(), viper.GetString("database.url"), logger)
+		return api.RunMigrations(context.Background(), viper.GetString("database.url"))
 	},
 }

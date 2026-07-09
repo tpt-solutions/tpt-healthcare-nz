@@ -87,9 +87,9 @@ type coreTermStore struct {
 	nzmt   *terminology.NZMTStore
 }
 
-// newCoreTermStore returns a TermStore backed by the given terminology
+// NewCoreTermStore returns a TermStore backed by the given terminology
 // stores. Pass nil for any store whose source data has not been loaded.
-func newCoreTermStore(snomed *terminology.SNOMEDStore, loinc *terminology.LOINCStore, icd10 *terminology.ICD10Store, nzmt *terminology.NZMTStore) TermStore {
+func NewCoreTermStore(snomed *terminology.SNOMEDStore, loinc *terminology.LOINCStore, icd10 *terminology.ICD10Store, nzmt *terminology.NZMTStore) TermStore {
 	return &coreTermStore{snomed: snomed, loinc: loinc, icd10: icd10, nzmt: nzmt}
 }
 

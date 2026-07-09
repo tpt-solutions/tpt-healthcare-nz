@@ -173,7 +173,7 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 }
 
 // RunMigrations runs the renal module's embedded SQL migrations.
-func RunMigrations(ctx context.Context, databaseURL string, logger *slog.Logger) error {
+func RunMigrations(ctx context.Context, databaseURL string) error {
 	pool, err := coredb.Connect(ctx, databaseURL)
 	if err != nil {
 		return fmt.Errorf("connect for migrations: %w", err)

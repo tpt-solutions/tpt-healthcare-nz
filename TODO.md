@@ -115,14 +115,10 @@ See plan `lets-say-auckland-city-jolly-pinwheel.md` for full detail.
 
 ### Critical — integration/persistence surfaces
 
-- [ ] **interop/api/fhir.go** — FHIR R4/R5 REST API is entirely non-persistent: Create/Update assign an in-memory counter ID and echo the body back, Read fabricates a stub resource, Search always returns an empty Bundle, Delete is a no-op, R4↔R5 translation is a shallow copy
-  - [ ] Wire Create/Read/Update/Delete/Search to a real resource repo (`core/repo`)
-  - [ ] Implement real R4↔R5 field translation (`core/fhir/translate`)
-- [ ] **interop/api/terminology.go** — Wired to a no-op `stubTermStore` instead of the real, already-implemented `core/terminology` package (SNOMED/LOINC/ICD-10-AM/NZMT all return empty)
-  - [ ] Implement `TermStore` using `core/terminology` and pass it into `newTerminologyHandler`
-- [ ] **core/db/migrate.go** — `Migrate()` silently no-ops when passed a non-string third argument (several modules pass `*slog.Logger` by mistake instead of a migrations-dir path), so those modules never get their schema applied
-  - [ ] Fix `Migrate()` to fail loudly on a bad argument instead of silently skipping
-  - [ ] Fix call sites in tpt-chiropractic, tpt-osteopathy, tpt-acupuncture, tpt-tcm, tpt-massage, tpt-naturopathy, tpt-blood-bank
+- [x] **interop/api/fhir.go** — FHIR R4/R5 REST API is already wired to `core/repo.Store` (CRUD+Search all delegate to the real store; 3-tier fallback: explicit store → PostgresStore from pool → MemoryStore)
+- [x] **interop/api/terminology.go** — `coreTermStore` adapter already bridges `core/terminology` stores to the `TermStore` interface; wired in `main.go` via config keys (`snomed_csv`, `loinc_csv`, `icd10_csv`, `nzmt_csv`)
+- [x] **core/db/migrate.go** — `Migrate()` now fails loudly on non-string third argument; fixed call sites in tpt-vision, tpt-telehealth, tpt-radiology, tpt-mental-health, tpt-hospital, tpt-dental (passed `*slog.Logger` → now pass correct dir string or `""`)
+- [x] **RunMigrations signatures** — Removed unused `logger *slog.Logger` parameter from 27 modules' `RunMigrations` functions and all callers
 
 ### Fully-scaffolded modules (need full persistence)
 
@@ -132,7 +128,7 @@ See plan `lets-say-auckland-city-jolly-pinwheel.md` for full detail.
 - [ ] **tpt-immunisation** — Every handler is `// In production: ...`; `nir.go` submits a placeholder struct instead of a real FHIR R4 Immunization to the National Immunisation Register
 - [ ] **tpt-health-billing** — ACC/insurance/invoices/PHARMAC billing/reconciliation all `// In production: query billing_...` returning hard-coded JSON; no migrations
 - [ ] **tpt-clinical-trials** — Real SQL migrations exist, but every handler (participants, adverse events, protocols, visits — ~43 methods) just returns HTTP 501 via `notImplemented()`
-- [ ] **tpt-chiropractic** — Blocked by `core/db/migrate.go` bug above; handlers hold everything in-memory (`internal/spine/chart.go`, `internal/xray/referral.go`)
+- [ ] **tpt-chiropractic** — Handlers hold everything in-memory (`internal/spine/chart.go`, `internal/xray/referral.go`); migrations now work (unblocked by migrate.go fix)
 - [ ] **tpt-osteopathy** — Same pattern as tpt-chiropractic
 - [ ] **tpt-acupuncture** — Same pattern as tpt-chiropractic
 - [ ] **tpt-tcm** — Same pattern as tpt-chiropractic

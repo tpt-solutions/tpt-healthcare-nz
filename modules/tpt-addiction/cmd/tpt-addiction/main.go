@@ -99,7 +99,7 @@ var migrateCmd = &cobra.Command{
 		dbURL := viper.GetString("database.url")
 		if dbURL == "" { return fmt.Errorf("database.url required (set TPT_ADDICTION_DATABASE_URL)") }
 		logger.Info("running migrations")
-		if err := api.RunMigrations(context.Background(), dbURL, logger); err != nil { return fmt.Errorf("migrations failed: %w", err) }
+		if err := api.RunMigrations(context.Background(), dbURL); err != nil { return fmt.Errorf("migrations failed: %w", err) }
 		logger.Info("migrations complete")
 		return nil
 	},

@@ -149,7 +149,7 @@ var migrateCmd = &cobra.Command{
 
 		logger.Info("running migrations", slog.String("database_url", dbURL))
 
-		if err := api.RunMigrations(context.Background(), dbURL, logger); err != nil {
+		if err := api.RunMigrations(context.Background(), dbURL); err != nil {
 			return fmt.Errorf("migrations failed: %w", err)
 		}
 

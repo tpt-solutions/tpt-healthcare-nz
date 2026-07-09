@@ -110,7 +110,7 @@ var migrateCmd = &cobra.Command{
 			return fmt.Errorf("database.url is required (set TPT_OSTEOPATHY_DATABASE_URL)")
 		}
 		logger.Info("running migrations", slog.String("database_url", dbURL))
-		if err := api.RunMigrations(context.Background(), dbURL, logger); err != nil {
+		if err := api.RunMigrations(context.Background(), dbURL); err != nil {
 			return fmt.Errorf("migrations failed: %w", err)
 		}
 		logger.Info("migrations complete")

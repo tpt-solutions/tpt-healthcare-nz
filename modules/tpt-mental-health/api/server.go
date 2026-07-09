@@ -234,14 +234,15 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 }
 
 // RunMigrations applies database migrations for the tpt-mental-health module.
-func RunMigrations(ctx context.Context, databaseURL string, logger *slog.Logger) error {
+func RunMigrations(ctx context.Context, databaseURL string) error {
 	pool, err := db.New(ctx, db.Config{DSN: databaseURL})
 	if err != nil {
 		return fmt.Errorf("connect for migrations: %w", err)
 	}
 	defer pool.Close()
 
-	if err := db.Migrate(ctx, pool, logger); err != nil {
+	// No migration files yet — safe no-op until db/migrate/ is populated.
+	if err := db.Migrate(ctx, pool, ""); err != nil {
 		return fmt.Errorf("run migrations: %w", err)
 	}
 	return nil
