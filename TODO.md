@@ -1,51 +1,186 @@
-# E2E Testing (Platform Review — first PR, mocked-backend scope)
+# TODO — TPT Healthcare NZ Testing Suite
 
-> CONTRIBUTING.md long promised a "Playwright smoke test for critical paths" that was never implemented. This tracks standing up a first, real e2e suite (mocked API boundary — no seed data/real backend yet) plus the deferred follow-ups identified during the review.
+## Phase 1-5: Core + Frontend (COMPLETED)
 
-## Workspace scaffolding
-- [x] `e2e/package.json`, `e2e/tsconfig.json`, `e2e/playwright.config.ts` (projects: clinic, portal)
-- [x] `e2e/fixtures/auth.ts` — mocked `POST /api/v1/auth/token` fixture
-- [x] `e2e/fixtures/test-data.ts` — `TEST_PRACTITIONER`, `TEST_PATIENT` mock payload constants
-- [x] `e2e/pages/` page objects: `LoginPage.ts`, `PatientListPage.ts`, `PatientDetailPage.ts`, `NewPatientPage.ts`
-- [x] `e2e/.gitignore` (test-results/, playwright-report/, blob-report/)
-- [x] Add `e2e` to `pnpm-workspace.yaml`
-- [x] Add `test:e2e` script to root `package.json`
+- [x] Test infrastructure (testutil/helpers, mock/)
+- [x] Core pure-logic (rbac, auth, ddi, resilience, translate, hl7)
+- [x] Core data-layer (repo, terminology, storage, nhi)
+- [x] Frontend package vitest (nz-codes, api-client, offline-store, fhir-types, ui)
+- [x] Frontend component tests (@tpt/ui components — Button, Card, Badge, Table, Input, Modal, PatientBanner, NHIInput, ErrorBoundary)
 
-## First 5 specs (mocked API, Chromium only)
-- [x] `e2e/specs/clinic/login.spec.ts` — success + failure
-- [x] `e2e/specs/clinic/patient-list.spec.ts`
-- [x] `e2e/specs/clinic/patient-detail.spec.ts`
-- [x] `e2e/specs/clinic/patient-create.spec.ts`
-- [x] `e2e/specs/portal/login.spec.ts`
+## Phase 6: Module Unit Tests (IN PROGRESS)
 
-## CI & docs
-- [x] Add parallel `e2e` job to `.github/workflows/ci.yml` (install, Playwright browsers, run, upload HTML report artifact)
-- [x] Update `CONTRIBUTING.md` to describe the real `e2e/` package and how to run it locally
-- [x] Run the suite locally to verify it actually passes — all 8 specs green (`pnpm test:e2e`)
+### Tier 1 — High Priority (Rich Pure Logic)
 
-## Bugs found and fixed while verifying the suite (not hypothetical — caught by writing real e2e tests)
-- [x] `apps/tpt-clinic/src/contexts/ApiContext.tsx` — `buildUrl()` called `new URL(relativePath)` with no base, which throws `TypeError: Invalid URL` in every real browser. **Every API call in tpt-clinic was silently failing before this fix.** Fixed by passing `window.location.origin` as the base.
-- [x] `packages/ui/package.json` — `NHIInput` imports `@tpt/nz-codes` but the package never declared it as a dependency; only worked for consumers (like tpt-clinic) that happened to also depend on it directly. Broke `tpt-portal`, which doesn't. Added as a direct dependency of `@tpt/ui`.
-- [x] `apps/tpt-clinic/package.json` & `apps/tpt-portal/package.json` — `vite-plugin-pwa`'s registration code imports `workbox-window`, which wasn't declared as a direct dependency of either app, breaking pnpm's strict `node_modules` resolution in dev mode. Added to both.
-- [x] Investigated: `tpt-clinic`'s `vite build` (bypassing `tsc`) is **not actually hung** — it's a slow cold-start dependency pre-bundle (~110s with `node_modules/.vite` cleared; the real bundling step itself is ~6s). Confirmed by clearing the cache and timing a fresh build to completion. The e2e webServer still uses the Vite dev server (faster, avoids paying that cold-start cost on every CI run for two apps), so no code change was needed here — this item is resolved as "understood, not a bug."
+- [ ] **tpt-dental** — fdi/chart_test.go (~25 tests)
+  - [x] Write test file
+  - [x] Run & verify all pass
+- [ ] **tpt-dental** — fdi/surface_test.go (~18 tests)
+  - [x] Write test file
+  - [x] Run & verify all pass
+- [ ] **tpt-dental** — procedure/codes_test.go (~10 tests)
+  - [x] Write test file
+  - [x] Run & verify all pass
+- [ ] **tpt-dental** — acc/claim_test.go (~12 tests)
+  - [x] Write test file
+  - [x] Run & verify all pass
+- [ ] **tpt-vision** — refraction/prescription_test.go (~22 tests)
+  - [ ] Write test file
+  - [ ] Run & verify all pass
+- [ ] **tpt-vision** — optical/dispensing_test.go (~8 tests)
+  - [ ] Write test file
+  - [ ] Run & verify all pass
+- [ ] **tpt-vision** — ophthalmology/exam_test.go (~5 tests)
+  - [ ] Write test file
+  - [ ] Run & verify all pass
+- [ ] **tpt-vision** — acc/claim_test.go (~10 tests)
+  - [ ] Write test file
+  - [ ] Run & verify all pass
+- [ ] **tpt-allied-health** — acc/claim_test.go (~19 tests)
+  - [ ] Write test file
+  - [ ] Run & verify all pass
 
-## Deferred follow-ups (tracked, not forgotten)
-- [x] Real-backend e2e integration: seed data/test practitioner, containerize `tpt-doctor` (the service that actually owns `/api/v1/patients` — not `interop`, which has no patients route), re-point `patient-create.spec.ts` at a real Postgres + tpt-doctor stack.
-  - **Major pre-existing bug found and fixed while wiring this up**: `modules/tpt-doctor` did not compile at all — `make build-doctor` had presumably never succeeded. Handler code across `patients_handler.go`, `claims_handler.go`, `pho.go`, `prescriptions_handler.go`, `referrals.go`, and `server.go` called methods/types that don't exist on the real `core/nhi`, `core/nes`, `core/acc`, `core/audit`, and `core/fhir/r5` packages (e.g. `nhiClient.Lookup` vs. the real `GetPatient`, `auditTrail.Write(Actor:, Metadata:)` vs. the real `Record(PrincipalID:, Details:)`, `acc.LodgeRequest` which doesn't exist, `patient.MarshalJSON()`/`SearchName()` which aren't defined on the plain `r5.Patient` struct). Fixed all of it so the module now builds and passes `go vet`.
-  - Also fixed: `POST /api/v1/patients` expected a `{nhi, patient: <FHIR Patient>}` body, but the clinic UI's `NewPatientPage.tsx` has always sent a flat form (`firstName`, `lastName`, `dateOfBirth`, `gender`, address fields, etc.) — every real patient registration would have 400'd. Added `patientCreateRequest.toFHIRPatient()` to build the FHIR resource server-side from the flat form fields, and made the NHI field genuinely optional (matching the UI's "leave blank to have NHI assigned by the Ministry" copy) with Ministry confirmation only attempted when an NHI client is configured.
-  - Also fixed: the clinic app never sent `X-Tenant-ID`, which `TenantExtraction` middleware requires on every authenticated request — every real API call would have 400'd regardless of the above. Added `getTenantId()` to `AuthContext`/`ApiContext`, sourced from a new `tenant_id` field in the login response.
-  - Added a dev/test-only `POST /api/v1/auth/token` endpoint (`modules/tpt-doctor/api/dev_auth_handler.go`, `core/auth/jwt`-backed) gated by `TPT_DOCTOR_DEV_AUTH_ENABLED`, since `tpt-doctor` is otherwise wired for Auth0 and there was no local login path for tests. Never enable this in production.
-  - Added `modules/tpt-doctor/Dockerfile` + `docker-entrypoint.sh` (migrate → seed → serve) and a `tpt-doctor` service in `deploy/docker-compose.dev.yml`. The pre-existing `interop` placeholder is untouched — it isn't the service this flow needs.
-  - Added `deploy/seed/e2e_seed.sql` (a fixed dev tenant row) and `patient-create.spec.ts` now has a real-backend mode gated by `E2E_REAL_BACKEND=true` via a new `e2e/fixtures/real-backend-auth.ts` (default `pnpm test:e2e`/CI still runs the mocked variant, unaffected). See CONTRIBUTING.md for how to run it.
-  - **Not done** (flagged, not silently skipped): `core/backup` and all of `interop/api` have their own, unrelated pre-existing compile errors (confirmed via `go build ./core/...` and `go build ./interop/...`) — neither is imported by `tpt-doctor`, so they didn't block this work, but `make build` / `make test` at the repo root will still fail until those are separately fixed.
-- [ ] `tpt-admin` e2e coverage
-- [ ] Deeper `tpt-portal` coverage (booking, records, consent, messages)
-- [ ] Appointments/queue/encounter/prescriptions e2e flows in `tpt-clinic`
-- [ ] E2E coverage for specialty-module pages (blocked on their backend services still being placeholder containers)
-- [ ] Visual regression + multi-browser/mobile matrix
-- [ ] Go unit/integration test coverage for the 34 currently-untested `modules/tpt-*` packages (separate effort from e2e, flagged by the same platform review)
-- [x] Go unit test coverage for a first batch of previously-untested `core/*` packages: `acc`, `auth`, `auth/jwt`, `ddi`, `fhir/translate`, `hl7`, `rbac`, `repo/search`, `resilience`, `storage/provider`, `terminology`. Added shared `core/mock/` fakes (checker, repository, storage, token) and `core/testutil/` helpers to support them.
-  - Still untested in `core/`: `accounting`, `accounts`, `ai`, `audit`, `backup` (also has pre-existing compile errors, see above), `breach`, `comms-prefs`, `consent`, `db`, `email`, `episurv`, `erms`, `fax`, `fhir` (top-level, as opposed to `fhir/translate`), `forms`, `gp2gp`, `health`, `hpi`, `inventory`, `medsafe`, `messaging`, `middleware`, `msd`, `nes`, `outbox`, `payment`, `payroll`, `pharmac`, `pharmacy-gateway`, `primhd`, `push`, `queue`, `recall`, `scoring`, `sms`, `subscription`, `tenant`, `video`, `worksafe`.
-- [x] Vitest coverage added for previously-untested frontend packages: `@tpt/api-client`, `@tpt/fhir-types`, `@tpt/nz-codes`, `@tpt/offline-store`, `@tpt/ui` (components: Badge, Button, Card, ErrorBoundary, Input, Modal, NHIInput, PatientBanner, Table).
-- [x] Add ErrorBoundary components to `tpt-clinic`/`tpt-portal`/`tpt-admin` — added a shared `ErrorBoundary` class component to `packages/ui` (`components/ErrorBoundary.tsx`, exported from `src/index.ts`) with a "Try again" / "Reload page" fallback UI matching the existing design system, and wrapped each app's route tree in it (`App.tsx` in all three apps). Verified by simulating a real render crash (patient record missing `name`) end-to-end in a browser: the fallback rendered, "Try again" correctly re-threw (same bad data), and "Reload page" reloaded without losing the URL. Full e2e suite (8/8) still passes after wrapping.
-  - Bonus fix found while verifying `tpt-admin` in a real browser: it had the **same missing `workbox-window` dependency bug** as `tpt-clinic`/`tpt-portal` (never caught because nothing had loaded the admin app in a real browser before) — its `main.tsx` was failing to load entirely, leaving a blank page. Fixed the same way (added `workbox-window` to `apps/tpt-admin/package.json`).
+### Tier 1 — Sub-discipline Tests (Repeated Patterns)
+
+- [ ] **tpt-allied-health** — speech/therapy_test.go (~10 tests)
+  - [ ] Write test file
+  - [ ] Run & verify all pass
+- [ ] **tpt-allied-health** — physio/treatment_test.go (~8 tests)
+  - [ ] Write test file
+  - [ ] Run & verify all pass
+- [ ] **tpt-allied-health** — ot/assessment_test.go (~8 tests)
+  - [ ] Write test file
+  - [ ] Run & verify all pass
+- [ ] **tpt-allied-health** — podiatry/care_test.go (~10 tests)
+  - [ ] Write test file
+  - [ ] Run & verify all pass
+
+### Tier 2 — Community Health
+
+- [ ] **tpt-community-health** — homevisit/visit_test.go (~12 tests)
+  - [ ] Write test file
+  - [ ] Run & verify all pass
+- [ ] **tpt-community-health** — outreach/program_test.go (~12 tests)
+  - [ ] Write test file
+  - [ ] Run & verify all pass
+- [ ] **tpt-community-health** — districtnursing/plan_test.go (~8 tests)
+  - [ ] Write test file
+  - [ ] Run & verify all pass
+
+### Tier 2 — Addiction
+
+- [ ] **tpt-addiction** — methadone/programme_test.go (~7 tests)
+  - [ ] Write test file
+  - [ ] Run & verify all pass
+
+## Skipped
+
+- [ ] **tpt-palliative** — No testable logic (pure data types, zero functions)
+
+## Phase 7: Hospital Go-Live Gaps (Auckland City / Starship)
+
+Gap analysis for a large adult tertiary hospital (Auckland City) and paediatric tertiary
+hospital (Starship) going live on `modules/tpt-hospital` + `modules/tpt-maternal-child-health`.
+See plan `lets-say-auckland-city-jolly-pinwheel.md` for full detail.
+
+- [ ] **tpt-hospital / tpt-pathology / tpt-radiology** — No lab/imaging order entry (CPOE) linked to admissions
+  - [ ] Design order model (admissionID-linked) and wire to pathology/radiology result callback
+- [ ] **core/hl7** — No HL7 ADT (A01/A02/A03/A08) or ORM/ORU message builders (`core/hl7/{client,mllp,parser}.go` is transport/parser only)
+  - [ ] Add ADT message builders for admit/transfer/discharge/update events
+  - [ ] Add ORM/ORU builders for lab/imaging order and result messages
+- [ ] **tpt-hospital/api/billing.go** — DRG/casemix grouper is a placeholder (`deriveDRG` hardcodes ~4 AR-DRG buckets from first letter of diagnosis code)
+  - [ ] Implement real AR-DRG/WIES grouper in `core/terminology/`
+- [ ] **core/fhir** — No FHIR `Location` resource; `Encounter` only exists in r5, not r4
+  - [ ] Add Location resource type; add r4 Encounter for compatibility
+- [ ] **tpt-hospital/api/pharmacy_*.go** — eMAR lacks barcode/five-rights verification, controlled-drug (S8) register, IV pump/smart-infusion integration
+  - [ ] Scope and implement bedside verification + S8 register
+- [ ] **tpt-hospital/api/icu.go** — ICU/PICU charting has no fluid balance charting or EWS/PEWS early-warning score engine; no PICU-specific charting distinct from adult ICU
+  - [ ] Add fluid balance charting
+  - [ ] Add EWS (adult) / PEWS (paediatric) scoring engine
+- [ ] **tpt-hospital + tpt-maternal-child-health** — Paediatric/NICU/PICU tooling (nicu.go, paediatrics_picu.go, paediatrics_growth.go) not linked back to `hospital_admissions`
+  - [ ] Wire NICU/PICU/growth-chart records to the hospital admission model
+- [ ] **tpt-hospital / tpt-maternal-child-health** — No weight-based/paediatric dosing calculator (mg/kg dosing, max-dose caps)
+  - [ ] Implement paediatric dosing calculator
+- [ ] **tpt-hospital/api/wards.go** — No bed-board/patient-flow forecasting beyond a live capacity snapshot (no discharge-ETA prediction, escalation triggers)
+  - [ ] Design and implement patient-flow forecasting dashboard
+- [ ] **tpt-hospital/api/admissions_*.go** — Discharge summaries not confirmed auto-populated from coding/pharmacy/admission data, nor wired to GP transmission (core/gp2gp)
+  - [ ] Auto-populate discharge summary from admission/coding/pharmacy data
+  - [ ] Confirm/wire GP transmission path
+
+## Phase 8: Replace Stubs & Scaffolds with Real Implementations
+
+Repo-wide audit for placeholder/stub/scaffold code that needs replacing with real, working
+implementations. Found via full sweep of `core/`, `interop/`, and all `modules/*`.
+See plan `lets-say-auckland-city-jolly-pinwheel.md` for full detail.
+
+### Critical — integration/persistence surfaces
+
+- [ ] **interop/api/fhir.go** — FHIR R4/R5 REST API is entirely non-persistent: Create/Update assign an in-memory counter ID and echo the body back, Read fabricates a stub resource, Search always returns an empty Bundle, Delete is a no-op, R4↔R5 translation is a shallow copy
+  - [ ] Wire Create/Read/Update/Delete/Search to a real resource repo (`core/repo`)
+  - [ ] Implement real R4↔R5 field translation (`core/fhir/translate`)
+- [ ] **interop/api/terminology.go** — Wired to a no-op `stubTermStore` instead of the real, already-implemented `core/terminology` package (SNOMED/LOINC/ICD-10-AM/NZMT all return empty)
+  - [ ] Implement `TermStore` using `core/terminology` and pass it into `newTerminologyHandler`
+- [ ] **core/db/migrate.go** — `Migrate()` silently no-ops when passed a non-string third argument (several modules pass `*slog.Logger` by mistake instead of a migrations-dir path), so those modules never get their schema applied
+  - [ ] Fix `Migrate()` to fail loudly on a bad argument instead of silently skipping
+  - [ ] Fix call sites in tpt-chiropractic, tpt-osteopathy, tpt-acupuncture, tpt-tcm, tpt-massage, tpt-naturopathy, tpt-blood-bank
+
+### Fully-scaffolded modules (need full persistence)
+
+- [ ] **tpt-pharmacy** — Dispensing/claims workflow is entirely `// In production: ...` placeholders; no `db/migrate` directory; nothing persisted
+- [ ] **tpt-counselling** — EAP claims/session notes/private-practice CRUD all in-memory; list endpoints return hardcoded empty slices; no migrations
+- [ ] **tpt-nutrition** — Food diary/meal plans/body composition CRUD in-memory only; no migrations
+- [ ] **tpt-immunisation** — Every handler is `// In production: ...`; `nir.go` submits a placeholder struct instead of a real FHIR R4 Immunization to the National Immunisation Register
+- [ ] **tpt-health-billing** — ACC/insurance/invoices/PHARMAC billing/reconciliation all `// In production: query billing_...` returning hard-coded JSON; no migrations
+- [ ] **tpt-clinical-trials** — Real SQL migrations exist, but every handler (participants, adverse events, protocols, visits — ~43 methods) just returns HTTP 501 via `notImplemented()`
+- [ ] **tpt-chiropractic** — Blocked by `core/db/migrate.go` bug above; handlers hold everything in-memory (`internal/spine/chart.go`, `internal/xray/referral.go`)
+- [ ] **tpt-osteopathy** — Same pattern as tpt-chiropractic
+- [ ] **tpt-acupuncture** — Same pattern as tpt-chiropractic
+- [ ] **tpt-tcm** — Same pattern as tpt-chiropractic
+- [ ] **tpt-massage** — Same pattern as tpt-chiropractic
+- [ ] **tpt-naturopathy** — Same pattern as tpt-chiropractic
+
+### Missing/broken migrations
+
+- [ ] **tpt-aged-care** — Handlers issue real SQL against `aged_care_plans`, `aged_care_funded_hours_allocations`, `aged_care_interrai_assessments`, `aged_care_nasc_referrals`, `aged_care_nasc_service_plans`, but no migration anywhere creates these tables
+- [ ] **tpt-blood-bank** — Real query code (crossmatch/donors/inventory) but no `db/migrate` directory (also hit by the `Migrate()` bug above)
+- [ ] **tpt-practice** — Real query code (rostering/settings) but no `db/migrate` directory
+
+### Partial stubs in otherwise-real modules
+
+- [ ] **tpt-allied-health** — One "get by ID" handler each in `acc_handler.go`, `ot.go`, `podiatry.go`, `speech.go` marked `// TODO: fetch from database; stub returns placeholder data.` (11 handlers total)
+- [ ] **tpt-vision** — `acc.go` (ListClaims, GetClaimFHIR), `ophth.go` (GetExamFHIR), `optical.go` (GetOrderFHIR), `refraction.go` return hard-coded/placeholder payloads instead of real repo queries
+- [ ] **tpt-dental** — `acc.go` (SubmitClaim + claim CRUD) and `procedure.go` (treatment-record CRUD) explicitly commented "Simplified stub", operate on in-memory data
+- [ ] **tpt-doctor** — `api/pho.go` (PHO extract "would transmit" but doesn't) and `api/referrals.go` (`Send` doesn't dispatch to receiving provider's inbox)
+- [ ] **tpt-pathology** — `api/mllp.go` `resolveTenant` for inbound HL7 MLLP messages doesn't look up the lab site code against a tenant mapping
+- [ ] **tpt-cardiology / tpt-rehabilitation / tpt-maternal-child-health** — `api/helpers.go` `recordAudit` isn't in the same DB transaction as the clinical write it audits (durability/consistency gap)
+
+### Moderate stubs in core/
+
+- [ ] **core/subscription/engine.go** — `buildNotificationBundle` emits a minimal FHIR R5 SubscriptionNotification with a hardcoded `"Subscription/unknown"` reference instead of the real subscription ID
+- [ ] **core/backup/scheduler.go** — `recordSuccess` records a 0-byte backup as successful (only warns) when no storage provider is configured — silent data-loss risk
+- [ ] **core/nhi/nhi.go** — NHI types marked `// TODO: replace with proper FHIR R4 types`
+
+## Phase 9: Tenant Service-Line Profiles
+
+Onboarding a new facility (e.g. a large tertiary hospital vs. a single-service clinic)
+currently has no concept of "which service lines does this tenant run." Recommendation:
+a service-line profile/enablement layer rather than fixed per-hospital templates, since
+real facilities are combinations (e.g. one campus with both adult and paediatric wards)
+that a hard-coded template can't cleanly represent. See `core/tenant` for the existing
+generic `Tenant` model this would extend.
+
+- [ ] **core/tenant** — Design a service-line profile: tenant selects which service lines it runs (ED, ICU, NICU/PICU, theatre, oncology, etc.) at onboarding
+  - [ ] Define the service-line catalogue/schema
+  - [ ] Wire service-line selection to toggle relevant modules/routes per tenant
+  - [ ] Seed sensible defaults per service line (ward-type list, triage scale, relevant formulary subset)
+  - [ ] Support facilities with multiple/mixed service lines (no forking or per-site hard-coded templates)
+
+## Final Verification
+
+- [ ] Run `go test ./modules/tpt-dental/...`
+- [ ] Run `go test ./modules/tpt-vision/...`
+- [ ] Run `go test ./modules/tpt-allied-health/...`
+- [ ] Run `go test ./modules/tpt-community-health/...`
+- [ ] Run `go test ./modules/tpt-addiction/...`
+- [ ] Run `gofmt -w ./modules/...`
+- [ ] Run `make lint`

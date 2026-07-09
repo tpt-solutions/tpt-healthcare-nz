@@ -131,7 +131,7 @@ func (s *Server) handleEAPListClaims(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, []eap.Claim{})
+	writeJSON(w, http.StatusOK, []eap.EAPClaim{})
 }
 
 func (s *Server) handleEAPCreateClaim(w http.ResponseWriter, r *http.Request) {
@@ -143,7 +143,7 @@ func (s *Server) handleEAPCreateClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	var claim eap.Claim
+	var claim eap.EAPClaim
 	if err := decodeJSON(r, &claim); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_JSON", Message: err.Error()})
 		return
@@ -180,7 +180,7 @@ func (s *Server) handleEAPUpdateClaim(w http.ResponseWriter, r *http.Request) {
 	}
 	claimID := r.PathValue("claimId")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	var claim eap.Claim
+	var claim eap.EAPClaim
 	if err := decodeJSON(r, &claim); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_JSON", Message: err.Error()})
 		return

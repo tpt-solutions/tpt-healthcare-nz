@@ -7,19 +7,20 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/PhillipC05/tpt-healthcare/core/repo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // newR4Handler returns an http.Handler for the FHIR R4 route with prefix stripped.
-func newR4Handler() http.Handler {
-	h := newFHIRHandler(fhirVersionR4)
+func newR4Handler(store repo.Store) http.Handler {
+	h := newFHIRHandler(fhirVersionR4, store)
 	return http.StripPrefix("/fhir/r4", h.router())
 }
 
 // TestR5MetadataFHIRVersion verifies the R5 capability statement reports fhirVersion 5.0.0.
 func TestR5MetadataFHIRVersion(t *testing.T) {
-	handler := newR5Handler()
+	handler := newR5Handler(repo.NewMemoryStore())
 	req := httptest.NewRequest(http.MethodGet, "/fhir/r5/metadata", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -32,7 +33,7 @@ func TestR5MetadataFHIRVersion(t *testing.T) {
 
 // TestR4MetadataFHIRVersion verifies the R4 capability statement reports fhirVersion 4.0.1.
 func TestR4MetadataFHIRVersion(t *testing.T) {
-	handler := newR4Handler()
+	handler := newR4Handler(repo.NewMemoryStore())
 	req := httptest.NewRequest(http.MethodGet, "/fhir/r4/metadata", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -45,9 +46,9 @@ func TestR4MetadataFHIRVersion(t *testing.T) {
 	assert.Equal(t, "4.0.1", cs["fhirVersion"], "R4 handler must report FHIR version 4.0.1")
 }
 
-// TestTranslateR4toR5PreservesKeys verifies that translateR4toR5 returns a map
-// containing all keys present in the input (no data is silently dropped).
-func TestTranslateR4toR5PreservesKeys(t *testing.T) {
+// TestTranslatePatientR4toR5PreservesData verifies that translateResourceR4toR5
+// maps a Patient's fields onto the R5 shape using the dedicated translator.
+func TestTranslatePatientR4toR5PreservesData(t *testing.T) {
 	input := map[string]any{
 		"resourceType": "Patient",
 		"id":           "test-1",
@@ -56,56 +57,46 @@ func TestTranslateR4toR5PreservesKeys(t *testing.T) {
 		"gender":       "male",
 	}
 
-	output := translateR4toR5(input)
+	output := translateResourceR4toR5("Patient", input)
 
-	for k := range input {
-		assert.Contains(t, output, k, "R4→R5 translation must preserve key %q", k)
-		assert.Equal(t, input[k], output[k], "R4→R5 must not change value of key %q", k)
-	}
+	assert.Equal(t, "Patient", output["resourceType"])
+	assert.Equal(t, "test-1", output["id"])
+	assert.Equal(t, "1980-01-01", output["birthDate"])
+	assert.Equal(t, "male", output["gender"])
+	names, ok := output["name"].([]any)
+	require.True(t, ok)
+	require.Len(t, names, 1)
+	name := names[0].(map[string]any)
+	assert.Equal(t, "Smith", name["family"])
 }
 
-// TestTranslateR5toR4PreservesKeys verifies that translateR5toR4 returns a map
-// containing all keys present in the input.
-func TestTranslateR5toR4PreservesKeys(t *testing.T) {
+// TestTranslateUnmappedResourcePassesThrough verifies that resource types
+// without a dedicated translator are passed through unchanged (no data loss).
+func TestTranslateUnmappedResourcePassesThrough(t *testing.T) {
 	input := map[string]any{
-		"resourceType": "Patient",
-		"id":           "test-2",
-		"name":         []any{map[string]any{"family": "Doe", "given": []any{"Jane"}}},
-		"birthDate":    "1990-06-15",
-		"gender":       "female",
-		"meta":         map[string]any{"versionId": "1"},
-	}
-
-	output := translateR5toR4(input)
-
-	for k := range input {
-		assert.Contains(t, output, k, "R5→R4 translation must preserve key %q", k)
-	}
-}
-
-// TestR4R5RoundTrip verifies that translating R4→R5→R4 returns a map
-// structurally equivalent to the original.
-func TestR4R5RoundTrip(t *testing.T) {
-	original := map[string]any{
 		"resourceType": "Observation",
 		"id":           "obs-42",
 		"status":       "final",
 		"code":         map[string]any{"text": "Blood pressure"},
 	}
 
-	roundTripped := translateR5toR4(translateR4toR5(original))
+	toR5 := translateResourceR4toR5("Observation", input)
+	for k, v := range input {
+		assert.Equal(t, v, toR5[k], "unmapped resource type must pass through key %q unchanged", k)
+	}
 
-	for k, v := range original {
-		assert.Equal(t, v, roundTripped[k], "round-trip must preserve key %q", k)
+	toR4 := translateResourceR5toR4("Observation", toR5)
+	for k, v := range input {
+		assert.Equal(t, v, toR4[k], "round-trip must preserve key %q", k)
 	}
 }
 
 // TestR4CreateReturns201 verifies that POST to the R4 handler creates a resource
 // and returns HTTP 201 with a Location header, mirroring the R5 behaviour.
 func TestR4CreateReturns201(t *testing.T) {
-	handler := newR4Handler()
+	handler := newR4Handler(repo.NewMemoryStore())
 	body := `{"resourceType":"Patient","name":[{"family":"Tane","given":["Wiremu"]}]}`
-	req := httptest.NewRequest(http.MethodPost, "/fhir/r4/Patient", strings.NewReader(body))
+	req := withTestTenant(httptest.NewRequest(http.MethodPost, "/fhir/r4/Patient", strings.NewReader(body)))
 	req.Header.Set("Content-Type", "application/fhir+json")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -122,8 +113,8 @@ func TestR4CreateReturns201(t *testing.T) {
 // TestFHIRSearchReturnsBundle verifies that GET /{resourceType} (search) returns
 // a FHIR Bundle with type=searchset.
 func TestFHIRSearchReturnsBundle(t *testing.T) {
-	handler := newR5Handler()
-	req := httptest.NewRequest(http.MethodGet, "/fhir/r5/Patient", nil)
+	handler := newR5Handler(repo.NewMemoryStore())
+	req := withTestTenant(httptest.NewRequest(http.MethodGet, "/fhir/r5/Patient", nil))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -135,21 +126,43 @@ func TestFHIRSearchReturnsBundle(t *testing.T) {
 }
 
 // TestFHIRDeleteReturns204 verifies that DELETE /{resourceType}/{id} returns
-// HTTP 204 No Content.
+// HTTP 204 No Content for a resource that exists.
 func TestFHIRDeleteReturns204(t *testing.T) {
-	handler := newR5Handler()
-	req := httptest.NewRequest(http.MethodDelete, "/fhir/r5/Patient/to-delete", nil)
+	store := repo.NewMemoryStore()
+	handler := newR5Handler(store)
+
+	createBody := `{"resourceType":"Patient","name":[{"family":"ToDelete"}]}`
+	createReq := withTestTenant(httptest.NewRequest(http.MethodPost, "/fhir/r5/Patient", strings.NewReader(createBody)))
+	createRec := httptest.NewRecorder()
+	handler.ServeHTTP(createRec, createReq)
+	require.Equal(t, http.StatusCreated, createRec.Code)
+	var created map[string]any
+	require.NoError(t, json.NewDecoder(createRec.Body).Decode(&created))
+	id := created["id"].(string)
+
+	req := withTestTenant(httptest.NewRequest(http.MethodDelete, "/fhir/r5/Patient/"+id, nil))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusNoContent, rec.Code)
 }
 
 // TestFHIRUpdateReturns200 verifies that PUT /{resourceType}/{id} returns HTTP 200
-// with the updated resource echoed back.
+// with the updated resource echoed back once it has been created.
 func TestFHIRUpdateReturns200(t *testing.T) {
-	handler := newR5Handler()
-	body := `{"resourceType":"Patient","id":"p1","name":[{"family":"Updated"}]}`
-	req := httptest.NewRequest(http.MethodPut, "/fhir/r5/Patient/p1", strings.NewReader(body))
+	store := repo.NewMemoryStore()
+	handler := newR5Handler(store)
+
+	createBody := `{"resourceType":"Patient","id":"p1","name":[{"family":"Original"}]}`
+	createReq := withTestTenant(httptest.NewRequest(http.MethodPost, "/fhir/r5/Patient", strings.NewReader(createBody)))
+	createRec := httptest.NewRecorder()
+	handler.ServeHTTP(createRec, createReq)
+	require.Equal(t, http.StatusCreated, createRec.Code)
+	var created map[string]any
+	require.NoError(t, json.NewDecoder(createRec.Body).Decode(&created))
+	id := created["id"].(string)
+
+	body := `{"resourceType":"Patient","name":[{"family":"Updated"}]}`
+	req := withTestTenant(httptest.NewRequest(http.MethodPut, "/fhir/r5/Patient/"+id, strings.NewReader(body)))
 	req.Header.Set("Content-Type", "application/fhir+json")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -157,16 +170,16 @@ func TestFHIRUpdateReturns200(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	var resource map[string]any
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resource))
-	assert.Equal(t, "p1", resource["id"])
+	assert.Equal(t, id, resource["id"])
 	assert.Equal(t, "Patient", resource["resourceType"])
 }
 
 // TestFHIRPOSTWithIDReturnsError verifies that POST /{resourceType}/{id}
 // (which is ambiguous in FHIR) is rejected.
 func TestFHIRPOSTWithIDReturnsError(t *testing.T) {
-	handler := newR5Handler()
+	handler := newR5Handler(repo.NewMemoryStore())
 	body := `{"resourceType":"Patient","id":"existing"}`
-	req := httptest.NewRequest(http.MethodPost, "/fhir/r5/Patient/existing", strings.NewReader(body))
+	req := withTestTenant(httptest.NewRequest(http.MethodPost, "/fhir/r5/Patient/existing", strings.NewReader(body)))
 	req.Header.Set("Content-Type", "application/fhir+json")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -176,7 +189,7 @@ func TestFHIRPOSTWithIDReturnsError(t *testing.T) {
 // TestFHIRCapabilityStatementStructure verifies the full structure of the R5
 // capability statement including required rest resources.
 func TestFHIRCapabilityStatementStructure(t *testing.T) {
-	handler := newR5Handler()
+	handler := newR5Handler(repo.NewMemoryStore())
 	req := httptest.NewRequest(http.MethodGet, "/fhir/r5/metadata", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)

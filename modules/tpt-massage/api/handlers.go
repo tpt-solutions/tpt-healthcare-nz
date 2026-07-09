@@ -194,7 +194,7 @@ func (s *Server) handleSubmitClaim(w http.ResponseWriter, r *http.Request) {
 	coreClaim := coreAcc.Claim{
 		PatientNHI:        strings.ToUpper(internalClaim.PatientNHI),
 		ProviderHPI:       principal.PractitionerID,
-		DateOfAccident:    internalClaim.DateOfAccident,
+		DateOfAccident:    internalClaim.AccidentDate,
 		InjuryDescription: internalClaim.InjuryDesc,
 	}
 	lodged, err := s.accClient.Lodge(r.Context(), coreClaim)
@@ -324,7 +324,7 @@ func (s *Server) handleListSOAPNotes(w http.ResponseWriter, r *http.Request) {
 	if !s.checkConsent(w, r, patientNHI) {
 		return
 	}
-	writeJSON(w, http.StatusOK, []soap.Note{})
+	writeJSON(w, http.StatusOK, []soap.SOAPNote{})
 }
 
 func (s *Server) handleCreateSOAPNote(w http.ResponseWriter, r *http.Request) {
@@ -336,7 +336,7 @@ func (s *Server) handleCreateSOAPNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	var note soap.Note
+	var note soap.SOAPNote
 	if err := decodeJSON(r, &note); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_JSON", Message: err.Error()})
 		return
@@ -385,7 +385,7 @@ func (s *Server) handleUpdateSOAPNote(w http.ResponseWriter, r *http.Request) {
 	}
 	noteID := r.PathValue("noteId")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	var note soap.Note
+	var note soap.SOAPNote
 	if err := decodeJSON(r, &note); err != nil {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_JSON", Message: err.Error()})
 		return

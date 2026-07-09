@@ -7,6 +7,11 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/PhillipC05/tpt-healthcare/core/db"
+	"github.com/PhillipC05/tpt-healthcare/core/db/migrate"
+	immdb "github.com/PhillipC05/tpt-healthcare/modules/tpt-immunisation/db"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Config holds all runtime configuration for the tpt-immunisation service.
@@ -27,22 +32,29 @@ type Config struct {
 type Server struct {
 	cfg    Config
 	mux    *http.ServeMux
+	pool   *pgxpool.Pool
 	logger *slog.Logger
 	nir    *NIRClient
 }
 
 // NewServer constructs and wires up a Server with all routes and middleware.
-func NewServer(cfg Config, logger *slog.Logger) *Server {
+func NewServer(cfg Config, logger *slog.Logger) (*Server, error) {
+	pool, err := db.Connect(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("connect to database: %w", err)
+	}
+
 	nirClient := NewNIRClient(cfg.NIRBaseURL, cfg.NIRTokenURL, cfg.NIRClientID, cfg.NIRClientSecret)
 
 	s := &Server{
 		cfg:    cfg,
 		mux:    http.NewServeMux(),
+		pool:   pool,
 		logger: logger,
 		nir:    nirClient,
 	}
 	s.registerRoutes()
-	return s
+	return s, nil
 }
 
 func (s *Server) registerRoutes() {
@@ -87,7 +99,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func Start(ctx context.Context, cfg Config) error {
 	logger := slog.Default()
 
-	srv := NewServer(cfg, logger)
+	srv, err := NewServer(cfg, logger)
+	if err != nil {
+		return fmt.Errorf("new server: %w", err)
+	}
 
 	addr := net.JoinHostPort(cfg.Host, fmt.Sprintf("%d", cfg.Port))
 	httpSrv := &http.Server{
@@ -121,8 +136,13 @@ func Start(ctx context.Context, cfg Config) error {
 
 // RunMigrations runs all embedded SQL migrations against the given database URL.
 func RunMigrations(ctx context.Context, databaseURL string) error {
-	slog.Default().Info("running immunisation migrations", "database_url", databaseURL)
-	return nil
+	pool, err := db.Connect(ctx, databaseURL)
+	if err != nil {
+		return fmt.Errorf("connect for migrations: %w", err)
+	}
+	defer pool.Close()
+	r := migrate.New(immdb.Migrations, pool)
+	return r.Up(ctx)
 }
 
 // Validate checks configuration and connectivity without starting the HTTP server.

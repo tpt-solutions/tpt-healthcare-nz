@@ -197,7 +197,7 @@ func (s *Server) handleCreateRemedy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rem.ID = uuid.New().String()
-	rem.PrescribedBy = principal.PractitionerID
+	rem.ClinicianID = principal.PractitionerID
 	now := time.Now().UnixMilli()
 	rem.CreatedAt = now
 	rem.UpdatedAt = now
@@ -226,7 +226,7 @@ func (s *Server) handleUpdateRemedy(w http.ResponseWriter, r *http.Request) {
 	}
 	rem.ID = remedyID
 	rem.PatientNHI = patientNHI
-	rem.PrescribedBy = principal.PractitionerID
+	rem.ClinicianID = principal.PractitionerID
 	rem.UpdatedAt = time.Now().UnixMilli()
 	s.recordEvent(r, principal, "update", "Remedy", remedyID, patientNHI)
 	writeJSON(w, http.StatusOK, rem)

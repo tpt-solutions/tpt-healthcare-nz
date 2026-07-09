@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
+	"github.com/google/uuid"
 )
 
 // ---------------------------------------------------------------------------
@@ -254,7 +255,7 @@ func (h *SubscriptionHandler) handleCreate(w http.ResponseWriter, r *http.Reques
 	now := time.Now().UTC()
 	sub := &Subscription{
 		ResourceType: "Subscription",
-		ID:           nextResourceID(),
+		ID:           uuid.NewString(),
 		TenantID:     tenantIDFromRequest(r),
 		Status:       SubscriptionStatusRequested,
 		Topic:        req.Topic,

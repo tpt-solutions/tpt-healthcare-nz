@@ -13,6 +13,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/auth"
 	"github.com/PhillipC05/tpt-healthcare/core/consent"
+	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 	"github.com/PhillipC05/tpt-healthcare/core/nhi"
 	chiAcc "github.com/PhillipC05/tpt-healthcare/modules/tpt-chiropractic/internal/acc"
@@ -115,7 +116,58 @@ func (s *Server) handleGetSpine(w http.ResponseWriter, r *http.Request) {
 	if !s.checkConsent(w, r, patientNHI) {
 		return
 	}
-	writeJSON(w, http.StatusOK, &spine.SpinalChart{PatientNHI: patientNHI})
+
+	// Load or create the spinal chart for this patient
+	var chartID string
+	var createdAt, updatedAt int64
+	err := s.pool.QueryRow(r.Context(),
+		`SELECT id, created_at, updated_at FROM chiropractic_spine_charts
+		 WHERE patient_nhi = $1 ORDER BY updated_at DESC LIMIT 1`, patientNHI,
+	).Scan(&chartID, &createdAt, &updatedAt)
+	if err != nil {
+		if db.IsNoRows(err) {
+			// No chart yet — return empty chart
+			writeJSON(w, http.StatusOK, &spine.SpinalChart{PatientNHI: patientNHI})
+			return
+		}
+		s.logger.Error("get spine chart failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to load spinal chart"})
+		return
+	}
+
+	// Load vertebra entries
+	rows, err := s.pool.Query(r.Context(),
+		`SELECT segment, region, fixation, subluxation, misalignment, mobility,
+		        tenderness, muscle_tone, x_ray_findings, adjustment, note, updated_at
+		 FROM chiropractic_vertebra_entries
+		 WHERE chart_id = $1
+		 ORDER BY segment`, chartID)
+	if err != nil {
+		s.logger.Error("get vertebrae failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to load vertebrae"})
+		return
+	}
+	defer rows.Close()
+
+	entries := make([]spine.VertebraEntry, 0)
+	for rows.Next() {
+		var e spine.VertebraEntry
+		if err := rows.Scan(&e.Segment, &e.Region, &e.Fixation, &e.Subluxation,
+			&e.Misalignment, &e.Mobility, &e.Tenderness, &e.MuscleTone,
+			&e.XRayFindings, &e.Adjustment, &e.Note, &e.UpdatedAt); err != nil {
+			s.logger.Error("scan vertebra row", "error", err)
+			continue
+		}
+		entries = append(entries, e)
+	}
+
+	writeJSON(w, http.StatusOK, spine.SpinalChart{
+		PatientNHI:  patientNHI,
+		Entries:     entries,
+		ChartDate:   createdAt,
+		CreatedAt:   createdAt,
+		UpdatedAt:   updatedAt,
+	})
 }
 
 func (s *Server) handleSaveSpine(w http.ResponseWriter, r *http.Request) {
@@ -143,7 +195,68 @@ func (s *Server) handleSaveSpine(w http.ResponseWriter, r *http.Request) {
 	if chart.CreatedAt == 0 {
 		chart.CreatedAt = now
 	}
-	s.recordEvent(r, principal, "update", "SpinalChart", patientNHI, patientNHI)
+
+	// Upsert the chart
+	var chartID string
+	err := s.pool.QueryRow(r.Context(),
+		`INSERT INTO chiropractic_spine_charts (patient_nhi, clinician_id, chart_date, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5)
+		 ON CONFLICT (id) DO UPDATE SET clinician_id = $2, chart_date = $3, updated_at = $5
+		 RETURNING id`,
+		patientNHI, principal.PractitionerID, chart.ChartDate, chart.CreatedAt, chart.UpdatedAt,
+	).Scan(&chartID)
+	if err != nil {
+		// Try finding existing chart
+		err2 := s.pool.QueryRow(r.Context(),
+			`SELECT id FROM chiropractic_spine_charts WHERE patient_nhi = $1 ORDER BY updated_at DESC LIMIT 1`,
+			patientNHI,
+		).Scan(&chartID)
+		if err2 != nil {
+			// Insert new chart
+			err3 := s.pool.QueryRow(r.Context(),
+				`INSERT INTO chiropractic_spine_charts (patient_nhi, clinician_id, chart_date, created_at, updated_at)
+				 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+				patientNHI, principal.PractitionerID, chart.ChartDate, chart.CreatedAt, chart.UpdatedAt,
+			).Scan(&chartID)
+			if err3 != nil {
+				s.logger.Error("save spine chart failed", "error", err3)
+				writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to save spinal chart"})
+				return
+			}
+		} else {
+			// Update existing chart
+			_, err = s.pool.Exec(r.Context(),
+				`UPDATE chiropractic_spine_charts SET clinician_id = $1, chart_date = $2, updated_at = $3
+				 WHERE id = $4`,
+				principal.PractitionerID, chart.ChartDate, chart.UpdatedAt, chartID)
+			if err != nil {
+				s.logger.Error("update spine chart failed", "error", err)
+				writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to update spinal chart"})
+				return
+			}
+		}
+	}
+
+	// Upsert vertebra entries
+	for _, entry := range chart.Entries {
+		entry.UpdatedAt = now
+		_, err := s.pool.Exec(r.Context(),
+			`INSERT INTO chiropractic_vertebra_entries
+			 (chart_id, segment, region, fixation, subluxation, misalignment, mobility, tenderness, muscle_tone, x_ray_findings, adjustment, note, updated_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			 ON CONFLICT (chart_id, segment) DO UPDATE SET
+			 region = $3, fixation = $4, subluxation = $5, misalignment = $6,
+			 mobility = $7, tenderness = $8, muscle_tone = $9, x_ray_findings = $10,
+			 adjustment = $11, note = $12, updated_at = $13`,
+			chartID, entry.Segment, entry.Region, entry.Fixation, entry.Subluxation,
+			entry.Misalignment, entry.Mobility, entry.Tenderness, entry.MuscleTone,
+			entry.XRayFindings, entry.Adjustment, entry.Note, entry.UpdatedAt)
+		if err != nil {
+			s.logger.Error("save vertebra entry failed", "segment", entry.Segment, "error", err)
+		}
+	}
+
+	s.recordEvent(r, principal, "update", "SpinalChart", chartID, patientNHI)
 	s.logger.Info("spinal chart saved", slog.String("patient_nhi", hashNHI(patientNHI)))
 	writeJSON(w, http.StatusOK, chart)
 }
@@ -165,7 +278,42 @@ func (s *Server) handleGetVertebra(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_SEGMENT", Message: "vertebra segment is required"})
 		return
 	}
-	writeJSON(w, http.StatusOK, spine.VertebraEntry{Segment: seg})
+
+	// Find the chart for this patient
+	var chartID string
+	err := s.pool.QueryRow(r.Context(),
+		`SELECT id FROM chiropractic_spine_charts WHERE patient_nhi = $1 ORDER BY updated_at DESC LIMIT 1`,
+		patientNHI).Scan(&chartID)
+	if err != nil {
+		if db.IsNoRows(err) {
+			writeJSON(w, http.StatusOK, spine.VertebraEntry{Segment: seg})
+			return
+		}
+		s.logger.Error("get vertebra chart failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to load vertebra"})
+		return
+	}
+
+	var entry spine.VertebraEntry
+	err = s.pool.QueryRow(r.Context(),
+		`SELECT segment, region, fixation, subluxation, misalignment, mobility,
+		        tenderness, muscle_tone, x_ray_findings, adjustment, note, updated_at
+		 FROM chiropractic_vertebra_entries
+		 WHERE chart_id = $1 AND segment = $2`, chartID, seg,
+	).Scan(&entry.Segment, &entry.Region, &entry.Fixation, &entry.Subluxation,
+		&entry.Misalignment, &entry.Mobility, &entry.Tenderness, &entry.MuscleTone,
+		&entry.XRayFindings, &entry.Adjustment, &entry.Note, &entry.UpdatedAt)
+	if err != nil {
+		if db.IsNoRows(err) {
+			writeJSON(w, http.StatusOK, spine.VertebraEntry{Segment: seg})
+			return
+		}
+		s.logger.Error("get vertebra failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to load vertebra"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, entry)
 }
 
 func (s *Server) handleUpdateVertebra(w http.ResponseWriter, r *http.Request) {
@@ -193,6 +341,55 @@ func (s *Server) handleUpdateVertebra(w http.ResponseWriter, r *http.Request) {
 	}
 	entry.Segment = seg
 	entry.UpdatedAt = time.Now().UnixMilli()
+
+	// Find or create chart
+	var chartID string
+	err := s.pool.QueryRow(r.Context(),
+		`SELECT id FROM chiropractic_spine_charts WHERE patient_nhi = $1 ORDER BY updated_at DESC LIMIT 1`,
+		patientNHI).Scan(&chartID)
+	if err != nil {
+		if db.IsNoRows(err) {
+			// Create new chart
+			err = s.pool.QueryRow(r.Context(),
+				`INSERT INTO chiropractic_spine_charts (patient_nhi, clinician_id, chart_date, created_at, updated_at)
+				 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+				patientNHI, principal.PractitionerID, entry.UpdatedAt, entry.UpdatedAt, entry.UpdatedAt,
+			).Scan(&chartID)
+			if err != nil {
+				s.logger.Error("create chart for vertebra failed", "error", err)
+				writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to create chart"})
+				return
+			}
+		} else {
+			s.logger.Error("find chart for vertebra failed", "error", err)
+			writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to load chart"})
+			return
+		}
+	}
+
+	// Upsert the vertebra entry
+	_, err = s.pool.Exec(r.Context(),
+		`INSERT INTO chiropractic_vertebra_entries
+		 (chart_id, segment, region, fixation, subluxation, misalignment, mobility, tenderness, muscle_tone, x_ray_findings, adjustment, note, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		 ON CONFLICT (chart_id, segment) DO UPDATE SET
+		 region = $3, fixation = $4, subluxation = $5, misalignment = $6,
+		 mobility = $7, tenderness = $8, muscle_tone = $9, x_ray_findings = $10,
+		 adjustment = $11, note = $12, updated_at = $13`,
+		chartID, entry.Segment, entry.Region, entry.Fixation, entry.Subluxation,
+		entry.Misalignment, entry.Mobility, entry.Tenderness, entry.MuscleTone,
+		entry.XRayFindings, entry.Adjustment, entry.Note, entry.UpdatedAt)
+	if err != nil {
+		s.logger.Error("upsert vertebra failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to save vertebra"})
+		return
+	}
+
+	// Update chart timestamp
+	_, _ = s.pool.Exec(r.Context(),
+		`UPDATE chiropractic_spine_charts SET updated_at = $1 WHERE id = $2`,
+		entry.UpdatedAt, chartID)
+
 	s.recordEvent(r, principal, "update", "VertebraEntry", seg, patientNHI)
 	writeJSON(w, http.StatusOK, entry)
 }
@@ -204,7 +401,32 @@ func (s *Server) handleListClaims(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, []chiAcc.Claim{})
+	rows, err := s.pool.Query(r.Context(),
+		`SELECT id, patient_nhi, provider_hpi, practice_id, accident_date, accident_desc,
+		        diagnosis, region, visit_count, total_fee, status, acc_claim_number, notes,
+		        created_at, updated_at
+		 FROM chiropractic_acc_claims
+		 ORDER BY created_at DESC LIMIT 100`)
+	if err != nil {
+		s.logger.Error("list ACC claims failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to list claims"})
+		return
+	}
+	defer rows.Close()
+
+	claims := make([]chiAcc.Claim, 0)
+	for rows.Next() {
+		var c chiAcc.Claim
+		if err := rows.Scan(&c.ID, &c.PatientNHI, &c.ProviderHPI, &c.PracticeID,
+			&c.AccidentDate, &c.AccidentDesc, &c.Diagnosis, &c.Region,
+			&c.VisitCount, &c.TotalFee, &c.Status, &c.ACCClaimNumber,
+			&c.Notes, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			s.logger.Error("scan ACC claim row", "error", err)
+			continue
+		}
+		claims = append(claims, c)
+	}
+	writeJSON(w, http.StatusOK, claims)
 }
 
 func (s *Server) handleCreateClaim(w http.ResponseWriter, r *http.Request) {
@@ -230,6 +452,20 @@ func (s *Server) handleCreateClaim(w http.ResponseWriter, r *http.Request) {
 	claim.Status = chiAcc.StatusDraft
 	claim.CreatedAt = time.Now().UTC()
 	claim.UpdatedAt = claim.CreatedAt
+
+	_, err := s.pool.Exec(r.Context(),
+		`INSERT INTO chiropractic_acc_claims (id, patient_nhi, provider_hpi, practice_id, accident_date, accident_desc, diagnosis, region, visit_count, total_fee, status, notes, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+		claim.ID, claim.PatientNHI, claim.ProviderHPI, claim.PracticeID,
+		claim.AccidentDate, claim.AccidentDesc, claim.Diagnosis, claim.Region,
+		claim.VisitCount, claim.TotalFee, claim.Status, claim.Notes,
+		claim.CreatedAt, claim.UpdatedAt)
+	if err != nil {
+		s.logger.Error("persist ACC claim failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to create claim"})
+		return
+	}
+
 	s.recordEvent(r, principal, "create", "ACCClaim", claim.ID, claim.PatientNHI)
 	writeJSON(w, http.StatusCreated, claim)
 }
@@ -244,7 +480,27 @@ func (s *Server) handleGetClaim(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_CLAIM_ID", Message: "claim ID is required"})
 		return
 	}
-	writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("claim %s not found", claimID)})
+
+	var claim chiAcc.Claim
+	err := s.pool.QueryRow(r.Context(),
+		`SELECT id, patient_nhi, provider_hpi, practice_id, accident_date, accident_desc,
+		        diagnosis, region, visit_count, total_fee, status, acc_claim_number, notes,
+		        created_at, updated_at
+		 FROM chiropractic_acc_claims WHERE id = $1`, claimID,
+	).Scan(&claim.ID, &claim.PatientNHI, &claim.ProviderHPI, &claim.PracticeID,
+		&claim.AccidentDate, &claim.AccidentDesc, &claim.Diagnosis, &claim.Region,
+		&claim.VisitCount, &claim.TotalFee, &claim.Status, &claim.ACCClaimNumber,
+		&claim.Notes, &claim.CreatedAt, &claim.UpdatedAt)
+	if err != nil {
+		if db.IsNoRows(err) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("claim %s not found", claimID)})
+			return
+		}
+		s.logger.Error("get ACC claim failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to load claim"})
+		return
+	}
+	writeJSON(w, http.StatusOK, claim)
 }
 
 func (s *Server) handleSubmitClaim(w http.ResponseWriter, r *http.Request) {
@@ -408,7 +664,33 @@ func (s *Server) handleListXRayReferrals(w http.ResponseWriter, r *http.Request)
 	if !s.checkConsent(w, r, patientNHI) {
 		return
 	}
-	writeJSON(w, http.StatusOK, []xray.Referral{})
+
+	rows, err := s.pool.Query(r.Context(),
+		`SELECT id, patient_nhi, clinician_id, practice_id, region, views, urgency,
+		        indication, findings, radiologist, report_url, status, created_at, updated_at
+		 FROM chiropractic_xray_referrals
+		 WHERE patient_nhi = $1
+		 ORDER BY created_at DESC`, patientNHI)
+	if err != nil {
+		s.logger.Error("list X-ray referrals failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to list referrals"})
+		return
+	}
+	defer rows.Close()
+
+	referrals := make([]xray.Referral, 0)
+	for rows.Next() {
+		var ref xray.Referral
+		if err := rows.Scan(&ref.ID, &ref.PatientNHI, &ref.ClinicianID, &ref.PracticeID,
+			&ref.Region, &ref.Views, &ref.Urgency, &ref.Indication,
+			&ref.Findings, &ref.Radiologist, &ref.ReportURL, &ref.Status,
+			&ref.CreatedAt, &ref.UpdatedAt); err != nil {
+			s.logger.Error("scan X-ray referral row", "error", err)
+			continue
+		}
+		referrals = append(referrals, ref)
+	}
+	writeJSON(w, http.StatusOK, referrals)
 }
 
 func (s *Server) handleCreateXRayReferral(w http.ResponseWriter, r *http.Request) {
@@ -432,6 +714,24 @@ func (s *Server) handleCreateXRayReferral(w http.ResponseWriter, r *http.Request
 	ref.ID = uuid.New().String()
 	ref.ClinicianID = principal.PractitionerID
 	ref.CreatedAt = time.Now().UnixMilli()
+	ref.UpdatedAt = ref.CreatedAt
+	if ref.Status == "" {
+		ref.Status = "ordered"
+	}
+
+	_, err := s.pool.Exec(r.Context(),
+		`INSERT INTO chiropractic_xray_referrals (id, patient_nhi, clinician_id, practice_id, region, views, urgency, indication, findings, radiologist, report_url, status, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+		ref.ID, ref.PatientNHI, ref.ClinicianID, ref.PracticeID,
+		ref.Region, ref.Views, ref.Urgency, ref.Indication,
+		ref.Findings, ref.Radiologist, ref.ReportURL, ref.Status,
+		ref.CreatedAt, ref.UpdatedAt)
+	if err != nil {
+		s.logger.Error("persist X-ray referral failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to create referral"})
+		return
+	}
+
 	s.recordEvent(r, principal, "create", "XRayReferral", ref.ID, ref.PatientNHI)
 	writeJSON(w, http.StatusCreated, ref)
 }
@@ -449,5 +749,29 @@ func (s *Server) handleGetXRayReferral(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	refID := r.PathValue("referralId")
-	writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("referral %s not found", refID)})
+	if refID == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_REFERRAL_ID", Message: "referral ID is required"})
+		return
+	}
+
+	var ref xray.Referral
+	err := s.pool.QueryRow(r.Context(),
+		`SELECT id, patient_nhi, clinician_id, practice_id, region, views, urgency,
+		        indication, findings, radiologist, report_url, status, created_at, updated_at
+		 FROM chiropractic_xray_referrals
+		 WHERE id = $1 AND patient_nhi = $2`, refID, patientNHI,
+	).Scan(&ref.ID, &ref.PatientNHI, &ref.ClinicianID, &ref.PracticeID,
+		&ref.Region, &ref.Views, &ref.Urgency, &ref.Indication,
+		&ref.Findings, &ref.Radiologist, &ref.ReportURL, &ref.Status,
+		&ref.CreatedAt, &ref.UpdatedAt)
+	if err != nil {
+		if db.IsNoRows(err) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("referral %s not found", refID)})
+			return
+		}
+		s.logger.Error("get X-ray referral failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to load referral"})
+		return
+	}
+	writeJSON(w, http.StatusOK, ref)
 }

@@ -84,8 +84,7 @@ func TestAuditEventPathIsRecorded(t *testing.T) {
 	require.Len(t, events, 1)
 
 	e := events[0]
-	details, ok := e.Details.(map[string]any)
-	require.True(t, ok, "Details should be a map[string]any")
+	details := e.Details
 	assert.Equal(t, "/api/v1/nhi/match", details["path"])
 	assert.Equal(t, "returned 0 candidates", details["detail"])
 }

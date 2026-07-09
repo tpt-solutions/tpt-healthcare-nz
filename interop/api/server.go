@@ -21,6 +21,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/nhi"
 	"github.com/PhillipC05/tpt-healthcare/core/push"
 	corequeue "github.com/PhillipC05/tpt-healthcare/core/queue"
+	"github.com/PhillipC05/tpt-healthcare/core/repo"
 	"github.com/PhillipC05/tpt-healthcare/core/subscription"
 	"github.com/PhillipC05/tpt-healthcare/core/tenant"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -68,6 +69,9 @@ type Server struct {
 	eventBus       *events.Bus
 	subEngine      *subscription.Engine
 	logger         *slog.Logger
+	// FHIR resource repository and terminology store
+	fhirStore repo.Store
+	termStore TermStore
 }
 
 // New initialises a Server with the provided dependencies. Passing nil for
@@ -152,6 +156,19 @@ func WithReminderWorker(w *corequeue.ReminderWorker) ServerOption {
 // WithLogger sets the structured logger.
 func WithLogger(l *slog.Logger) ServerOption {
 	return func(s *Server) { s.logger = l }
+}
+
+// WithFHIRStore attaches a repo.Store used to persist FHIR resources.
+// If not supplied, the server derives a PostgresStore from the attached
+// pool (see WithPool), or falls back to an in-memory store if no pool is set.
+func WithFHIRStore(store repo.Store) ServerOption {
+	return func(s *Server) { s.fhirStore = store }
+}
+
+// WithTermStore attaches a TermStore used to serve terminology lookups.
+// If not supplied, the terminology handler falls back to a no-op stub.
+func WithTermStore(store TermStore) ServerOption {
+	return func(s *Server) { s.termStore = store }
 }
 
 // Start begins listening for HTTP requests and blocks until ctx is cancelled,
@@ -276,12 +293,23 @@ func (s *Server) registerRoutes() {
 		s.router.Handle("/api/v1/admin/", s.withAdminAuth(ob.adminRouter()))
 	}
 
+	// FHIR resource repository: prefer an explicitly attached store, else
+	// derive one from the DB pool, else fall back to an in-memory store.
+	fhirStore := s.fhirStore
+	if fhirStore == nil {
+		if s.pool != nil {
+			fhirStore = repo.NewPostgresStore(s.pool)
+		} else {
+			fhirStore = repo.NewMemoryStore()
+		}
+	}
+
 	// FHIR R5 — tenant-scoped, auth required.
-	fhirR5 := newFHIRHandler(fhirVersionR5)
+	fhirR5 := newFHIRHandler(fhirVersionR5, fhirStore)
 	s.router.Handle("/fhir/r5/", s.withTenant(s.withAuth(http.StripPrefix("/fhir/r5", fhirR5.router()))))
 
 	// FHIR R4 — tenant-scoped, auth required.
-	fhirR4 := newFHIRHandler(fhirVersionR4)
+	fhirR4 := newFHIRHandler(fhirVersionR4, fhirStore)
 	s.router.Handle("/fhir/r4/", s.withTenant(s.withAuth(http.StripPrefix("/fhir/r4", fhirR4.router()))))
 
 	// NHI — tenant-scoped, auth required.
@@ -289,7 +317,7 @@ func (s *Server) registerRoutes() {
 	s.router.Handle("/api/v1/nhi/", s.withTenant(s.withAuth(nhiH.router())))
 
 	// Terminology — tenant-scoped, auth required.
-	termH := newTerminologyHandler()
+	termH := newTerminologyHandler(s.termStore)
 	s.router.Handle("/api/v1/terminology/", s.withTenant(s.withAuth(termH.router())))
 
 	// Subscriptions — tenant-scoped, auth required.

@@ -8,7 +8,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/PhillipC05/tpt-healthcare/core/db"
+	"github.com/PhillipC05/tpt-healthcare/core/db/migrate"
 	"github.com/PhillipC05/tpt-healthcare/core/medsafe"
+	pharmacydb "github.com/PhillipC05/tpt-healthcare/modules/tpt-pharmacy/db"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Config holds all runtime configuration for the tpt-pharmacy service.
@@ -29,12 +33,18 @@ type Config struct {
 type Server struct {
 	cfg           Config
 	mux           *http.ServeMux
+	pool          *pgxpool.Pool
 	medsafeClient *medsafe.Client
 	logger        *slog.Logger
 }
 
 // NewServer constructs and wires up a Server with all routes and middleware.
-func NewServer(cfg Config, logger *slog.Logger) *Server {
+func NewServer(cfg Config, logger *slog.Logger) (*Server, error) {
+	pool, err := db.Connect(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("connect to database: %w", err)
+	}
+
 	var msClient *medsafe.Client
 	if cfg.MedsafeBaseURL != "" {
 		token := cfg.MedsafeToken
@@ -46,16 +56,17 @@ func NewServer(cfg Config, logger *slog.Logger) *Server {
 	s := &Server{
 		cfg:           cfg,
 		mux:           http.NewServeMux(),
+		pool:          pool,
 		medsafeClient: msClient,
 		logger:        logger,
 	}
 	s.registerRoutes()
-	return s
+	return s, nil
 }
 
 func (s *Server) registerRoutes() {
-	dispensingHandler := &DispensingHandler{medsafeClient: s.medsafeClient, logger: s.logger}
-	claimsHandler := &ClaimsHandler{logger: s.logger}
+	dispensingHandler := &DispensingHandler{pool: s.pool, medsafeClient: s.medsafeClient, logger: s.logger}
+	claimsHandler := &ClaimsHandler{pool: s.pool, logger: s.logger}
 
 	// Dispensing routes
 	s.mux.HandleFunc("GET /api/v1/dispensing", dispensingHandler.List)
@@ -103,7 +114,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func Start(ctx context.Context, cfg Config) error {
 	logger := slog.Default()
 
-	srv := NewServer(cfg, logger)
+	srv, err := NewServer(cfg, logger)
+	if err != nil {
+		return fmt.Errorf("new server: %w", err)
+	}
 
 	addr := net.JoinHostPort(cfg.Host, fmt.Sprintf("%d", cfg.Port))
 	httpSrv := &http.Server{
@@ -137,10 +151,13 @@ func Start(ctx context.Context, cfg Config) error {
 
 // RunMigrations runs all embedded SQL migrations against the given database URL.
 func RunMigrations(ctx context.Context, databaseURL string) error {
-	// Delegate to core/db migration runner. Wired at build time via core dependency.
-	// Placeholder until the core db.Migrate API is imported here.
-	slog.Default().Info("running pharmacy migrations", "database_url", databaseURL)
-	return nil
+	pool, err := db.Connect(ctx, databaseURL)
+	if err != nil {
+		return fmt.Errorf("connect for migrations: %w", err)
+	}
+	defer pool.Close()
+	r := migrate.New(pharmacydb.Migrations, pool)
+	return r.Up(ctx)
 }
 
 // Validate checks configuration and connectivity without starting the HTTP server.
@@ -172,5 +189,9 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
+	if err := s.pool.Ping(r.Context()); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable", "reason": "database not reachable"})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 }

@@ -1,14 +1,49 @@
 package api
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/PhillipC05/tpt-healthcare/core/middleware"
+	corenhi "github.com/PhillipC05/tpt-healthcare/core/nhi"
+	corequeue "github.com/PhillipC05/tpt-healthcare/core/queue"
 	"github.com/google/uuid"
 )
+
+// apiError is a generic JSON error body used by handlers in this package
+// that are not part of the FHIR REST API (which uses OperationOutcome).
+type apiError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+// idFromPath returns the named path segment, mirroring the r.PathValue
+// convention already used elsewhere in this package (e.g. queue.go).
+func idFromPath(r *http.Request, name string) string {
+	return r.PathValue(name)
+}
+
+// tenantFromCtx retrieves the tenant UUID placed in the request context by
+// middleware.TenantExtraction, returned as a string.
+func tenantFromCtx(ctx context.Context) (string, bool) {
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		return "", false
+	}
+	return tenantID.String(), true
+}
+
+// decodeJSON decodes a request body into v.
+func decodeJSON(r *http.Request, v any) error {
+	defer r.Body.Close()
+	return json.NewDecoder(r.Body).Decode(v)
+}
 
 // QRPayload is the data encoded in a clinic check-in QR code.
 // It contains only non-sensitive identifiers; the patient proves their identity
@@ -103,6 +138,43 @@ func (s *Server) RedeemCheckInQR(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delegate to the existing queue check-in handler logic.
-	s.checkInPatient(w, r, queueID, req.PatientNHI, "portal-qr")
+	// Delegate to the existing queue check-in logic.
+	s.checkInPatient(w, r, queueID, req.PatientNHI)
+}
+
+// checkInPatient checks a patient into queueID by NHI, sourced from a QR
+// redemption. It mirrors handleQueueCheckIn's logic (queue.go) using
+// CheckInPortal as the method, since QR check-in is always patient-initiated.
+func (s *Server) checkInPatient(w http.ResponseWriter, r *http.Request, queueID uuid.UUID, nhi string) {
+	nhiUpper := strings.ToUpper(strings.TrimSpace(nhi))
+	if !corenhi.ValidateNHI(nhiUpper) {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_NHI", Message: "invalid NHI number"})
+		return
+	}
+
+	patientID, err := s.lookupPatientIDByNHI(r.Context(), nhiUpper)
+	if err != nil {
+		// Unknown patient is not a hard error — they can still join the queue anonymously.
+		patientID = uuid.Nil
+	}
+	var patientIDPtr *uuid.UUID
+	if patientID != uuid.Nil {
+		patientIDPtr = &patientID
+	}
+
+	entry, estWait, err := s.queueService.CheckIn(r.Context(), queueID, patientIDPtr, nhiUpper, nil, corequeue.CheckInPortal)
+	if err != nil {
+		if errors.Is(err, corequeue.ErrQueueNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "QUEUE_NOT_FOUND", Message: "queue not found"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "CHECKIN_FAILED", Message: "check-in failed"})
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"entryId":              entry.ID,
+		"position":             entry.Position,
+		"estimatedWaitMinutes": estWait,
+	})
 }

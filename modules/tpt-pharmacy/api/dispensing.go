@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/medsafe"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // --- Domain types ---
@@ -91,19 +93,50 @@ type Schedule2ConfirmRequest struct {
 
 // DispensingHandler handles all /api/v1/dispensing routes.
 type DispensingHandler struct {
+	pool          *pgxpool.Pool
 	medsafeClient *medsafe.Client
 	logger        *slog.Logger
 }
 
 // ListPrescriptions handles GET /api/v1/prescriptions — lists incoming GP prescriptions.
 func (h *DispensingHandler) ListPrescriptions(w http.ResponseWriter, r *http.Request) {
-	// In production: query the FHIR repository for MedicationRequest resources
-	// with status=active addressed to this pharmacy organisation.
+	rows, err := h.pool.Query(r.Context(),
+		`SELECT id, medication_request_id, patient_nhi, status, is_schedule2, created_at
+		 FROM pharmacy_dispensing_records
+		 WHERE status = 'pending'
+		 ORDER BY created_at DESC
+		 LIMIT 100`)
+	if err != nil {
+		h.logger.Error("list prescriptions query failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to list prescriptions")
+		return
+	}
+	defer rows.Close()
+
+	entries := make([]map[string]any, 0)
+	for rows.Next() {
+		var id, medReqID, patientNHI, status string
+		var isSchedule2 bool
+		var createdAt time.Time
+		if err := rows.Scan(&id, &medReqID, &patientNHI, &status, &isSchedule2, &createdAt); err != nil {
+			h.logger.Error("scan prescription row", "error", err)
+			continue
+		}
+		entries = append(entries, map[string]any{
+			"id":                  id,
+			"medicationRequestId": medReqID,
+			"patientNhi":          patientNHI,
+			"status":              status,
+			"isSchedule2":         isSchedule2,
+			"createdAt":           createdAt,
+		})
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"resourceType": "Bundle",
 		"type":         "searchset",
-		"total":        0,
-		"entry":        []any{},
+		"total":        len(entries),
+		"entry":        entries,
 	})
 }
 
@@ -124,12 +157,17 @@ func (h *DispensingHandler) ReceivePrescription(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// In production:
-	//   1. Validate NHI checksum via core/nhi.
-	//   2. Validate requester APC via core/hpi.
-	//   3. Persist to FHIR repository (core/repo).
-	//   4. Write AuditEvent via core/audit.
-	//   5. Create a DispensingRecord in pending state.
+	now := time.Now().UTC()
+	recordID := fmt.Sprintf("rx-%d", now.UnixNano())
+	_, err := h.pool.Exec(r.Context(),
+		`INSERT INTO pharmacy_dispensing_records (id, medication_request_id, patient_nhi, status, is_schedule2, created_at, updated_at)
+		 VALUES ($1, $2, $3, 'pending', $4, $5, $6)`,
+		recordID, req.ID, req.SubjectNHI, req.IsSchedule2, now, now)
+	if err != nil {
+		h.logger.Error("persist prescription failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to persist prescription")
+		return
+	}
 
 	h.logger.Info("prescription received",
 		"medication_request_id", req.ID,
@@ -138,7 +176,7 @@ func (h *DispensingHandler) ReceivePrescription(w http.ResponseWriter, r *http.R
 		"request_id", r.Context().Value(requestIDKey),
 	)
 
-	writeFHIRJSON(w, http.StatusCreated, req)
+	writeJSON(w, http.StatusCreated, req)
 }
 
 // List handles GET /api/v1/dispensing — list pending dispensing records.
@@ -148,14 +186,39 @@ func (h *DispensingHandler) List(w http.ResponseWriter, r *http.Request) {
 		status = string(DispensingStatusPending)
 	}
 
-	// In production: query the repository filtered by status, with pagination.
-	h.logger.Info("list dispensing", "status", status, "request_id", r.Context().Value(requestIDKey))
+	rows, err := h.pool.Query(r.Context(),
+		`SELECT id, medication_request_id, patient_nhi, status, is_schedule2,
+		        pharmacist_hpi_cpn, second_pharmacist_id, created_at, updated_at
+		 FROM pharmacy_dispensing_records
+		 WHERE status = $1
+		 ORDER BY created_at DESC
+		 LIMIT 100`, status)
+	if err != nil {
+		h.logger.Error("list dispensing query failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to list dispensing records")
+		return
+	}
+	defer rows.Close()
+
+	entries := make([]DispensingRecord, 0)
+	for rows.Next() {
+		var rec DispensingRecord
+		if err := rows.Scan(&rec.ID, &rec.MedicationRequestID, &rec.PatientNHI, &rec.Status,
+			&rec.IsSchedule2, &rec.PharmacistHPICPN, &rec.SecondPharmacistID,
+			&rec.CreatedAt, &rec.UpdatedAt); err != nil {
+			h.logger.Error("scan dispensing row", "error", err)
+			continue
+		}
+		entries = append(entries, rec)
+	}
+
+	h.logger.Info("list dispensing", "status", status, "count", len(entries), "request_id", r.Context().Value(requestIDKey))
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"resourceType": "Bundle",
 		"type":         "searchset",
-		"total":        0,
-		"entry":        []any{},
+		"total":        len(entries),
+		"entry":        entries,
 	})
 }
 
@@ -176,20 +239,26 @@ func (h *DispensingHandler) Receive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production:
-	//   1. Validate NHI via core/nhi.
-	//   2. Validate PHARMAC formulary code via core/pharmac.
-	//   3. Persist MedicationRequest and create DispensingRecord.
-	//   4. Write AuditEvent.
+	now := time.Now().UTC()
+	recordID := fmt.Sprintf("disp-%d", now.UnixNano())
+	_, err := h.pool.Exec(r.Context(),
+		`INSERT INTO pharmacy_dispensing_records (id, medication_request_id, patient_nhi, status, is_schedule2, created_at, updated_at)
+		 VALUES ($1, $2, $3, 'pending', $4, $5, $6)`,
+		recordID, req.ID, req.SubjectNHI, req.IsSchedule2, now, now)
+	if err != nil {
+		h.logger.Error("persist dispensing record failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to create dispensing record")
+		return
+	}
 
 	record := DispensingRecord{
-		ID:                  "new-id-placeholder",
+		ID:                  recordID,
 		MedicationRequestID: req.ID,
 		PatientNHI:          req.SubjectNHI,
 		Status:              DispensingStatusPending,
 		IsSchedule2:         req.IsSchedule2,
-		CreatedAt:           time.Now().UTC(),
-		UpdatedAt:           time.Now().UTC(),
+		CreatedAt:           now,
+		UpdatedAt:           now,
 	}
 
 	h.logger.Info("dispensing record created",
@@ -210,15 +279,27 @@ func (h *DispensingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production: fetch DispensingRecord + associated MedicationRequest from repository.
-	h.logger.Info("get dispensing record", "id", id, "request_id", r.Context().Value(requestIDKey))
+	var rec DispensingRecord
+	err := h.pool.QueryRow(r.Context(),
+		`SELECT id, medication_request_id, patient_nhi, status, is_schedule2,
+		        pharmacist_hpi_cpn, second_pharmacist_id, created_at, updated_at
+		 FROM pharmacy_dispensing_records
+		 WHERE id = $1`, id,
+	).Scan(&rec.ID, &rec.MedicationRequestID, &rec.PatientNHI, &rec.Status,
+		&rec.IsSchedule2, &rec.PharmacistHPICPN, &rec.SecondPharmacistID,
+		&rec.CreatedAt, &rec.UpdatedAt)
+	if err != nil {
+		if db.IsNoRows(err) {
+			writeError(w, http.StatusNotFound, "dispensing record not found")
+			return
+		}
+		h.logger.Error("get dispensing record failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to fetch dispensing record")
+		return
+	}
 
-	writeJSON(w, http.StatusOK, DispensingRecord{
-		ID:        id,
-		Status:    DispensingStatusPending,
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
-	})
+	h.logger.Info("get dispensing record", "id", id, "request_id", r.Context().Value(requestIDKey))
+	writeJSON(w, http.StatusOK, rec)
 }
 
 // Dispense handles POST /api/v1/dispensing/{id}/dispense — record a MedicationDispense.
@@ -253,14 +334,56 @@ func (h *DispensingHandler) Dispense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production:
-	//   1. Load DispensingRecord by id, assert status == pending.
-	//   2. Validate pharmacist APC via core/hpi (scope must include dispensing).
-	//   3. Validate patient NHI via core/nhi.
-	//   4. Check PHARMAC formulary subsidy eligibility via core/pharmac.
-	//   5. If IsSchedule2: set status to "awaiting-schedule2-confirm" and return 202.
-	//   6. Otherwise: persist MedicationDispense FHIR resource, update DispensingRecord status.
-	//   7. Write AuditEvent (core/audit) including pharmacist HPI CPN and patient NHI.
+	// Load the dispensing record to check current status
+	var isSchedule2 bool
+	var status string
+	err := h.pool.QueryRow(r.Context(),
+		`SELECT is_schedule2, status FROM pharmacy_dispensing_records WHERE id = $1`, id,
+	).Scan(&isSchedule2, &status)
+	if err != nil {
+		if db.IsNoRows(err) {
+			writeError(w, http.StatusNotFound, "dispensing record not found")
+			return
+		}
+		h.logger.Error("load dispensing record failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to load dispensing record")
+		return
+	}
+	if status != string(DispensingStatusPending) {
+		writeError(w, http.StatusConflict, fmt.Sprintf("dispensing record is not in pending state (current: %s)", status))
+		return
+	}
+
+	if isSchedule2 {
+		// Schedule 2 drugs: set status to awaiting-schedule2-confirm
+		_, err := h.pool.Exec(r.Context(),
+			`UPDATE pharmacy_dispensing_records
+			 SET pharmacist_hpi_cpn = $1, status = 'on-hold', updated_at = now()
+			 WHERE id = $2`, req.PharmacistHPICPN, id)
+		if err != nil {
+			h.logger.Error("update dispensing record for schedule2 failed", "error", err)
+			writeError(w, http.StatusInternalServerError, "failed to update dispensing record")
+			return
+		}
+
+		writeJSON(w, http.StatusAccepted, map[string]any{
+			"dispensingId": id,
+			"status":       "on-hold",
+			"message":      "Schedule 2 drug: awaiting second pharmacist confirmation",
+		})
+		return
+	}
+
+	// Non-schedule 2: mark as dispensed
+	_, err = h.pool.Exec(r.Context(),
+		`UPDATE pharmacy_dispensing_records
+		 SET pharmacist_hpi_cpn = $1, status = 'dispensed', updated_at = now()
+		 WHERE id = $2`, req.PharmacistHPICPN, id)
+	if err != nil {
+		h.logger.Error("update dispensing record failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to update dispensing record")
+		return
+	}
 
 	dispense := MedicationDispense{
 		ResourceType:        "MedicationDispense",
@@ -312,19 +435,46 @@ func (h *DispensingHandler) Schedule2Confirm(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// In production:
-	//   1. Load DispensingRecord by id, assert IsSchedule2 == true and status == "awaiting-schedule2-confirm".
-	//   2. Assert SecondPharmacistID != primary PharmacistHPICPN (cannot self-confirm).
-	//   3. Validate second pharmacist APC via core/hpi.
-	//   4. Update DispensingRecord: SecondPharmacistID = req.SecondPharmacistID, status = dispensed.
-	//   5. Write an extended AuditEvent (FHIR R5 AuditEvent) containing:
-	//      - Both pharmacist HPI CPNs (agent[0] primary, agent[1] witness)
-	//      - Patient NHI (encrypted in the audit record)
-	//      - Drug NZMT code and quantity
-	//      - Timestamp (UTC)
-	//      - Action: "CONFIRM-SCHEDULE2"
-	//      - Request correlation ID
-	//   6. Append to controlled drug register (append-only table, see CLAUDE.md audit requirements).
+	// Load and validate the dispensing record
+	var isSchedule2 bool
+	var status string
+	var primaryPharmacist string
+	err := h.pool.QueryRow(r.Context(),
+		`SELECT is_schedule2, status, pharmacist_hpi_cpn FROM pharmacy_dispensing_records WHERE id = $1`, id,
+	).Scan(&isSchedule2, &status, &primaryPharmacist)
+	if err != nil {
+		if db.IsNoRows(err) {
+			writeError(w, http.StatusNotFound, "dispensing record not found")
+			return
+		}
+		h.logger.Error("load dispensing record for schedule2 confirm failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to load dispensing record")
+		return
+	}
+
+	if !isSchedule2 {
+		writeError(w, http.StatusBadRequest, "dispensing record is not a Schedule 2 drug")
+		return
+	}
+	if status != "on-hold" {
+		writeError(w, http.StatusConflict, fmt.Sprintf("dispensing record is not awaiting confirmation (current: %s)", status))
+		return
+	}
+	if primaryPharmacist != "" && primaryPharmacist == req.SecondPharmacistID {
+		writeError(w, http.StatusConflict, "second pharmacist cannot be the same as the primary pharmacist")
+		return
+	}
+
+	// Update the dispensing record
+	_, err = h.pool.Exec(r.Context(),
+		`UPDATE pharmacy_dispensing_records
+		 SET second_pharmacist_id = $1, status = 'dispensed', updated_at = now()
+		 WHERE id = $2`, req.SecondPharmacistID, id)
+	if err != nil {
+		h.logger.Error("update dispensing record for schedule2 confirm failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to update dispensing record")
+		return
+	}
 
 	h.logger.Info("schedule 2 confirmation recorded",
 		"dispensing_id", id,

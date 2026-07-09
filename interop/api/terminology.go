@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/PhillipC05/tpt-healthcare/core/terminology"
 )
 
 const (
@@ -70,6 +72,108 @@ func (stubTermStore) SearchICD10AM(query string, limit int) ([]TermConcept, erro
 }
 func (stubTermStore) SearchNZMT(query string, limit int) ([]TermConcept, error) {
 	return []TermConcept{}, nil
+}
+
+// coreTermStore adapts the in-memory terminology stores in core/terminology
+// (loaded from SNOMED CT RF2, LOINC, ICD-10-AM and NZMT/NZULM source files)
+// to the TermStore interface. Any of the four backing stores may be nil, in
+// which case lookups/searches against that code system return "not found" /
+// empty results rather than erroring — this lets a deployment enable only
+// the terminology systems it has data files for.
+type coreTermStore struct {
+	snomed *terminology.SNOMEDStore
+	loinc  *terminology.LOINCStore
+	icd10  *terminology.ICD10Store
+	nzmt   *terminology.NZMTStore
+}
+
+// newCoreTermStore returns a TermStore backed by the given terminology
+// stores. Pass nil for any store whose source data has not been loaded.
+func newCoreTermStore(snomed *terminology.SNOMEDStore, loinc *terminology.LOINCStore, icd10 *terminology.ICD10Store, nzmt *terminology.NZMTStore) TermStore {
+	return &coreTermStore{snomed: snomed, loinc: loinc, icd10: icd10, nzmt: nzmt}
+}
+
+func (c *coreTermStore) SearchSNOMED(query string, limit int) ([]TermConcept, error) {
+	if c.snomed == nil {
+		return []TermConcept{}, nil
+	}
+	results := c.snomed.Search(query, limit)
+	out := make([]TermConcept, 0, len(results))
+	for _, r := range results {
+		out = append(out, TermConcept{Code: r.ID, Display: snomedDisplay(r), Definition: r.FSN})
+	}
+	return out, nil
+}
+
+func (c *coreTermStore) GetSNOMED(sctid string) (*TermConcept, error) {
+	if c.snomed == nil {
+		return nil, fmt.Errorf("SNOMED CT concept %q not found", sctid)
+	}
+	r, ok := c.snomed.Lookup(sctid)
+	if !ok {
+		return nil, fmt.Errorf("SNOMED CT concept %q not found", sctid)
+	}
+	return &TermConcept{Code: r.ID, Display: snomedDisplay(r), Definition: r.FSN}, nil
+}
+
+func (c *coreTermStore) SearchLOINC(query string, limit int) ([]TermConcept, error) {
+	if c.loinc == nil {
+		return []TermConcept{}, nil
+	}
+	results := c.loinc.Search(query, limit)
+	out := make([]TermConcept, 0, len(results))
+	for _, r := range results {
+		out = append(out, TermConcept{Code: r.LOINC, Display: r.LongCommonName, Definition: r.Component})
+	}
+	return out, nil
+}
+
+func (c *coreTermStore) GetLOINC(code string) (*TermConcept, error) {
+	if c.loinc == nil {
+		return nil, fmt.Errorf("LOINC code %q not found", code)
+	}
+	r, ok := c.loinc.Lookup(code)
+	if !ok {
+		return nil, fmt.Errorf("LOINC code %q not found", code)
+	}
+	return &TermConcept{Code: r.LOINC, Display: r.LongCommonName, Definition: r.Component}, nil
+}
+
+func (c *coreTermStore) SearchICD10AM(query string, limit int) ([]TermConcept, error) {
+	if c.icd10 == nil {
+		return []TermConcept{}, nil
+	}
+	results := c.icd10.Search(query, limit)
+	out := make([]TermConcept, 0, len(results))
+	for _, r := range results {
+		out = append(out, TermConcept{Code: r.Code, Display: r.Description})
+	}
+	return out, nil
+}
+
+func (c *coreTermStore) SearchNZMT(query string, limit int) ([]TermConcept, error) {
+	if c.nzmt == nil {
+		return []TermConcept{}, nil
+	}
+	results := c.nzmt.Search(query, limit)
+	out := make([]TermConcept, 0, len(results))
+	for _, r := range results {
+		display := r.BrandName
+		if display == "" {
+			display = r.GenericName
+		}
+		out = append(out, TermConcept{Code: r.NZULM, Display: display, Definition: r.GenericName})
+	}
+	return out, nil
+}
+
+// snomedDisplay prefers the NZ preferred term, falling back to the fully
+// specified name when no preferred term was loaded.
+func snomedDisplay(c *terminology.SNOMEDConcept) string {
+	if c.PreferredTerm != "" {
+		return c.PreferredTerm
+	}
+	return c.FSN
 }
 
 // newTerminologyHandler returns a TerminologyHandler. Pass a nil store to use

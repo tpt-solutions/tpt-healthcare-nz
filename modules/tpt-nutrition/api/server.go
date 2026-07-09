@@ -14,9 +14,11 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/auth/auth0"
 	"github.com/PhillipC05/tpt-healthcare/core/consent"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
+	"github.com/PhillipC05/tpt-healthcare/core/db/migrate"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
+	nutdb "github.com/PhillipC05/tpt-healthcare/modules/tpt-nutrition/db"
 )
 
 // Config holds all configuration for the tpt-nutrition server.
@@ -141,10 +143,8 @@ func RunMigrations(ctx context.Context, databaseURL string, logger *slog.Logger)
 		return fmt.Errorf("connect for migrations: %w", err)
 	}
 	defer pool.Close()
-	if err := db.Migrate(ctx, pool, logger); err != nil {
-		return fmt.Errorf("run migrations: %w", err)
-	}
-	return nil
+	r := migrate.New(nutdb.Migrations, pool)
+	return r.Up(ctx)
 }
 
 // ValidateConnectivity checks that the database is reachable.

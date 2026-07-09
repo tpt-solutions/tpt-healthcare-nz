@@ -6,6 +6,10 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/PhillipC05/tpt-healthcare/core/db"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // --- Domain types ---
@@ -88,6 +92,7 @@ type HSDRecord struct {
 
 // ClaimsHandler handles all /api/v1/claims and /api/v1/reports/hsd routes.
 type ClaimsHandler struct {
+	pool   *pgxpool.Pool
 	logger *slog.Logger
 }
 
@@ -95,13 +100,50 @@ type ClaimsHandler struct {
 func (h *ClaimsHandler) List(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
 
-	// In production: query repository for PHARMACClaim records filtered by status,
-	// ordered by createdAt desc, with cursor-based pagination.
-	h.logger.Info("list claims", "status", status, "request_id", r.Context().Value(requestIDKey))
+	var rows pgx.Rows
+	var err error
+	if status != "" {
+		rows, err = h.pool.Query(r.Context(),
+			`SELECT id, status, pharmacy_hsp_no, claim_period_start, claim_period_end,
+			        dispense_ids, total_subsidy_amount, submitted_at, pharmac_reference_no,
+			        created_at, updated_at
+			 FROM pharmacy_pharmac_claims
+			 WHERE status = $1
+			 ORDER BY created_at DESC`, status)
+	} else {
+		rows, err = h.pool.Query(r.Context(),
+			`SELECT id, status, pharmacy_hsp_no, claim_period_start, claim_period_end,
+			        dispense_ids, total_subsidy_amount, submitted_at, pharmac_reference_no,
+			        created_at, updated_at
+			 FROM pharmacy_pharmac_claims
+			 ORDER BY created_at DESC`)
+	}
+	if err != nil {
+		h.logger.Error("list claims query failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to list claims")
+		return
+	}
+	defer rows.Close()
+
+	claims := make([]PHARMACClaim, 0)
+	for rows.Next() {
+		var c PHARMACClaim
+		var dispenseIDsJSON []byte
+		if err := rows.Scan(&c.ID, &c.Status, &c.PharmacyHSPNo, &c.ClaimPeriodStart,
+			&c.ClaimPeriodEnd, &dispenseIDsJSON, &c.TotalSubsidyAmountNZD,
+			&c.SubmittedAt, &c.PHARMACReferenceNo, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			h.logger.Error("scan claim row", "error", err)
+			continue
+		}
+		_ = json.Unmarshal(dispenseIDsJSON, &c.DispenseIDs)
+		claims = append(claims, c)
+	}
+
+	h.logger.Info("list claims", "status", status, "count", len(claims), "request_id", r.Context().Value(requestIDKey))
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"claims": []PHARMACClaim{},
-		"total":  0,
+		"claims": claims,
+		"total":  len(claims),
 	})
 }
 
@@ -131,17 +173,22 @@ func (h *ClaimsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production:
-	//   1. Load all MedicationDispense records for the given DispenseIDs.
-	//   2. Validate all records are status=completed and belong to PharmacyHSPNo.
-	//   3. Look up PHARMAC subsidy amounts via core/pharmac for each NZMT/formulary code.
-	//   4. Sum total subsidy, build PHARMACClaim.
-	//   5. Persist claim in draft status.
-	//   6. Write AuditEvent.
-
 	now := time.Now().UTC()
+	claimID := fmt.Sprintf("claim-%d", now.UnixNano())
+	dispenseIDsJSON, _ := json.Marshal(req.DispenseIDs)
+
+	_, err := h.pool.Exec(r.Context(),
+		`INSERT INTO pharmacy_pharmac_claims (id, status, pharmacy_hsp_no, claim_period_start, claim_period_end, dispense_ids, total_subsidy_amount, created_at, updated_at)
+		 VALUES ($1, 'draft', $2, $3, $4, $5, 0, $6, $7)`,
+		claimID, req.PharmacyHSPNo, req.ClaimPeriodStart, req.ClaimPeriodEnd, dispenseIDsJSON, now, now)
+	if err != nil {
+		h.logger.Error("persist claim failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to create claim")
+		return
+	}
+
 	claim := PHARMACClaim{
-		ID:                   fmt.Sprintf("claim-%d", now.UnixNano()),
+		ID:                   claimID,
 		Status:               PHARMACClaimStatusDraft,
 		PharmacyHSPNo:        req.PharmacyHSPNo,
 		ClaimPeriodStart:     req.ClaimPeriodStart,
@@ -174,15 +221,36 @@ func (h *ClaimsHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production:
-	//   1. Load PHARMACClaim by id, assert status == draft.
-	//   2. Build the PHARMAC ePAD submission payload (proprietary XML or HL7 format).
-	//   3. POST to PHARMAC ePAD endpoint with mTLS client certificate.
-	//   4. On success: update status to submitted, store PHARMACReferenceNo.
-	//   5. Schedule a background status-polling job.
-	//   6. Write AuditEvent.
+	// Verify claim exists and is in draft status
+	var status string
+	err := h.pool.QueryRow(r.Context(),
+		`SELECT status FROM pharmacy_pharmac_claims WHERE id = $1`, id,
+	).Scan(&status)
+	if err != nil {
+		if db.IsNoRows(err) {
+			writeError(w, http.StatusNotFound, "claim not found")
+			return
+		}
+		h.logger.Error("load claim for submit failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to load claim")
+		return
+	}
+	if status != string(PHARMACClaimStatusDraft) {
+		writeError(w, http.StatusConflict, fmt.Sprintf("claim is not in draft status (current: %s)", status))
+		return
+	}
 
+	// Update to submitted
 	now := time.Now().UTC()
+	_, err = h.pool.Exec(r.Context(),
+		`UPDATE pharmacy_pharmac_claims
+		 SET status = 'submitted', submitted_at = $1, updated_at = $2
+		 WHERE id = $3`, now, now, id)
+	if err != nil {
+		h.logger.Error("update claim status failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to update claim status")
+		return
+	}
 
 	h.logger.Info("claim submitted to PHARMAC",
 		"claim_id", id,
@@ -205,17 +273,30 @@ func (h *ClaimsHandler) Status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production:
-	//   1. Load PHARMACClaim by id.
-	//   2. If status is "submitted": poll PHARMAC ePAD status endpoint and update local record.
-	//   3. Return current status.
+	var status string
+	var pharmacRef string
+	var submittedAt *time.Time
+	err := h.pool.QueryRow(r.Context(),
+		`SELECT status, pharmac_reference_no, submitted_at
+		 FROM pharmacy_pharmac_claims WHERE id = $1`, id,
+	).Scan(&status, &pharmacRef, &submittedAt)
+	if err != nil {
+		if db.IsNoRows(err) {
+			writeError(w, http.StatusNotFound, "claim not found")
+			return
+		}
+		h.logger.Error("load claim status failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to load claim status")
+		return
+	}
 
 	h.logger.Info("claim status check", "claim_id", id, "request_id", r.Context().Value(requestIDKey))
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"claimId":            id,
-		"status":             string(PHARMACClaimStatusSubmitted),
-		"pharmacReferenceNo": "",
+		"status":             status,
+		"pharmacReferenceNo": pharmacRef,
+		"submittedAt":        submittedAt,
 		"checkedAt":          time.Now().UTC(),
 	})
 }

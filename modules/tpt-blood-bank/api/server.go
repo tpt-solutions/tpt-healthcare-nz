@@ -185,7 +185,7 @@ func RunMigrations(ctx context.Context, databaseURL string, logger *slog.Logger)
 	}
 	defer pool.Close()
 
-	if err := db.Migrate(ctx, pool, logger); err != nil {
+	if err := db.Migrate(ctx, pool, "modules/tpt-blood-bank/db/migrate"); err != nil {
 		return fmt.Errorf("run migrations: %w", err)
 	}
 	return nil
