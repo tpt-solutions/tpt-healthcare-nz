@@ -32,20 +32,20 @@ const (
 )
 
 type Episode struct {
-	ID                     string    `json:"id"`
-	PatientNHI             string    `json:"patientNhi"`
-	LMCHpi                 string    `json:"lmcHpi"`
-	Status                 string    `json:"status"`
-	EDD                    *string   `json:"edd"`
-	LMP                    *string   `json:"lmp"`
-	GestationAtBookingWeeks *int16   `json:"gestationAtBookingWeeks"`
-	Gravida                *int16    `json:"gravida"`
-	Parity                 *int16    `json:"parity"`
-	RiskLevel              string    `json:"riskLevel"`
-	Notes                  *string   `json:"notes"`
-	TenantID               string    `json:"tenantId"`
-	CreatedAt              time.Time `json:"createdAt"`
-	UpdatedAt              time.Time `json:"updatedAt"`
+	ID                      string    `json:"id"`
+	PatientNHI              string    `json:"patientNhi"`
+	LMCHpi                  string    `json:"lmcHpi"`
+	Status                  string    `json:"status"`
+	EDD                     *string   `json:"edd"`
+	LMP                     *string   `json:"lmp"`
+	GestationAtBookingWeeks *int16    `json:"gestationAtBookingWeeks"`
+	Gravida                 *int16    `json:"gravida"`
+	Parity                  *int16    `json:"parity"`
+	RiskLevel               string    `json:"riskLevel"`
+	Notes                   *string   `json:"notes"`
+	TenantID                string    `json:"tenantId"`
+	CreatedAt               time.Time `json:"createdAt"`
+	UpdatedAt               time.Time `json:"updatedAt"`
 }
 
 type createEpisodeReq struct {
@@ -264,16 +264,16 @@ func (h *episodeHandler) Update(w http.ResponseWriter, r *http.Request) {
 		          gestation_at_booking_weeks, gravida, parity, risk_level, notes, tenant_id,
 		          created_at, updated_at
 	`, pgx.NamedArgs{
-		"lmc_hpi":   req.LMCHpi,
-		"edd":       req.EDD,
-		"lmp":       req.LMP,
-		"gestation": req.GestationAtBookingWeeks,
-		"gravida":   req.Gravida,
-		"parity":    req.Parity,
+		"lmc_hpi":    req.LMCHpi,
+		"edd":        req.EDD,
+		"lmp":        req.LMP,
+		"gestation":  req.GestationAtBookingWeeks,
+		"gravida":    req.Gravida,
+		"parity":     req.Parity,
 		"risk_level": req.RiskLevel,
-		"notes":     req.Notes,
-		"id":        id,
-		"tenant_id": tenantID,
+		"notes":      req.Notes,
+		"id":         id,
+		"tenant_id":  tenantID,
 	}).Scan(
 		&ep.ID, &ep.PatientNHI, &ep.LMCHpi, &ep.Status, &ep.EDD, &ep.LMP,
 		&ep.GestationAtBookingWeeks, &ep.Gravida, &ep.Parity, &ep.RiskLevel, &ep.Notes,

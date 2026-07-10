@@ -57,29 +57,31 @@ const (
 )
 
 type PaediatricAdmission struct {
-	ID               string     `json:"id"`
-	PatientNHI       string     `json:"patientNhi"`
-	ProxyGuardianNHI *string    `json:"proxyGuardianNhi"`
-	ClinicianHpi     string     `json:"clinicianHpi"`
-	Status           string     `json:"status"`
-	AdmissionType    string     `json:"admissionType"`
-	AdmissionReason  string     `json:"admissionReason"`
-	Ward             string     `json:"ward"`
-	BedLabel         string     `json:"bedLabel"`
-	AgeYears         *int16     `json:"ageYears"`
-	AgeMonths        *int16     `json:"ageMonths"`
-	WeightKg         *float64   `json:"weightKg"`
-	HeightCm         *float64   `json:"heightCm"`
-	TenantID         string     `json:"tenantId"`
-	AdmittedAt       time.Time  `json:"admittedAt"`
-	DischargedAt     *time.Time `json:"dischargedAt"`
-	CreatedAt        time.Time  `json:"createdAt"`
-	UpdatedAt        time.Time  `json:"updatedAt"`
+	ID                  string     `json:"id"`
+	PatientNHI          string     `json:"patientNhi"`
+	HospitalAdmissionID *string    `json:"hospitalAdmissionId,omitempty"`
+	ProxyGuardianNHI    *string    `json:"proxyGuardianNhi"`
+	ClinicianHpi        string     `json:"clinicianHpi"`
+	Status              string     `json:"status"`
+	AdmissionType       string     `json:"admissionType"`
+	AdmissionReason     string     `json:"admissionReason"`
+	Ward                string     `json:"ward"`
+	BedLabel            string     `json:"bedLabel"`
+	AgeYears            *int16     `json:"ageYears"`
+	AgeMonths           *int16     `json:"ageMonths"`
+	WeightKg            *float64   `json:"weightKg"`
+	HeightCm            *float64   `json:"heightCm"`
+	TenantID            string     `json:"tenantId"`
+	AdmittedAt          time.Time  `json:"admittedAt"`
+	DischargedAt        *time.Time `json:"dischargedAt"`
+	CreatedAt           time.Time  `json:"createdAt"`
+	UpdatedAt           time.Time  `json:"updatedAt"`
 }
 
 type PICUAdmission struct {
 	ID                    string     `json:"id"`
 	PaediatricAdmissionID string     `json:"paediatricAdmissionId"`
+	HospitalAdmissionID   *string    `json:"hospitalAdmissionId,omitempty"`
 	PatientNHI            string     `json:"patientNhi"`
 	ClinicianHpi          string     `json:"clinicianHpi"`
 	Status                string     `json:"status"`

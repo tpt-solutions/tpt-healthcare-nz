@@ -557,3 +557,70 @@ func PractitionerR5ToR4(r5p *r5.Practitioner) *r4.Practitioner {
 	}
 	return out
 }
+
+// ---------------------------------------------------------------------------
+// Immunization translators
+// ---------------------------------------------------------------------------
+
+// ImmunizationR5ToR4 converts an R5 Immunization to an R4 Immunization.
+// Both versions are similar; this is a thin wrapper preserving fields.
+func ImmunizationR5ToR4(r5im *r5.Immunization) *r4.Immunization {
+	if r5im == nil {
+		return nil
+	}
+	out := &r4.Immunization{
+		ResourceType:       "Immunization",
+		ID:                 r5im.ID,
+		Meta:               metaR5ToR4(r5im.Meta),
+		Extension:          extensionsR5ToR4(r5im.Extension),
+		Identifier:         identifiersR5ToR4(r5im.Identifier),
+		Status:             r5im.Status,
+		VaccineCode:        ccR5ToR4(r5im.VaccineCode),
+		OccurrenceDateTime: r5im.OccurrenceDateTime,
+		LotNumber:          r5im.LotNumber,
+		Route:              ccPtrR5ToR4(r5im.Route),
+		DoseQuantity:       qtyR5ToR4(r5im.DoseQuantity),
+	}
+	// Convert patient reference
+	if r5im.Patient != nil {
+		out.Patient = &r4.Reference{
+			Reference:  r5im.Patient.Reference,
+			Type:       r5im.Patient.Type,
+			Identifier: nil,
+			Display:    r5im.Patient.Display,
+		}
+		if r5im.Patient.Identifier != nil {
+			id := identifierR5ToR4(*r5im.Patient.Identifier)
+			out.Patient.Identifier = &id
+		}
+	}
+	// Convert notes
+	for _, n := range r5im.Note {
+		ann := r4.Annotation{
+			AuthorString: n.AuthorString,
+			Text:         n.Text,
+		}
+		if n.AuthorReference != nil {
+			ann.AuthorReference = refR5ToR4(n.AuthorReference)
+		}
+		if n.Time != nil {
+			ann.Time = n.Time
+		}
+		out.Note = append(out.Note, ann)
+	}
+	return out
+}
+
+// qtyR5ToR4 converts an R5 Quantity to an R4 Quantity.
+func qtyR5ToR4(q *r5.Quantity) *r4.Quantity {
+	if q == nil {
+		return nil
+	}
+	return &r4.Quantity{
+		Value:      q.Value,
+		Comparator: q.Comparator,
+		Unit:       q.Unit,
+		System:     q.System,
+		Code:       q.Code,
+	}
+}

@@ -74,13 +74,15 @@ func (g *DRGGrouper) GroupDRG(principalDiagnosis string, age int, hasMCC bool) D
 		result.LOS = 14
 	}
 
-	// Age adjustment: paediatric and geriatric are more complex
-	if age < 1 {
+	// Age adjustment: paediatric and geriatric are more complex.
+	// age < 0 means "unknown" (e.g. age not resolvable from the admission) and
+	// is not adjusted for.
+	if age >= 0 && age < 1 {
 		result.Weight *= 2.0
 		result.BasePrice *= 2.0
 		result.LOS += 3
 		result.Complexity = "high"
-	} else if age < 5 {
+	} else if age >= 0 && age < 5 {
 		result.Weight *= 1.3
 		result.LOS += 1
 	}

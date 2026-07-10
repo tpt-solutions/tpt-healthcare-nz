@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -8,7 +9,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	"github.com/PhillipC05/tpt-healthcare/core/payment"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // --- Domain types ---
@@ -129,6 +132,8 @@ type RecordPaymentRequest struct {
 
 // InvoiceHandler handles all /api/v1/invoices/* routes.
 type InvoiceHandler struct {
+	pool            *pgxpool.Pool
+	enc             *encryption.Encryptor
 	logger          *slog.Logger
 	paymentProvider payment.Provider
 }
@@ -161,10 +166,17 @@ func (h *InvoiceHandler) List(w http.ResponseWriter, r *http.Request) {
 		"request_id", r.Context().Value(requestIDKey),
 	)
 
-	// In production: query billing_invoices with filters, cursor pagination.
+	q := newQueryDB(h.pool, h.enc)
+	invoices, err := q.listInvoices(r.Context(), tenantID, status, sourceModule, fundingType)
+	if err != nil {
+		h.logger.Error("list invoices", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to list invoices")
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"invoices": []Invoice{},
-		"total":    0,
+		"invoices": invoices,
+		"total":    len(invoices),
 	})
 }
 
@@ -194,13 +206,6 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production:
-	//   1. Validate NHI checksum via core/nhi.
-	//   2. Encrypt patientNhi with core/encryption before persisting.
-	//   3. Calculate totals using core/billing.CalculateTotals.
-	//   4. Persist invoice + lines (billing_invoices, billing_invoice_lines).
-	//   5. Write AuditEvent.
-
 	var total, subsidy float64
 	for _, l := range req.Lines {
 		lineTotal := l.UnitFeeNZD * float64(l.Quantity)
@@ -214,15 +219,22 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC()
-	invoice := Invoice{
-		ID:               fmt.Sprintf("inv-%d", now.UnixNano()),
+	invoiceID := fmt.Sprintf("inv-%d", now.UnixNano())
+	lines := make([]InvoiceLine, len(req.Lines))
+	for i, l := range req.Lines {
+		lines[i] = l
+		lines[i].ID = fmt.Sprintf("%s-l%d", invoiceID, i+1)
+	}
+
+	inv := Invoice{
+		ID:               invoiceID,
 		TenantID:         req.TenantID,
 		SourceModule:     req.SourceModule,
 		SourceRefID:      req.SourceRefID,
 		PatientNHI:       req.PatientNHI,
 		FundingType:      req.FundingType,
 		Status:           InvoiceStatusDraft,
-		Lines:            req.Lines,
+		Lines:            lines,
 		TotalAmountNZD:   total,
 		SubsidyAmountNZD: subsidy,
 		PatientAmountNZD: patientAmount,
@@ -231,15 +243,22 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:        now,
 	}
 
+	q := newQueryDB(h.pool, h.enc)
+	if err := q.insertInvoice(r.Context(), inv, lines); err != nil {
+		h.logger.Error("insert invoice", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to create invoice")
+		return
+	}
+
 	h.logger.Info("invoice created",
-		"invoice_id", invoice.ID,
-		"source_module", invoice.SourceModule,
-		"total_nzd", invoice.TotalAmountNZD,
-		"patient_amount_nzd", invoice.PatientAmountNZD,
+		"invoice_id", inv.ID,
+		"source_module", inv.SourceModule,
+		"total_nzd", inv.TotalAmountNZD,
+		"patient_amount_nzd", inv.PatientAmountNZD,
 		"request_id", r.Context().Value(requestIDKey),
 	)
 
-	writeJSON(w, http.StatusCreated, invoice)
+	writeJSON(w, http.StatusCreated, inv)
 }
 
 // Get handles GET /api/v1/invoices/{id}.
@@ -252,7 +271,19 @@ func (h *InvoiceHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	h.logger.Info("get invoice", "invoice_id", id, "request_id", r.Context().Value(requestIDKey))
 
-	writeError(w, http.StatusNotFound, "invoice not found")
+	q := newQueryDB(h.pool, h.enc)
+	inv, err := q.getInvoice(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeError(w, http.StatusNotFound, "invoice not found")
+			return
+		}
+		h.logger.Error("get invoice", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to get invoice")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, inv)
 }
 
 // Issue handles POST /api/v1/invoices/{id}/issue — finalise and send invoice to patient.
@@ -267,20 +298,24 @@ func (h *InvoiceHandler) Issue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production:
-	//   1. Load invoice, assert status == draft.
-	//   2. Set status=issued, issued_at=now, due_at=now+30days (configurable per tenant).
-	//   3. Dispatch patient notification via core/email or core/sms outbox.
-	//   4. Write AuditEvent.
+	dueAt := time.Now().UTC().Add(30 * 24 * time.Hour)
+	q := newQueryDB(h.pool, h.enc)
+	if err := q.issueInvoice(r.Context(), id, dueAt); err != nil {
+		if errors.Is(err, errNotFound) {
+			writeError(w, http.StatusNotFound, "invoice not found or not in draft status")
+			return
+		}
+		h.logger.Error("issue invoice", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to issue invoice")
+		return
+	}
 
-	now := time.Now().UTC()
-
-	h.logger.Info("invoice issued", "invoice_id", id, "issued_at", now, "request_id", r.Context().Value(requestIDKey))
+	h.logger.Info("invoice issued", "invoice_id", id, "issued_at", time.Now().UTC(), "request_id", r.Context().Value(requestIDKey))
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"invoiceId": id,
 		"status":    string(InvoiceStatusIssued),
-		"issuedAt":  now,
+		"issuedAt":  time.Now().UTC(),
 	})
 }
 
@@ -295,12 +330,16 @@ func (h *InvoiceHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production:
-	//   1. Load invoice, assert status in (draft, issued).
-	//   2. Set status=cancelled.
-	//   3. If any insurance or ACC claims reference this invoice: reject the cancellation
-	//      until claims are also cancelled.
-	//   4. Write AuditEvent.
+	q := newQueryDB(h.pool, h.enc)
+	if err := q.cancelInvoice(r.Context(), id); err != nil {
+		if errors.Is(err, errNotFound) {
+			writeError(w, http.StatusNotFound, "invoice not found or not cancellable")
+			return
+		}
+		h.logger.Error("cancel invoice", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to cancel invoice")
+		return
+	}
 
 	h.logger.Info("invoice cancelled", "invoice_id", id, "request_id", r.Context().Value(requestIDKey))
 
@@ -337,15 +376,28 @@ func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production:
-	//   1. Load invoice, assert status in (issued, overdue).
-	//   2. Insert payment record into billing_payments.
-	//   3. Sum all payments for this invoice; if >= patientAmountNzd set invoice status=paid.
-	//   4. Write AuditEvent.
+	q := newQueryDB(h.pool, h.enc)
+
+	// Verify invoice exists and is payable
+	inv, err := q.getInvoice(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeError(w, http.StatusNotFound, "invoice not found")
+			return
+		}
+		h.logger.Error("get invoice for payment", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to process payment")
+		return
+	}
+	if inv.Status != InvoiceStatusIssued && inv.Status != InvoiceStatusOverdue {
+		writeError(w, http.StatusConflict, "invoice must be issued or overdue to accept payment")
+		return
+	}
 
 	now := time.Now().UTC()
-	payment := Payment{
+	pmt := Payment{
 		ID:            fmt.Sprintf("pay-%d", now.UnixNano()),
+		TenantID:      inv.TenantID,
 		InvoiceID:     id,
 		PaymentMethod: req.PaymentMethod,
 		AmountNZD:     req.AmountNZD,
@@ -357,15 +409,29 @@ func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:     now,
 	}
 
+	if err := q.insertPayment(r.Context(), pmt); err != nil {
+		h.logger.Error("insert payment", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to record payment")
+		return
+	}
+
+	// Check if fully paid
+	totalPaid, err := q.sumPayments(r.Context(), id)
+	if err != nil {
+		h.logger.Error("sum payments", "error", err)
+	} else if totalPaid >= inv.PatientAmountNZD {
+		_ = q.updateInvoiceStatus(r.Context(), id, InvoiceStatusPaid)
+	}
+
 	h.logger.Info("payment recorded",
-		"payment_id", payment.ID,
+		"payment_id", pmt.ID,
 		"invoice_id", id,
-		"amount_nzd", payment.AmountNZD,
-		"method", payment.PaymentMethod,
+		"amount_nzd", pmt.AmountNZD,
+		"method", pmt.PaymentMethod,
 		"request_id", r.Context().Value(requestIDKey),
 	)
 
-	writeJSON(w, http.StatusCreated, payment)
+	writeJSON(w, http.StatusCreated, pmt)
 }
 
 // ListPayments handles GET /api/v1/invoices/{id}/payments — list payments on an invoice.
@@ -378,10 +444,17 @@ func (h *InvoiceHandler) ListPayments(w http.ResponseWriter, r *http.Request) {
 
 	h.logger.Info("list payments", "invoice_id", id, "request_id", r.Context().Value(requestIDKey))
 
-	// In production: query billing_payments where invoice_id = id.
+	q := newQueryDB(h.pool, h.enc)
+	payments, err := q.listPayments(r.Context(), id)
+	if err != nil {
+		h.logger.Error("list payments", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to list payments")
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"payments": []Payment{},
-		"total":    0,
+		"payments": payments,
+		"total":    len(payments),
 	})
 }
 
@@ -407,9 +480,19 @@ func (h *InvoiceHandler) InitiatePayment(w http.ResponseWriter, r *http.Request)
 
 	returnURL := r.URL.Query().Get("return_url")
 
-	// In production: load the invoice from the database to get the real amount.
-	// Using a placeholder 1000 cents (NZD $10.00) for the scaffold.
-	amountCents := int64(1000)
+	q := newQueryDB(h.pool, h.enc)
+	inv, err := q.getInvoice(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeError(w, http.StatusNotFound, "invoice not found")
+			return
+		}
+		h.logger.Error("get invoice for payment", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to initiate payment")
+		return
+	}
+
+	amountCents := int64(inv.PatientAmountNZD * 100)
 
 	intent, err := h.paymentProvider.CreatePaymentRequest(r.Context(), payment.PaymentRequest{
 		AmountCents: amountCents,
@@ -480,14 +563,31 @@ func (h *InvoiceHandler) HandlePaymentWebhook(w http.ResponseWriter, r *http.Req
 
 	switch event.Type {
 	case payment.WebhookPaymentSucceeded:
-		// In production:
-		//   1. Look up billing_payment_intents by external_id to get invoice_id.
-		//   2. Insert billing_payments record.
-		//   3. Transition invoice to "paid" if fully settled.
-		//   4. Write AuditEvent.
+		amountNZD := math.Round(float64(event.AmountCents)/100*100) / 100
+		pmt := Payment{
+			ID:            fmt.Sprintf("pay-wh-%d", time.Now().UTC().UnixNano()),
+			TenantID:      "",
+			InvoiceID:     event.Reference,
+			PaymentMethod: PaymentInternetBanking,
+			AmountNZD:     amountNZD,
+			Reference:     event.ExternalID,
+			PaymentDate:   time.Now().UTC(),
+			Reconciled:    true,
+			CreatedAt:     time.Now().UTC(),
+		}
+		if event.Reference != "" {
+			q := newQueryDB(h.pool, h.enc)
+			inv, err := q.getInvoice(r.Context(), event.Reference)
+			if err == nil {
+				pmt.TenantID = inv.TenantID
+			}
+			if insertErr := q.insertPayment(r.Context(), pmt); insertErr != nil {
+				h.logger.Error("insert webhook payment", "error", insertErr)
+			}
+		}
 		h.logger.Info("payment succeeded",
 			"external_id", event.ExternalID,
-			"amount_nzd", math.Round(float64(event.AmountCents)/100*100)/100,
+			"amount_nzd", amountNZD,
 		)
 
 	case payment.WebhookPaymentFailed:

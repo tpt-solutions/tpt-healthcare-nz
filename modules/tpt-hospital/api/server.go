@@ -17,6 +17,7 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	"github.com/PhillipC05/tpt-healthcare/core/events"
+	"github.com/PhillipC05/tpt-healthcare/core/hl7"
 	"github.com/PhillipC05/tpt-healthcare/core/hpi"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
 )
@@ -31,7 +32,11 @@ type Config struct {
 	Auth0Domain   string
 	Auth0Audience string
 	TenantHeader  string
-	Logger        *slog.Logger
+	// HL7MLLPAddr is the address (host:port) of the downstream HL7 v2 MLLP
+	// listener (lab/radiology/PAS feed) that receives ORM and ADT messages.
+	// Leave empty to disable HL7 dispatch.
+	HL7MLLPAddr string
+	Logger      *slog.Logger
 }
 
 // Server is the tpt-hospital HTTP server.
@@ -44,6 +49,7 @@ type Server struct {
 	hpiClient  *hpi.Client
 	auditTrail *audit.Trail
 	eventBus   *events.Bus
+	hl7Client  *hl7.MLLPClient
 	logger     *slog.Logger
 }
 
@@ -74,6 +80,14 @@ func NewServer(cfg Config) (*Server, error) {
 	hpiClient := hpi.NewClient(cfg.RedisURL, cfg.Logger)
 	trail := audit.NewTrail(pool)
 
+	var hl7Client *hl7.MLLPClient
+	if cfg.HL7MLLPAddr != "" {
+		hl7Client, err = hl7.NewMLLPClient(cfg.HL7MLLPAddr, 10*time.Second)
+		if err != nil {
+			return nil, fmt.Errorf("init HL7 MLLP client: %w", err)
+		}
+	}
+
 	s := &Server{
 		cfg:        cfg,
 		pool:       pool,
@@ -82,6 +96,7 @@ func NewServer(cfg Config) (*Server, error) {
 		hpiClient:  hpiClient,
 		auditTrail: trail,
 		eventBus:   events.New(),
+		hl7Client:  hl7Client,
 		logger:     cfg.Logger,
 	}
 
@@ -110,10 +125,11 @@ func (s *Server) Handler() http.Handler {
 //     surge capacity management, CBRN decontamination (HERP / CDEM Act 2002)
 //
 // Specialist departments are separate modules:
-//   tpt-oncology, tpt-renal, tpt-maternity, tpt-cardiology,
-//   tpt-rehabilitation, tpt-paediatrics, tpt-blood-bank
+//
+//	tpt-oncology, tpt-renal, tpt-maternity, tpt-cardiology,
+//	tpt-rehabilitation, tpt-paediatrics, tpt-blood-bank
 func (s *Server) buildRoutes() *http.ServeMux {
-	admissions := &AdmissionsHandler{pool: s.pool, enc: s.enc, hpiClient: s.hpiClient, auditTrail: s.auditTrail, logger: s.logger}
+	admissions := &AdmissionsHandler{pool: s.pool, enc: s.enc, hpiClient: s.hpiClient, auditTrail: s.auditTrail, hl7Client: s.hl7Client, logger: s.logger}
 	wards := &WardsHandler{pool: s.pool, auditTrail: s.auditTrail, logger: s.logger}
 	ed := &EDHandler{pool: s.pool, enc: s.enc, hpiClient: s.hpiClient, auditTrail: s.auditTrail, logger: s.logger}
 	icu := &ICUHandler{pool: s.pool, enc: s.enc, hpiClient: s.hpiClient, auditTrail: s.auditTrail, logger: s.logger}
@@ -122,7 +138,7 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	coding := &CodingHandler{pool: s.pool, auditTrail: s.auditTrail, logger: s.logger}
 	billing := &BillingHandler{pool: s.pool, auditTrail: s.auditTrail, logger: s.logger}
 	pharmacy := &PharmacyHandler{pool: s.pool, enc: s.enc, hpiClient: s.hpiClient, auditTrail: s.auditTrail, logger: s.logger}
-	cpoe := &CPOEHandler{pool: s.pool, hpiClient: s.hpiClient, auditTrail: s.auditTrail, logger: s.logger}
+	cpoe := &CPOEHandler{pool: s.pool, hpiClient: s.hpiClient, auditTrail: s.auditTrail, hl7Client: s.hl7Client, logger: s.logger}
 	infectionControl := &InfectionControlHandler{pool: s.pool, enc: s.enc, auditTrail: s.auditTrail, logger: s.logger}
 	outpatient := &OutpatientHandler{pool: s.pool, enc: s.enc, hpiClient: s.hpiClient, auditTrail: s.auditTrail, logger: s.logger}
 	hith := &HITHHandler{pool: s.pool, enc: s.enc, hpiClient: s.hpiClient, auditTrail: s.auditTrail, logger: s.logger}
@@ -158,6 +174,7 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.Handle("POST /api/v1/admissions/{id}/transfer", chain(http.HandlerFunc(admissions.Transfer)))
 	mux.Handle("GET /api/v1/admissions/{admissionId}/discharge-summary", chain(http.HandlerFunc(admissions.GetDischargeSummary)))
 	mux.Handle("POST /api/v1/admissions/{admissionId}/discharge-summary", chain(http.HandlerFunc(admissions.CreateDischargeSummary)))
+	mux.Handle("POST /api/v1/admissions/{admissionId}/discharge-summary/auto-populate", chain(http.HandlerFunc(admissions.AutoPopulateDischargeSummaryHandler)))
 
 	// ── Ward and bed management ───────────────────────────────────────────────
 	mux.Handle("GET /api/v1/wards", chain(http.HandlerFunc(wards.ListWards)))
@@ -165,6 +182,7 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.Handle("GET /api/v1/wards/{wardId}/beds", chain(http.HandlerFunc(wards.ListBeds)))
 	mux.Handle("PUT /api/v1/wards/{wardId}/beds/{bedId}", chain(http.HandlerFunc(wards.UpdateBed)))
 	mux.Handle("GET /api/v1/wards/capacity", chain(http.HandlerFunc(wards.HospitalCapacity)))
+	mux.Handle("GET /api/v1/wards/flow-forecast", chain(http.HandlerFunc(wards.PatientFlowForecast)))
 
 	// ── Emergency department ──────────────────────────────────────────────────
 	mux.Handle("GET /api/v1/ed/triage", chain(http.HandlerFunc(ed.List)))
@@ -183,6 +201,18 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.Handle("POST /api/v1/icu/admissions/{id}/chart", chain(http.HandlerFunc(icu.AddChart)))
 	mux.Handle("GET /api/v1/icu/admissions/{id}/chart", chain(http.HandlerFunc(icu.ListChart)))
 	mux.Handle("POST /api/v1/icu/admissions/{id}/discharge", chain(http.HandlerFunc(icu.Discharge)))
+
+	// ── ICU fluid balance ─────────────────────────────────────────────────────
+	mux.Handle("POST /api/v1/icu/admissions/{id}/fluid-balance", chain(http.HandlerFunc(icu.AddFluidBalance)))
+	mux.Handle("GET /api/v1/icu/admissions/{id}/fluid-balance", chain(http.HandlerFunc(icu.ListFluidBalance)))
+
+	// ── ICU EWS/PEWS early-warning scoring ───────────────────────────────────
+	mux.Handle("POST /api/v1/icu/admissions/{id}/ews", chain(http.HandlerFunc(icu.CalculateEWS)))
+	mux.Handle("POST /api/v1/icu/admissions/{id}/pews", chain(http.HandlerFunc(icu.CalculatePEWS)))
+	mux.Handle("GET /api/v1/icu/admissions/{id}/ews", chain(http.HandlerFunc(icu.ListEWS)))
+
+	// ── Paediatric dosing calculator ──────────────────────────────────────────
+	mux.Handle("POST /api/v1/icu/paediatric-dose", chain(http.HandlerFunc(icu.CalculatePaediatricDose)))
 
 	// ── Surgical theatre ──────────────────────────────────────────────────────
 	mux.Handle("GET /api/v1/theatre/bookings", chain(http.HandlerFunc(theatre.List)))
@@ -226,6 +256,19 @@ func (s *Server) buildRoutes() *http.ServeMux {
 	mux.Handle("POST /api/v1/admissions/{admissionId}/medications/{medId}/cease", chain(http.HandlerFunc(pharmacy.Cease)))
 	mux.Handle("GET /api/v1/admissions/{admissionId}/medications/reconciliation", chain(http.HandlerFunc(pharmacy.GetReconciliation)))
 	mux.Handle("POST /api/v1/admissions/{admissionId}/medications/reconciliation", chain(http.HandlerFunc(pharmacy.ReconcileMedications)))
+
+	// ── S8 controlled drug register + bedside verification ───────────────────
+	mux.Handle("GET /api/v1/admissions/{admissionId}/controlled-drug-register", chain(http.HandlerFunc(pharmacy.ListControlledDrugRegister)))
+	mux.Handle("POST /api/v1/admissions/{admissionId}/controlled-drug-register", chain(http.HandlerFunc(pharmacy.AddControlledDrugEntry)))
+	mux.Handle("POST /api/v1/admissions/{admissionId}/medications/{medId}/verify", chain(http.HandlerFunc(pharmacy.VerifyBedside)))
+
+	// ── IV Pump / Smart Infusion Integration ───────────────────────────────────
+	mux.Handle("POST /api/v1/admissions/{admissionId}/medications/{medId}/iv-pump/link", chain(http.HandlerFunc(pharmacy.LinkIVPump)))
+	mux.Handle("POST /api/v1/admissions/{admissionId}/medications/{medId}/iv-pump/status", chain(http.HandlerFunc(pharmacy.UpdateIVPumpStatus)))
+	mux.Handle("GET /api/v1/admissions/{admissionId}/medications/{medId}/iv-pump", chain(http.HandlerFunc(pharmacy.ListIVInfusions)))
+
+	// ── Discharge Summary GP Transmission ─────────────────────────────────────
+	mux.Handle("POST /api/v1/admissions/{admissionId}/discharge-summary/notify-gp", chain(http.HandlerFunc(admissions.NotifyGP)))
 
 	// ── CPOE — Computerised Provider Order Entry (lab/imaging/consult orders) ─
 	mux.Handle("GET /api/v1/admissions/{admissionId}/orders", chain(http.HandlerFunc(cpoe.List)))

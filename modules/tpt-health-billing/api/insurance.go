@@ -1,10 +1,14 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/PhillipC05/tpt-healthcare/core/encryption"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // --- Domain types ---
@@ -84,6 +88,8 @@ type CreateInsuranceClaimRequest struct {
 
 // InsuranceHandler handles all /api/v1/insurance/* routes.
 type InsuranceHandler struct {
+	pool   *pgxpool.Pool
+	enc    *encryption.Encryptor
 	logger *slog.Logger
 }
 

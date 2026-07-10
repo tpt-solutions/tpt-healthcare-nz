@@ -38,26 +38,26 @@ const (
 type BedStatus string
 
 const (
-	BedStatusAvailable  BedStatus = "available"
-	BedStatusOccupied   BedStatus = "occupied"
-	BedStatusCleaning   BedStatus = "cleaning"
+	BedStatusAvailable   BedStatus = "available"
+	BedStatusOccupied    BedStatus = "occupied"
+	BedStatusCleaning    BedStatus = "cleaning"
 	BedStatusMaintenance BedStatus = "maintenance"
-	BedStatusBlocked    BedStatus = "blocked"
+	BedStatusBlocked     BedStatus = "blocked"
 )
 
 // Ward represents a hospital ward or clinical unit.
 type Ward struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Code         string    `json:"code"`   // e.g. "GW1", "ICU", "ED"
-	WardType     WardType  `json:"wardType"`
-	Floor        string    `json:"floor,omitempty"`
-	Building     string    `json:"building,omitempty"`
-	TotalBeds    int       `json:"totalBeds"`
-	AvailableBeds int      `json:"availableBeds"`
-	TenantID     string    `json:"tenantId"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Code          string    `json:"code"` // e.g. "GW1", "ICU", "ED"
+	WardType      WardType  `json:"wardType"`
+	Floor         string    `json:"floor,omitempty"`
+	Building      string    `json:"building,omitempty"`
+	TotalBeds     int       `json:"totalBeds"`
+	AvailableBeds int       `json:"availableBeds"`
+	TenantID      string    `json:"tenantId"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
 // Bed represents a single hospital bed within a ward.
@@ -213,6 +213,244 @@ func (h *WardsHandler) HospitalCapacity(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, snapshot)
+}
+
+// ── Patient-Flow Forecasting ──────────────────────────────────────────────────
+
+// FlowForecast provides projected bed demand based on historical length-of-stay.
+type FlowForecast struct {
+	GeneratedAt      time.Time                `json:"generatedAt"`
+	CurrentOccupancy map[string]WardOccupancy `json:"currentOccupancy"`
+	ProjectedDemand  []ProjectedDemandWindow  `json:"projectedDemand"`
+	Alerts           []FlowAlert              `json:"alerts"`
+	AverageLOS       map[string]float64       `json:"averageLosHours"` // avg hours by admission type
+}
+
+// WardOccupancy holds current occupancy stats for a ward type.
+type WardOccupancy struct {
+	TotalBeds     int     `json:"totalBeds"`
+	OccupiedBeds  int     `json:"occupiedBeds"`
+	AvailableBeds int     `json:"availableBeds"`
+	OccupancyPct  float64 `json:"occupancyPct"`
+}
+
+// ProjectedDemandWindow shows predicted discharges and occupancy at a future time.
+type ProjectedDemandWindow struct {
+	HoursFromNow       int     `json:"hoursFromNow"`
+	ExpectedDischarges int     `json:"expectedDischarges"`
+	ProjectedOccupied  int     `json:"projectedOccupied"`
+	ProjectedAvailable int     `json:"projectedAvailable"`
+	OccupancyPct       float64 `json:"occupancyPct"`
+}
+
+// FlowAlert flags capacity risks.
+type FlowAlert struct {
+	Level     string  `json:"level"` // "warning", "critical"
+	Message   string  `json:"message"`
+	WardType  string  `json:"wardType,omitempty"`
+	Threshold float64 `json:"threshold"`
+	Actual    float64 `json:"actual"`
+}
+
+// PatientFlowForecast handles GET /api/v1/wards/flow-forecast.
+func (h *WardsHandler) PatientFlowForecast(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+
+	forecast, err := h.buildFlowForecast(ctx, tenantID.String())
+	if err != nil {
+		h.logger.Error("patient flow forecast", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "FORECAST_ERROR", Message: "failed to generate flow forecast"})
+		return
+	}
+	writeJSON(w, http.StatusOK, forecast)
+}
+
+func (h *WardsHandler) buildFlowForecast(ctx context.Context, tenantID string) (FlowForecast, error) {
+	now := time.Now().UTC()
+
+	// 1. Get current bed occupancy by ward type.
+	capacity, err := h.capacitySnapshot(ctx, tenantID)
+	if err != nil {
+		return FlowForecast{}, fmt.Errorf("capacity snapshot: %w", err)
+	}
+
+	// Build ward-type occupancy map.
+	occupancy := make(map[string]WardOccupancy)
+	wardTotal := make(map[string]int)
+	wardAvail := make(map[string]int)
+
+	bedRows, err := h.pool.Query(ctx,
+		`SELECT w.ward_type, b.status, COUNT(*)
+		 FROM hospital_beds b
+		 JOIN hospital_wards w ON b.ward_id = w.id
+		 WHERE b.tenant_id = @tenant_id
+		 GROUP BY w.ward_type, b.status`,
+		db.NamedArgs{"tenant_id": tenantID},
+	)
+	if err != nil {
+		return FlowForecast{}, fmt.Errorf("query bed occupancy: %w", err)
+	}
+	defer bedRows.Close()
+
+	for bedRows.Next() {
+		var wt, status string
+		var count int
+		if err := bedRows.Scan(&wt, &status, &count); err != nil {
+			return FlowForecast{}, fmt.Errorf("scan bed occupancy: %w", err)
+		}
+		wardTotal[wt] += count
+		if status == "available" {
+			wardAvail[wt] += count
+		}
+	}
+	if err := bedRows.Err(); err != nil {
+		return FlowForecast{}, err
+	}
+
+	for wt, total := range wardTotal {
+		avail := wardAvail[wt]
+		occ := total - avail
+		pct := 0.0
+		if total > 0 {
+			pct = float64(occ) / float64(total) * 100
+		}
+		occupancy[wt] = WardOccupancy{
+			TotalBeds:     total,
+			OccupiedBeds:  occ,
+			AvailableBeds: avail,
+			OccupancyPct:  pct,
+		}
+	}
+
+	// 2. Calculate average LOS from recently discharged admissions (last 90 days).
+	losRows, err := h.pool.Query(ctx,
+		`SELECT admission_type,
+		        AVG(EXTRACT(EPOCH FROM (discharged_at - admitted_at)) / 3600) AS avg_los_hours,
+		        COUNT(*) AS sample_size
+		 FROM hospital_admissions
+		 WHERE tenant_id = @tenant_id
+		   AND status = 'discharged'
+		   AND discharged_at > now() - INTERVAL '90 days'
+		   AND discharged_at IS NOT NULL
+		 GROUP BY admission_type
+		 HAVING COUNT(*) >= 3`,
+		db.NamedArgs{"tenant_id": tenantID},
+	)
+	if err != nil {
+		return FlowForecast{}, fmt.Errorf("query avg LOS: %w", err)
+	}
+	defer losRows.Close()
+
+	avgLOS := make(map[string]float64)
+	for losRows.Next() {
+		var admType string
+		var avgHours float64
+		var sampleSize int
+		if err := losRows.Scan(&admType, &avgHours, &sampleSize); err != nil {
+			return FlowForecast{}, fmt.Errorf("scan LOS row: %w", err)
+		}
+		avgLOS[admType] = avgHours
+	}
+	if err := losRows.Err(); err != nil {
+		return FlowForecast{}, err
+	}
+
+	// 3. Get current active admissions with admitted_at and admission_type.
+	admRows, err := h.pool.Query(ctx,
+		`SELECT admission_type, admitted_at
+		 FROM hospital_admissions
+		 WHERE tenant_id = @tenant_id AND status IN ('admitted', 'in-hospital')`,
+		db.NamedArgs{"tenant_id": tenantID},
+	)
+	if err != nil {
+		return FlowForecast{}, fmt.Errorf("query active admissions: %w", err)
+	}
+	defer admRows.Close()
+
+	type activeAdmission struct {
+		AdmissionType string
+		AdmittedAt    time.Time
+	}
+	var activeAdmissions []activeAdmission
+	for admRows.Next() {
+		var a activeAdmission
+		if err := admRows.Scan(&a.AdmissionType, &a.AdmittedAt); err != nil {
+			return FlowForecast{}, fmt.Errorf("scan active admission: %w", err)
+		}
+		activeAdmissions = append(activeAdmissions, a)
+	}
+	if err := admRows.Err(); err != nil {
+		return FlowForecast{}, err
+	}
+
+	// 4. For each time window, predict how many admissions will discharge.
+	windows := []int{4, 8, 12, 24, 48}
+	var projected []ProjectedDemandWindow
+	var alerts []FlowAlert
+
+	for _, hours := range windows {
+		futureTime := now.Add(time.Duration(hours) * time.Hour)
+		expectedDischarges := 0
+
+		for _, a := range activeAdmissions {
+			los := avgLOS[a.AdmissionType]
+			if los <= 0 {
+				los = 72 // default 3-day LOS if no history
+			}
+			predictedDischarge := a.AdmittedAt.Add(time.Duration(los * float64(time.Hour)))
+			if predictedDischarge.Before(futureTime) {
+				expectedDischarges++
+			}
+		}
+
+		projectedOccupied := capacity.OccupiedBeds - expectedDischarges
+		if projectedOccupied < 0 {
+			projectedOccupied = 0
+		}
+		projectedAvailable := capacity.TotalBeds - projectedOccupied
+		pct := 0.0
+		if capacity.TotalBeds > 0 {
+			pct = float64(projectedOccupied) / float64(capacity.TotalBeds) * 100
+		}
+
+		projected = append(projected, ProjectedDemandWindow{
+			HoursFromNow:       hours,
+			ExpectedDischarges: expectedDischarges,
+			ProjectedOccupied:  projectedOccupied,
+			ProjectedAvailable: projectedAvailable,
+			OccupancyPct:       pct,
+		})
+
+		// Generate alerts.
+		if pct >= 95 {
+			alerts = append(alerts, FlowAlert{
+				Level:     "critical",
+				Message:   fmt.Sprintf("Projected occupancy at %dh: %.0f%% — at or above critical threshold", hours, pct),
+				Threshold: 95,
+				Actual:    pct,
+			})
+		} else if pct >= 85 {
+			alerts = append(alerts, FlowAlert{
+				Level:     "warning",
+				Message:   fmt.Sprintf("Projected occupancy at %dh: %.0f%% — approaching capacity", hours, pct),
+				Threshold: 85,
+				Actual:    pct,
+			})
+		}
+	}
+
+	return FlowForecast{
+		GeneratedAt:      now,
+		CurrentOccupancy: occupancy,
+		ProjectedDemand:  projected,
+		Alerts:           alerts,
+		AverageLOS:       avgLOS,
+	}, nil
 }
 
 // ── DB helpers ────────────────────────────────────────────────────────────────

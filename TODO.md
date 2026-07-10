@@ -12,64 +12,64 @@
 
 ### Tier 1 — High Priority (Rich Pure Logic)
 
-- [ ] **tpt-dental** — fdi/chart_test.go (~25 tests)
+- [x] **tpt-dental** — fdi/chart_test.go (~25 tests)
   - [x] Write test file
   - [x] Run & verify all pass
-- [ ] **tpt-dental** — fdi/surface_test.go (~18 tests)
+- [x] **tpt-dental** — fdi/surface_test.go (~18 tests)
   - [x] Write test file
   - [x] Run & verify all pass
-- [ ] **tpt-dental** — procedure/codes_test.go (~10 tests)
+- [x] **tpt-dental** — procedure/codes_test.go (~10 tests)
   - [x] Write test file
   - [x] Run & verify all pass
-- [ ] **tpt-dental** — acc/claim_test.go (~12 tests)
+- [x] **tpt-dental** — acc/claim_test.go (~12 tests)
   - [x] Write test file
   - [x] Run & verify all pass
-- [ ] **tpt-vision** — refraction/prescription_test.go (~22 tests)
+- [x] **tpt-vision** — refraction/prescription_test.go (~22 tests)
   - [x] Write test file
   - [x] Run & verify all pass
-- [ ] **tpt-vision** — optical/dispensing_test.go (~8 tests)
+- [x] **tpt-vision** — optical/dispensing_test.go (~8 tests)
   - [x] Write test file
   - [x] Run & verify all pass
-- [ ] **tpt-vision** — ophthalmology/exam_test.go (~5 tests)
+- [x] **tpt-vision** — ophthalmology/exam_test.go (~5 tests)
   - [x] Write test file
   - [x] Run & verify all pass
-- [ ] **tpt-vision** — acc/claim_test.go (~10 tests)
+- [x] **tpt-vision** — acc/claim_test.go (~10 tests)
   - [x] Write test file
   - [x] Run & verify all pass
-- [ ] **tpt-allied-health** — acc/claim_test.go (~19 tests)
+- [x] **tpt-allied-health** — acc/claim_test.go (~19 tests)
   - [x] Write test file
   - [x] Run & verify all pass
 
 ### Tier 1 — Sub-discipline Tests (Repeated Patterns)
 
-- [ ] **tpt-allied-health** — speech/therapy_test.go (~10 tests)
+- [x] **tpt-allied-health** — speech/therapy_test.go (~10 tests)
   - [x] Write test file
   - [x] Run & verify all pass
-- [ ] **tpt-allied-health** — physio/treatment_test.go (~8 tests)
+- [x] **tpt-allied-health** — physio/treatment_test.go (~8 tests)
   - [x] Write test file
   - [x] Run & verify all pass
-- [ ] **tpt-allied-health** — ot/assessment_test.go (~8 tests)
+- [x] **tpt-allied-health** — ot/assessment_test.go (~8 tests)
   - [x] Write test file
   - [x] Run & verify all pass
-- [ ] **tpt-allied-health** — podiatry/care_test.go (~10 tests)
+- [x] **tpt-allied-health** — podiatry/care_test.go (~10 tests)
   - [x] Write test file
   - [x] Run & verify all pass
 
 ### Tier 2 — Community Health
 
-- [ ] **tpt-community-health** — homevisit/visit_test.go (~12 tests)
+- [x] **tpt-community-health** — homevisit/visit_test.go (~12 tests)
   - [x] Write test file
   - [x] Run & verify all pass
-- [ ] **tpt-community-health** — outreach/program_test.go (~12 tests)
+- [x] **tpt-community-health** — outreach/program_test.go (~12 tests)
   - [x] Write test file
   - [x] Run & verify all pass
-- [ ] **tpt-community-health** — districtnursing/plan_test.go (~8 tests)
+- [x] **tpt-community-health** — districtnursing/plan_test.go (~8 tests)
   - [x] Write test file
   - [x] Run & verify all pass
 
 ### Tier 2 — Addiction
 
-- [ ] **tpt-addiction** — methadone/programme_test.go (~7 tests)
+- [x] **tpt-addiction** — methadone/programme_test.go (~7 tests)
   - [x] Write test file
   - [x] Run & verify all pass
 
@@ -85,13 +85,13 @@ See plan `lets-say-auckland-city-jolly-pinwheel.md` for full detail.
 
 - [x] **tpt-hospital / tpt-pathology / tpt-radiology** — CPOE implemented: `clinical_orders` table (`012_cpoe.sql`), `CPOEHandler` with 7 routes + result callback, HL7 ORM^O01 dispatch, admission-linked order lifecycle
   - [x] Design order model (admissionID-linked) and wire to pathology/radiology result callback
-- [ ] **core/hl7** — HL7 ADT (A01/A02/A03/A08) message builders missing; ORM/ORU builders already exist (`core/hl7/orm.go`, `core/hl7/oru.go`)
-  - [ ] Add ADT message builders for admit/transfer/discharge/update events
+- [x] **core/hl7** — HL7 ADT (A01/A02/A03/A08) message builders (`core/hl7/adt.go`) now wired into `tpt-hospital` admissions lifecycle (`AdmissionsHandler.sendADT`) via optional MLLP client (`Config.HL7MLLPAddr`), same pattern as CPOE's ORM dispatch
+  - [x] Add ADT message builders for admit/transfer/discharge/update events
   - [x] ORM builders for lab/imaging order messages
-- [ ] **tpt-hospital/api/billing.go** — DRG/casemix grouper is a placeholder (`deriveDRG` hardcodes ~4 AR-DRG buckets from first letter of diagnosis code)
-  - [ ] Implement real AR-DRG/WIES grouper in `core/terminology/`
-- [ ] **core/fhir** — No FHIR `Location` resource; `Encounter` only exists in r5, not r4
-  - [ ] Add Location resource type; add r4 Encounter for compatibility
+- [x] **tpt-hospital/api/billing.go** — `deriveDRG` now delegates to the existing `core/terminology.DRGGrouper` (MDC/category rules + MCC-driven complexity/weight adjustment) instead of its own hardcoded 4-bucket switch; MCC signal comes from `additional-diagnosis` codes on the admission
+  - [x] Implement real AR-DRG/WIES grouper in `core/terminology/` (grouper already existed but was unused; now wired in)
+- [x] **core/fhir** — `Location` resource exists in both `core/fhir/r5/location.go` and `core/fhir/r4/location.go`; `Encounter` exists in both `r5` and `r4` (`core/fhir/r4/encounter.go`). The FHIR REST API (`interop/api/fhir.go`) is generic over `resourceType` (JSONB store), so both work through CRUD/search with no extra registration.
+  - [x] Add Location resource type; add r4 Encounter for compatibility
 - [ ] **tpt-hospital/api/pharmacy_*.go** — eMAR lacks barcode/five-rights verification, controlled-drug (S8) register, IV pump/smart-infusion integration
   - [ ] Scope and implement bedside verification + S8 register
 - [ ] **tpt-hospital/api/icu.go** — ICU/PICU charting has no fluid balance charting or EWS/PEWS early-warning score engine; no PICU-specific charting distinct from adult ICU
@@ -143,7 +143,7 @@ See plan `lets-say-auckland-city-jolly-pinwheel.md` for full detail.
 
 ### Partial stubs in otherwise-real modules
 
-- [ ] **tpt-allied-health** — One "get by ID" handler each in `acc_handler.go`, `ot.go`, `podiatry.go`, `speech.go` marked `// TODO: fetch from database; stub returns placeholder data.` (11 handlers total)
+- [ ] **tpt-allied-health** — `acc_handler.go` now queries the real repo (resolved in be58032); `ot.go`, `podiatry.go`, `speech.go` "get by ID" handlers still marked `// TODO: fetch from database; stub returns placeholder data.` (10 handlers remaining)
 - [ ] **tpt-vision** — `acc.go` (ListClaims, GetClaimFHIR), `ophth.go` (GetExamFHIR), `optical.go` (GetOrderFHIR), `refraction.go` return hard-coded/placeholder payloads instead of real repo queries
 - [ ] **tpt-dental** — `acc.go` (SubmitClaim + claim CRUD) and `procedure.go` (treatment-record CRUD) explicitly commented "Simplified stub", operate on in-memory data
 - [ ] **tpt-doctor** — `api/pho.go` (PHO extract "would transmit" but doesn't) and `api/referrals.go` (`Send` doesn't dispatch to receiving provider's inbox)
@@ -174,10 +174,19 @@ generic `Tenant` model this would extend.
 
 ## Final Verification
 
-- [ ] Run `go test ./modules/tpt-dental/...`
-- [ ] Run `go test ./modules/tpt-vision/...`
-- [ ] Run `go test ./modules/tpt-allied-health/...`
-- [ ] Run `go test ./modules/tpt-community-health/...`
-- [ ] Run `go test ./modules/tpt-addiction/...`
-- [ ] Run `gofmt -w ./modules/...`
-- [ ] Run `make lint`
+- [x] Run `go test ./modules/tpt-dental/...` — all packages pass (see middleware fix below)
+- [x] Run `go test ./modules/tpt-vision/...` — all internal packages pass
+- [x] Run `go test ./modules/tpt-allied-health/...` — all internal packages pass
+- [x] Run `go test ./modules/tpt-community-health/...` — all packages pass (see middleware fix below)
+- [x] Run `go test ./modules/tpt-addiction/...` — all internal packages pass (no test files needed for counselling/prescribing — no pure logic to test)
+- [x] Run `gofmt -w ./modules/...` — applied to tpt-dental, tpt-vision, tpt-allied-health, tpt-community-health, tpt-addiction (all had alignment-only diffs)
+- [x] Run `make lint` (via `golangci-lint run ./internal/...` per module) — 0 issues across all five modules
+
+### Pre-existing build break found during verification (fixed)
+
+`modules/tpt-dental/api/server.go` and `modules/tpt-community-health/api/server.go` failed to compile because their
+`chain` middleware helper still called the old pre-refactor `core/middleware` signatures (`middleware.Auth`,
+`middleware.Tenant`, `middleware.Recovery`, and single-arg `AuditWrap`/`CORS`/`RateLimit`). Fixed both to match the
+current API (same pattern already used in `tpt-vision/api/server.go`): `middleware.AuditWrap(s.auditTrail)(h)`,
+`auth.RequireAuth(s.auth)(h)`, `middleware.TenantExtraction()(h)`, `middleware.CORS([]string{"*"})(h)`,
+`middleware.RateLimit(10, 30)(h)`, `middleware.RecoveryMiddleware()(h)`. Both modules now build and test clean.

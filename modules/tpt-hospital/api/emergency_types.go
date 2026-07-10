@@ -32,7 +32,7 @@ type CIMSRole string
 const (
 	CIMSRoleIC              CIMSRole = "incident_commander"
 	CIMSRoleDeputyIC        CIMSRole = "deputy_ic"
-	CIMSRoleSafetyOfficer  CIMSRole = "safety_officer"
+	CIMSRoleSafetyOfficer   CIMSRole = "safety_officer"
 	CIMSRoleOpsChief        CIMSRole = "operations_chief"
 	CIMSRoleLogisticsChief  CIMSRole = "logistics_chief"
 	CIMSRolePlanningChief   CIMSRole = "planning_chief"

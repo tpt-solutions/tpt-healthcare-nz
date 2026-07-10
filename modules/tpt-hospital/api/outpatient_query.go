@@ -102,15 +102,15 @@ func (h *OutpatientHandler) insertAppointment(ctx context.Context, clinicID stri
 		 RETURNING id, clinic_id, patient_id, patient_nhi, clinician_hpi, status, referral_id,
 		           reason, notes, scheduled_at, attended_at, tenant_id, created_at, updated_at`,
 		db.NamedArgs{
-			"clinic_id":    clinicID,
-			"patient_id":   req.PatientID,
-			"patient_nhi":  req.PatientNHI,
+			"clinic_id":     clinicID,
+			"patient_id":    req.PatientID,
+			"patient_nhi":   req.PatientNHI,
 			"clinician_hpi": req.ClinicianHPI,
-			"status":       OPApptBooked,
-			"referral_id":  req.ReferralID,
-			"reason":       req.Reason,
-			"scheduled_at": req.ScheduledAt,
-			"tenant_id":    tenantID,
+			"status":        OPApptBooked,
+			"referral_id":   req.ReferralID,
+			"reason":        req.Reason,
+			"scheduled_at":  req.ScheduledAt,
+			"tenant_id":     tenantID,
 		},
 	)
 	return scanOPApptRow(row)

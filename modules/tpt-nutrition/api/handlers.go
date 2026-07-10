@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -114,7 +115,13 @@ func (s *Server) handleListDiaryEntries(w http.ResponseWriter, r *http.Request) 
 	if !s.checkConsent(w, r, patientNHI) {
 		return
 	}
-	writeJSON(w, http.StatusOK, []fooddiary.FoodDiaryEntry{})
+	entries, err := s.listDiaryEntries(r.Context(), patientNHI)
+	if err != nil {
+		s.logger.Error("list diary entries failed", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "unable to retrieve food diary entries"})
+		return
+	}
+	writeJSON(w, http.StatusOK, entries)
 }
 
 func (s *Server) handleCreateDiaryEntry(w http.ResponseWriter, r *http.Request) {
@@ -139,8 +146,14 @@ func (s *Server) handleCreateDiaryEntry(w http.ResponseWriter, r *http.Request) 
 	now := time.Now().UnixMilli()
 	entry.CreatedAt = now
 	entry.UpdatedAt = now
-	s.recordEvent(r, principal, "create", "FoodDiaryEntry", entry.ID, entry.PatientNHI)
-	writeJSON(w, http.StatusCreated, entry)
+	created, err := s.createDiaryEntry(r.Context(), entry)
+	if err != nil {
+		s.logger.Error("create diary entry failed", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "unable to save food diary entry"})
+		return
+	}
+	s.recordEvent(r, principal, "create", "FoodDiaryEntry", created.ID, created.PatientNHI)
+	writeJSON(w, http.StatusCreated, created)
 }
 
 func (s *Server) handleGetDiaryEntry(w http.ResponseWriter, r *http.Request) {
@@ -156,8 +169,18 @@ func (s *Server) handleGetDiaryEntry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	entryID := r.PathValue("entryId")
+	entry, err := s.getDiaryEntry(r.Context(), entryID, patientNHI)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("diary entry %s not found", entryID)})
+			return
+		}
+		s.logger.Error("get diary entry failed", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "unable to retrieve food diary entry"})
+		return
+	}
 	s.recordEvent(r, principal, "read", "FoodDiaryEntry", entryID, patientNHI)
-	writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("diary entry %s not found", entryID)})
+	writeJSON(w, http.StatusOK, entry)
 }
 
 func (s *Server) handleUpdateDiaryEntry(w http.ResponseWriter, r *http.Request) {
@@ -182,8 +205,18 @@ func (s *Server) handleUpdateDiaryEntry(w http.ResponseWriter, r *http.Request) 
 	entry.ID = entryID
 	entry.PatientNHI = patientNHI
 	entry.UpdatedAt = time.Now().UnixMilli()
+	updated, err := s.updateDiaryEntry(r.Context(), entry)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("diary entry %s not found", entryID)})
+			return
+		}
+		s.logger.Error("update diary entry failed", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "unable to update food diary entry"})
+		return
+	}
 	s.recordEvent(r, principal, "update", "FoodDiaryEntry", entryID, patientNHI)
-	writeJSON(w, http.StatusOK, entry)
+	writeJSON(w, http.StatusOK, updated)
 }
 
 // ---- Meal Plan Handlers ----
@@ -200,7 +233,13 @@ func (s *Server) handleListMealPlans(w http.ResponseWriter, r *http.Request) {
 	if !s.checkConsent(w, r, patientNHI) {
 		return
 	}
-	writeJSON(w, http.StatusOK, []mealplan.MealPlan{})
+	plans, err := s.listMealPlans(r.Context(), patientNHI)
+	if err != nil {
+		s.logger.Error("list meal plans failed", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "unable to retrieve meal plans"})
+		return
+	}
+	writeJSON(w, http.StatusOK, plans)
 }
 
 func (s *Server) handleCreateMealPlan(w http.ResponseWriter, r *http.Request) {
@@ -226,8 +265,14 @@ func (s *Server) handleCreateMealPlan(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UnixMilli()
 	plan.CreatedAt = now
 	plan.UpdatedAt = now
-	s.recordEvent(r, principal, "create", "MealPlan", plan.ID, plan.PatientNHI)
-	writeJSON(w, http.StatusCreated, plan)
+	created, err := s.createMealPlan(r.Context(), plan)
+	if err != nil {
+		s.logger.Error("create meal plan failed", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "unable to save meal plan"})
+		return
+	}
+	s.recordEvent(r, principal, "create", "MealPlan", created.ID, created.PatientNHI)
+	writeJSON(w, http.StatusCreated, created)
 }
 
 func (s *Server) handleGetMealPlan(w http.ResponseWriter, r *http.Request) {
@@ -243,8 +288,18 @@ func (s *Server) handleGetMealPlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	planID := r.PathValue("planId")
+	plan, err := s.getMealPlan(r.Context(), planID, patientNHI)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("meal plan %s not found", planID)})
+			return
+		}
+		s.logger.Error("get meal plan failed", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "unable to retrieve meal plan"})
+		return
+	}
 	s.recordEvent(r, principal, "read", "MealPlan", planID, patientNHI)
-	writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("meal plan %s not found", planID)})
+	writeJSON(w, http.StatusOK, plan)
 }
 
 func (s *Server) handleUpdateMealPlan(w http.ResponseWriter, r *http.Request) {
@@ -270,8 +325,18 @@ func (s *Server) handleUpdateMealPlan(w http.ResponseWriter, r *http.Request) {
 	plan.PatientNHI = patientNHI
 	plan.ClinicianID = principal.PractitionerID
 	plan.UpdatedAt = time.Now().UnixMilli()
+	updated, err := s.updateMealPlan(r.Context(), plan)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("meal plan %s not found", planID)})
+			return
+		}
+		s.logger.Error("update meal plan failed", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "unable to update meal plan"})
+		return
+	}
 	s.recordEvent(r, principal, "update", "MealPlan", planID, patientNHI)
-	writeJSON(w, http.StatusOK, plan)
+	writeJSON(w, http.StatusOK, updated)
 }
 
 // ---- Body Composition Handlers ----
@@ -288,8 +353,18 @@ func (s *Server) handleGetBodyComp(w http.ResponseWriter, r *http.Request) {
 	if !s.checkConsent(w, r, patientNHI) {
 		return
 	}
+	bc, err := s.getLatestBodyComp(r.Context(), patientNHI)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusOK, &bodycomp.BodyComposition{PatientNHI: patientNHI})
+			return
+		}
+		s.logger.Error("get body composition failed", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "unable to retrieve body composition"})
+		return
+	}
 	s.recordEvent(r, principal, "read", "BodyComposition", patientNHI, patientNHI)
-	writeJSON(w, http.StatusOK, &bodycomp.BodyComposition{PatientNHI: patientNHI})
+	writeJSON(w, http.StatusOK, bc)
 }
 
 func (s *Server) handleCreateBodyComp(w http.ResponseWriter, r *http.Request) {
@@ -315,6 +390,12 @@ func (s *Server) handleCreateBodyComp(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UnixMilli()
 	bc.CreatedAt = now
 	bc.UpdatedAt = now
-	s.recordEvent(r, principal, "create", "BodyComposition", bc.ID, bc.PatientNHI)
-	writeJSON(w, http.StatusCreated, bc)
+	created, err := s.createBodyComp(r.Context(), bc)
+	if err != nil {
+		s.logger.Error("create body composition failed", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "unable to save body composition"})
+		return
+	}
+	s.recordEvent(r, principal, "create", "BodyComposition", created.ID, created.PatientNHI)
+	writeJSON(w, http.StatusCreated, created)
 }

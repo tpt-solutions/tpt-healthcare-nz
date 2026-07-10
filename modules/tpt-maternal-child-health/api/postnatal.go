@@ -36,31 +36,31 @@ const (
 )
 
 type PostnatalCheck struct {
-	ID                    string    `json:"id"`
-	MaternityEpisodeID    string    `json:"maternityEpisodeId"`
-	ClinicianHpi          string    `json:"clinicianHpi"`
-	CheckType             string    `json:"checkType"`
-	CheckSubject          string    `json:"checkSubject"`
-	MaternalBpSystolic    *int16    `json:"maternalBpSystolic"`
-	MaternalBpDiastolic   *int16    `json:"maternalBpDiastolic"`
-	MaternalPulseBpm      *int16    `json:"maternalPulseBpm"`
-	MaternalTemperatureC  *float64  `json:"maternalTemperatureC"`
-	MaternalFundalHeightCm *float64 `json:"maternalFundalHeightCm"`
-	MaternalLochia        *string   `json:"maternalLochia"`
-	MaternalPerineum      *string   `json:"maternalPerineum"`
-	MaternalMood          string    `json:"maternalMood"`
-	BabyWeightGrams       *int      `json:"babyWeightGrams"`
-	BabyTemperatureC      *float64  `json:"babyTemperatureC"`
-	BabyBilirubinUmol     *float64  `json:"babyBilirubinUmol"`
-	BabyJaundice          bool      `json:"babyJaundice"`
-	BabyFeedingMethod     *string   `json:"babyFeedingMethod"`
-	BabyFeedingIssues     *string   `json:"babyFeedingIssues"`
-	BabyUrineOutput       *string   `json:"babyUrineOutput"`
-	BabyStool             *string   `json:"babyStool"`
-	Notes                 *string   `json:"notes"`
-	CheckedAt             time.Time `json:"checkedAt"`
-	TenantID              string    `json:"tenantId"`
-	CreatedAt             time.Time `json:"createdAt"`
+	ID                     string    `json:"id"`
+	MaternityEpisodeID     string    `json:"maternityEpisodeId"`
+	ClinicianHpi           string    `json:"clinicianHpi"`
+	CheckType              string    `json:"checkType"`
+	CheckSubject           string    `json:"checkSubject"`
+	MaternalBpSystolic     *int16    `json:"maternalBpSystolic"`
+	MaternalBpDiastolic    *int16    `json:"maternalBpDiastolic"`
+	MaternalPulseBpm       *int16    `json:"maternalPulseBpm"`
+	MaternalTemperatureC   *float64  `json:"maternalTemperatureC"`
+	MaternalFundalHeightCm *float64  `json:"maternalFundalHeightCm"`
+	MaternalLochia         *string   `json:"maternalLochia"`
+	MaternalPerineum       *string   `json:"maternalPerineum"`
+	MaternalMood           string    `json:"maternalMood"`
+	BabyWeightGrams        *int      `json:"babyWeightGrams"`
+	BabyTemperatureC       *float64  `json:"babyTemperatureC"`
+	BabyBilirubinUmol      *float64  `json:"babyBilirubinUmol"`
+	BabyJaundice           bool      `json:"babyJaundice"`
+	BabyFeedingMethod      *string   `json:"babyFeedingMethod"`
+	BabyFeedingIssues      *string   `json:"babyFeedingIssues"`
+	BabyUrineOutput        *string   `json:"babyUrineOutput"`
+	BabyStool              *string   `json:"babyStool"`
+	Notes                  *string   `json:"notes"`
+	CheckedAt              time.Time `json:"checkedAt"`
+	TenantID               string    `json:"tenantId"`
+	CreatedAt              time.Time `json:"createdAt"`
 }
 
 type CommunityMidwifeVisit struct {
@@ -175,28 +175,28 @@ func (h *postnatalHandler) CreateCheck(w http.ResponseWriter, r *http.Request) {
 		          baby_bilirubin_umol, baby_jaundice, baby_feeding_method, baby_feeding_issues,
 		          baby_urine_output, baby_stool, notes, checked_at, tenant_id, created_at
 	`, pgx.NamedArgs{
-		"episode_id":               episodeID,
-		"clinician_hpi":            req.ClinicianHpi,
-		"check_type":               req.CheckType,
-		"check_subject":            req.CheckSubject,
-		"maternal_bp_systolic":     req.MaternalBpSystolic,
-		"maternal_bp_diastolic":    req.MaternalBpDiastolic,
-		"maternal_pulse_bpm":       req.MaternalPulseBpm,
-		"maternal_temperature_c":   req.MaternalTemperatureC,
+		"episode_id":                episodeID,
+		"clinician_hpi":             req.ClinicianHpi,
+		"check_type":                req.CheckType,
+		"check_subject":             req.CheckSubject,
+		"maternal_bp_systolic":      req.MaternalBpSystolic,
+		"maternal_bp_diastolic":     req.MaternalBpDiastolic,
+		"maternal_pulse_bpm":        req.MaternalPulseBpm,
+		"maternal_temperature_c":    req.MaternalTemperatureC,
 		"maternal_fundal_height_cm": req.MaternalFundalHeightCm,
-		"maternal_lochia":          req.MaternalLochia,
-		"maternal_perineum":        req.MaternalPerineum,
-		"maternal_mood":            req.MaternalMood,
-		"baby_weight_grams":        req.BabyWeightGrams,
-		"baby_temperature_c":       req.BabyTemperatureC,
-		"baby_bilirubin_umol":      req.BabyBilirubinUmol,
-		"baby_jaundice":            req.BabyJaundice,
-		"baby_feeding_method":      req.BabyFeedingMethod,
-		"baby_feeding_issues":      req.BabyFeedingIssues,
-		"baby_urine_output":        req.BabyUrineOutput,
-		"baby_stool":               req.BabyStool,
-		"notes":                    req.Notes,
-		"tenant_id":                tenantID,
+		"maternal_lochia":           req.MaternalLochia,
+		"maternal_perineum":         req.MaternalPerineum,
+		"maternal_mood":             req.MaternalMood,
+		"baby_weight_grams":         req.BabyWeightGrams,
+		"baby_temperature_c":        req.BabyTemperatureC,
+		"baby_bilirubin_umol":       req.BabyBilirubinUmol,
+		"baby_jaundice":             req.BabyJaundice,
+		"baby_feeding_method":       req.BabyFeedingMethod,
+		"baby_feeding_issues":       req.BabyFeedingIssues,
+		"baby_urine_output":         req.BabyUrineOutput,
+		"baby_stool":                req.BabyStool,
+		"notes":                     req.Notes,
+		"tenant_id":                 tenantID,
 	}).Scan(
 		&c.ID, &c.MaternityEpisodeID, &c.ClinicianHpi, &c.CheckType, &c.CheckSubject,
 		&c.MaternalBpSystolic, &c.MaternalBpDiastolic, &c.MaternalPulseBpm,
@@ -281,17 +281,17 @@ func (h *postnatalHandler) CreateCommunityVisit(w http.ResponseWriter, r *http.R
 		          days_postnatal, mother_wellbeing, baby_wellbeing, breastfeeding_support,
 		          issues_identified, referrals, visited_at, tenant_id, created_at
 	`, pgx.NamedArgs{
-		"episode_id":           episodeID,
-		"midwife_hpi":          req.MidwifeHpi,
-		"visit_number":         req.VisitNumber,
-		"visit_type":           req.VisitType,
-		"days_postnatal":       req.DaysPostnatal,
-		"mother_wellbeing":     req.MotherWellbeing,
-		"baby_wellbeing":       req.BabyWellbeing,
+		"episode_id":            episodeID,
+		"midwife_hpi":           req.MidwifeHpi,
+		"visit_number":          req.VisitNumber,
+		"visit_type":            req.VisitType,
+		"days_postnatal":        req.DaysPostnatal,
+		"mother_wellbeing":      req.MotherWellbeing,
+		"baby_wellbeing":        req.BabyWellbeing,
 		"breastfeeding_support": req.BreastfeedingSupport,
-		"issues_identified":    req.IssuesIdentified,
-		"referrals":            req.Referrals,
-		"tenant_id":            tenantID,
+		"issues_identified":     req.IssuesIdentified,
+		"referrals":             req.Referrals,
+		"tenant_id":             tenantID,
 	}).Scan(
 		&v.ID, &v.MaternityEpisodeID, &v.MidwifeHpi, &v.VisitNumber, &v.VisitType,
 		&v.DaysPostnatal, &v.MotherWellbeing, &v.BabyWellbeing, &v.BreastfeedingSupport,

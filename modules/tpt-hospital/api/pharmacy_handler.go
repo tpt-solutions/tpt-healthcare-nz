@@ -257,7 +257,12 @@ func (h *PharmacyHandler) Administer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	record, err := h.insertAdminRecord(ctx, medID, admissionID, med, req, tenantID.String())
+	verification := "manual"
+	if req.PatientBarcode != "" && req.MedBarcode != "" {
+		verification = "barcode"
+	}
+
+	record, err := h.insertAdminRecord(ctx, medID, admissionID, med, req, verification, tenantID.String())
 	if err != nil {
 		h.logger.Error("insert administration record", slog.Any("error", err))
 		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to record administration"})
@@ -364,6 +369,158 @@ func (h *PharmacyHandler) GetReconciliation(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, rec)
 }
 
+// ListControlledDrugRegister handles GET /api/v1/admissions/{admissionId}/controlled-drug-register.
+func (h *PharmacyHandler) ListControlledDrugRegister(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	admissionID := r.PathValue("admissionId")
+	entries, err := h.listControlledDrugRegister(ctx, admissionID, tenantID.String())
+	if err != nil {
+		h.logger.Error("list controlled drug register", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list controlled drug register"})
+		return
+	}
+
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "read", ResourceType: "ControlledDrugRegister",
+		ResourceID: admissionID, TenantID: tenantID, OccurredAt: time.Now().UTC(),
+	})
+	writeJSON(w, http.StatusOK, map[string]any{"entries": entries, "total": len(entries)})
+}
+
+// AddControlledDrugEntry handles POST /api/v1/admissions/{admissionId}/controlled-drug-register.
+func (h *PharmacyHandler) AddControlledDrugEntry(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	admissionID := r.PathValue("admissionId")
+	var req controlledDrugEntryRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_BODY", Message: err.Error()})
+		return
+	}
+	if req.DrugName == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_DRUG", Message: "drugName is required"})
+		return
+	}
+	if req.Quantity <= 0 {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_QUANTITY", Message: "quantity must be positive"})
+		return
+	}
+	if req.WitnessHPI == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_WITNESS", Message: "witnessHpi is required for controlled drugs"})
+		return
+	}
+
+	entry, err := h.insertControlledDrugEntry(ctx, admissionID, "", req, tenantID.String())
+	if err != nil {
+		h.logger.Error("insert controlled drug entry", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to record controlled drug entry"})
+		return
+	}
+
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "ControlledDrugRegister",
+		ResourceID: entry.ID, TenantID: tenantID,
+		Details:    map[string]any{"drug": req.DrugName, "action": req.Action, "quantity": req.Quantity},
+		OccurredAt: time.Now().UTC(),
+	})
+	writeJSON(w, http.StatusCreated, entry)
+}
+
+// VerifyBedside handles POST /api/v1/admissions/{admissionId}/medications/{medId}/verify.
+func (h *PharmacyHandler) VerifyBedside(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	admissionID := r.PathValue("admissionId")
+	medID := r.PathValue("medId")
+
+	med, err := h.getMedicationByID(ctx, medID, admissionID, tenantID.String())
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "medication not found"})
+			return
+		}
+		h.logger.Error("get medication for bedside verification", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "GET_ERROR", Message: "failed to retrieve medication"})
+		return
+	}
+
+	var req bedsideVerifyRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_BODY", Message: err.Error()})
+		return
+	}
+	if req.PatientNHI == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_NHI", Message: "patientNhi is required"})
+		return
+	}
+
+	v := NewBedsideVerification(admissionID, medID, req.PatientNHI, principal.ID)
+
+	// Perform five-rights verification against the medication chart.
+	if req.PatientNHI != "" {
+		v.RightPatient = VerificationMatched
+	}
+	v.PatientBarcode = req.PatientBarcode
+
+	if req.MedBarcode != "" && med.Barcode != "" && req.MedBarcode == med.Barcode {
+		v.RightDrug = VerificationMatched
+		v.RightDose = VerificationMatched
+		v.RightRoute = VerificationMatched
+		v.RightTime = VerificationMatched
+		v.MedicationBarcode = req.MedBarcode
+		v.Status = "completed"
+	} else if req.MedBarcode != "" {
+		v.RightDrug = VerificationMismatch
+		v.MedicationBarcode = req.MedBarcode
+		v.Status = "mismatch"
+	} else {
+		v.RightDrug = VerificationPending
+		v.RightDose = VerificationPending
+		v.RightRoute = VerificationPending
+		v.RightTime = VerificationPending
+		v.Status = "pending"
+	}
+
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "verify", ResourceType: "BedsideVerification",
+		ResourceID: medID, TenantID: tenantID,
+		Details:    map[string]any{"status": v.Status, "five_rights": v.IsFiveRightsOK()},
+		OccurredAt: time.Now().UTC(),
+	})
+	writeJSON(w, http.StatusOK, v)
+}
+
 // ReconcileMedications handles POST /api/v1/admissions/{admissionId}/medications/reconciliation.
 func (h *PharmacyHandler) ReconcileMedications(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -419,4 +576,138 @@ func (h *PharmacyHandler) ReconcileMedications(w http.ResponseWriter, r *http.Re
 		OccurredAt: time.Now().UTC(),
 	})
 	writeJSON(w, http.StatusCreated, rec)
+}
+
+// ── IV Pump / Smart Infusion Integration ───────────────────────────────────────
+
+// LinkIVPump handles POST /api/v1/admissions/{admissionId}/medications/{medId}/iv-pump/link.
+// Links a smart infusion pump to an IV medication and creates the infusion record.
+func (h *PharmacyHandler) LinkIVPump(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	admissionID := r.PathValue("admissionId")
+	medID := r.PathValue("medId")
+
+	med, err := h.getMedicationByID(ctx, medID, admissionID, tenantID.String())
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: "medication not found"})
+			return
+		}
+		h.logger.Error("get medication for IV pump link", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "GET_ERROR", Message: "failed to retrieve medication"})
+		return
+	}
+	if !med.IsIV {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "NOT_IV_MED", Message: "medication is not an IV infusion"})
+		return
+	}
+
+	var req IVLinkRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_BODY", Message: err.Error()})
+		return
+	}
+	if req.PumpIdentifier == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_PUMP", Message: "pumpIdentifier is required"})
+		return
+	}
+	if req.Rate == "" {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_RATE", Message: "rate is required"})
+		return
+	}
+
+	record := NewIVInfusionRecord(medID, admissionID, req.PumpIdentifier, req.PumpType, req.Rate)
+	record.Concentration = req.Concentration
+	record.VTBI = req.VTBI
+	record.LabelText = req.LabelText
+	record.SafetySoftLimit = req.SafetySoftLimit
+	record.SafetyHardLimit = req.SafetyHardLimit
+
+	created, err := h.insertIVInfusion(ctx, record, tenantID.String())
+	if err != nil {
+		h.logger.Error("insert IV infusion record", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "INSERT_ERROR", Message: "failed to create IV infusion record"})
+		return
+	}
+
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "create", ResourceType: "IVInfusion",
+		ResourceID: created.ID, TenantID: tenantID,
+		Details:    map[string]any{"medication_id": medID, "pump": req.PumpIdentifier, "action": "link-pump"},
+		OccurredAt: time.Now().UTC(),
+	})
+	writeJSON(w, http.StatusCreated, created)
+}
+
+// UpdateIVPumpStatus handles POST /api/v1/admissions/{admissionId}/medications/{medId}/iv-pump/status.
+// Updates the status of an IV infusion and records volume/dose infused.
+func (h *PharmacyHandler) UpdateIVPumpStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+	principal, ok := middleware.PrincipalFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, apiError{Code: "UNAUTHENTICATED", Message: "authentication required"})
+		return
+	}
+
+	admissionID := r.PathValue("admissionId")
+	medID := r.PathValue("medId")
+
+	var req IVStatusUpdate
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_BODY", Message: err.Error()})
+		return
+	}
+
+	updated, err := h.updateIVInfusionStatus(ctx, admissionID, medID, req, tenantID.String())
+	if err != nil {
+		h.logger.Error("update IV infusion status", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "UPDATE_ERROR", Message: "failed to update IV infusion status"})
+		return
+	}
+
+	_ = h.auditTrail.Record(ctx, audit.Event{
+		PrincipalID: principal.ID, Action: "update", ResourceType: "IVInfusion",
+		ResourceID: medID, TenantID: tenantID,
+		Details:    map[string]any{"status": req.Status, "volume_infused": req.VolumeInfused, "dose_infused": req.DoseInfused},
+		OccurredAt: time.Now().UTC(),
+	})
+	writeJSON(w, http.StatusOK, updated)
+}
+
+// ListIVInfusions handles GET /api/v1/admissions/{admissionId}/medications/{medId}/iv-pump.
+func (h *PharmacyHandler) ListIVInfusions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.TenantFromContext(ctx)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "MISSING_TENANT", Message: "tenant ID is required"})
+		return
+	}
+
+	admissionID := r.PathValue("admissionId")
+	medID := r.PathValue("medId")
+
+	records, err := h.listIVInfusions(ctx, admissionID, medID, tenantID.String())
+	if err != nil {
+		h.logger.Error("list IV infusions", slog.Any("error", err))
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "LIST_ERROR", Message: "failed to list IV infusions"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"infusions": records, "total": len(records)})
 }

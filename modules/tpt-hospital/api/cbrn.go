@@ -46,10 +46,10 @@ type CBRNDeconRecord struct {
 
 // CBRNZone is a derived view of patients grouped by decontamination zone.
 type CBRNZone struct {
-	Zone              string `json:"zone"`
-	TotalPatients     int    `json:"totalPatients"`
-	DeconComplete     int    `json:"deconComplete"`
-	ClearedForTreatment int  `json:"clearedForTreatment"`
+	Zone                string `json:"zone"`
+	TotalPatients       int    `json:"totalPatients"`
+	DeconComplete       int    `json:"deconComplete"`
+	ClearedForTreatment int    `json:"clearedForTreatment"`
 }
 
 type cbrnDeconStartRequest struct {
@@ -60,9 +60,9 @@ type cbrnDeconStartRequest struct {
 }
 
 type cbrnDeconCompleteRequest struct {
-	DeconBy          string `json:"deconBy,omitempty"`
-	ClearedForTreatment bool `json:"clearedForTreatment"`
-	Notes            string `json:"notes,omitempty"`
+	DeconBy             string `json:"deconBy,omitempty"`
+	ClearedForTreatment bool   `json:"clearedForTreatment"`
+	Notes               string `json:"notes,omitempty"`
 }
 
 // CBRNHandler handles all /api/v1/emergency/incidents/{id}/cbrn routes.
@@ -386,12 +386,12 @@ func (h *CBRNHandler) updateDeconComplete(ctx context.Context, mciPatientID, inc
 		           created_at, updated_at`,
 		db.NamedArgs{
 			"decon_complete_at": now,
-			"decon_by":         req.DeconBy,
-			"cleared":          req.ClearedForTreatment,
-			"notes":            req.Notes,
-			"mci_patient_id":   mciPatientID,
-			"incident_id":      incidentID,
-			"tenant_id":        tenantID,
+			"decon_by":          req.DeconBy,
+			"cleared":           req.ClearedForTreatment,
+			"notes":             req.Notes,
+			"mci_patient_id":    mciPatientID,
+			"incident_id":       incidentID,
+			"tenant_id":         tenantID,
 		},
 	)
 	rec, err := scanCBRNDeconRow(row)

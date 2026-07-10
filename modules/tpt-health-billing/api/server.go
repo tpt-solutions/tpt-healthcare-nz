@@ -10,6 +10,7 @@ import (
 
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/db/migrate"
+	"github.com/PhillipC05/tpt-healthcare/core/encryption"
 	billdb "github.com/PhillipC05/tpt-healthcare/modules/tpt-health-billing/db"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -32,6 +33,7 @@ type Server struct {
 	cfg    Config
 	mux    *http.ServeMux
 	pool   *pgxpool.Pool
+	enc    *encryption.Encryptor
 	logger *slog.Logger
 }
 
@@ -42,10 +44,16 @@ func NewServer(cfg Config, logger *slog.Logger) (*Server, error) {
 		return nil, fmt.Errorf("connect to database: %w", err)
 	}
 
+	enc, err := encryption.NewCipher(cfg.EncryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("init encryption: %w", err)
+	}
+
 	s := &Server{
 		cfg:    cfg,
 		mux:    http.NewServeMux(),
 		pool:   pool,
+		enc:    enc,
 		logger: logger,
 	}
 	s.registerRoutes()
@@ -53,11 +61,11 @@ func NewServer(cfg Config, logger *slog.Logger) (*Server, error) {
 }
 
 func (s *Server) registerRoutes() {
-	accHandler := &ACCHandler{logger: s.logger}
-	pharmaCHandler := &PHARMACHandler{logger: s.logger}
-	insuranceHandler := &InsuranceHandler{logger: s.logger}
-	invoiceHandler := &InvoiceHandler{logger: s.logger}
-	reconciliationHandler := &ReconciliationHandler{logger: s.logger}
+	accHandler := &ACCHandler{pool: s.pool, enc: s.enc, logger: s.logger}
+	pharmaCHandler := &PHARMACHandler{pool: s.pool, enc: s.enc, logger: s.logger}
+	insuranceHandler := &InsuranceHandler{pool: s.pool, enc: s.enc, logger: s.logger}
+	invoiceHandler := &InvoiceHandler{pool: s.pool, enc: s.enc, logger: s.logger}
+	reconciliationHandler := &ReconciliationHandler{pool: s.pool, enc: s.enc, logger: s.logger}
 
 	// ACC cross-module claiming
 	s.mux.HandleFunc("GET /api/v1/acc/claims", accHandler.List)

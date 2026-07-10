@@ -47,76 +47,76 @@ const (
 type CTGClassification string
 
 const (
-	CTGClassificationNormal      CTGClassification = "normal"
-	CTGClassificationSuspicious  CTGClassification = "suspicious"
+	CTGClassificationNormal       CTGClassification = "normal"
+	CTGClassificationSuspicious   CTGClassification = "suspicious"
 	CTGClassificationPathological CTGClassification = "pathological"
 )
 
 type IntrapartumEpisode struct {
-	ID                      string     `json:"id"`
-	MaternityEpisodeID      string     `json:"maternityEpisodeId"`
-	ClinicianHpi            string     `json:"clinicianHpi"`
-	Status                  string     `json:"status"`
-	OnsetType               string     `json:"onsetType"`
-	BirthSetting            string     `json:"birthSetting"`
-	LabourOnsetAt           *time.Time `json:"labourOnsetAt"`
-	ActiveLabourAt          *time.Time `json:"activeLabourAt"`
-	BirthAt                 *time.Time `json:"birthAt"`
-	DeliveryMethod          *string    `json:"deliveryMethod"`
-	PerinealOutcome         *string    `json:"perinealOutcome"`
-	BloodLossMl             *int       `json:"bloodLossMl"`
-	NeonatalSex             *string    `json:"neonatalSex"`
-	BirthWeightGrams        *int       `json:"birthWeightGrams"`
-	GestationAtBirthWeeks   *int16     `json:"gestationAtBirthWeeks"`
-	Apgar1min               *int16     `json:"apgar1min"`
-	Apgar5min               *int16     `json:"apgar5min"`
-	Apgar10min              *int16     `json:"apgar10min"`
-	CordPh                  *float64   `json:"cordPh"`
-	Notes                   *string    `json:"notes"`
-	TenantID                string     `json:"tenantId"`
-	CreatedAt               time.Time  `json:"createdAt"`
-	UpdatedAt               time.Time  `json:"updatedAt"`
+	ID                    string     `json:"id"`
+	MaternityEpisodeID    string     `json:"maternityEpisodeId"`
+	ClinicianHpi          string     `json:"clinicianHpi"`
+	Status                string     `json:"status"`
+	OnsetType             string     `json:"onsetType"`
+	BirthSetting          string     `json:"birthSetting"`
+	LabourOnsetAt         *time.Time `json:"labourOnsetAt"`
+	ActiveLabourAt        *time.Time `json:"activeLabourAt"`
+	BirthAt               *time.Time `json:"birthAt"`
+	DeliveryMethod        *string    `json:"deliveryMethod"`
+	PerinealOutcome       *string    `json:"perinealOutcome"`
+	BloodLossMl           *int       `json:"bloodLossMl"`
+	NeonatalSex           *string    `json:"neonatalSex"`
+	BirthWeightGrams      *int       `json:"birthWeightGrams"`
+	GestationAtBirthWeeks *int16     `json:"gestationAtBirthWeeks"`
+	Apgar1min             *int16     `json:"apgar1min"`
+	Apgar5min             *int16     `json:"apgar5min"`
+	Apgar10min            *int16     `json:"apgar10min"`
+	CordPh                *float64   `json:"cordPh"`
+	Notes                 *string    `json:"notes"`
+	TenantID              string     `json:"tenantId"`
+	CreatedAt             time.Time  `json:"createdAt"`
+	UpdatedAt             time.Time  `json:"updatedAt"`
 }
 
 type PartogramEntry struct {
-	ID                       string     `json:"id"`
-	IntrapartumEpisodeID     string     `json:"intrapartumEpisodeId"`
-	ClinicianHpi             string     `json:"clinicianHpi"`
-	CervicalDilationCm       *float64   `json:"cervicalDilationCm"`
-	FetalStation             *int16     `json:"fetalStation"`
-	ContractionsIn10min      *int16     `json:"contractionsIn10min"`
-	ContractionDurationSecs  *int16     `json:"contractionDurationSecs"`
-	FetalHeartRateBpm        *int16     `json:"fetalHeartRateBpm"`
-	MaternalBpSystolic       *int16     `json:"maternalBpSystolic"`
-	MaternalBpDiastolic      *int16     `json:"maternalBpDiastolic"`
-	MaternalPulseBpm         *int16     `json:"maternalPulseBpm"`
-	TemperatureCelsius       *float64   `json:"temperatureCelsius"`
-	UrineVolumeMl            *int       `json:"urineVolumeMl"`
-	LiquorColour             *string    `json:"liquorColour"`
-	Caput                    *int16     `json:"caput"`
-	Moulding                 *int16     `json:"moulding"`
-	OxytocinDoseMuPerMin     *float64   `json:"oxytocinDoseMuPerMin"`
-	Analgesic                *string    `json:"analgesic"`
-	Notes                    *string    `json:"notes"`
-	RecordedAt               time.Time  `json:"recordedAt"`
-	TenantID                 string     `json:"tenantId"`
+	ID                      string    `json:"id"`
+	IntrapartumEpisodeID    string    `json:"intrapartumEpisodeId"`
+	ClinicianHpi            string    `json:"clinicianHpi"`
+	CervicalDilationCm      *float64  `json:"cervicalDilationCm"`
+	FetalStation            *int16    `json:"fetalStation"`
+	ContractionsIn10min     *int16    `json:"contractionsIn10min"`
+	ContractionDurationSecs *int16    `json:"contractionDurationSecs"`
+	FetalHeartRateBpm       *int16    `json:"fetalHeartRateBpm"`
+	MaternalBpSystolic      *int16    `json:"maternalBpSystolic"`
+	MaternalBpDiastolic     *int16    `json:"maternalBpDiastolic"`
+	MaternalPulseBpm        *int16    `json:"maternalPulseBpm"`
+	TemperatureCelsius      *float64  `json:"temperatureCelsius"`
+	UrineVolumeMl           *int      `json:"urineVolumeMl"`
+	LiquorColour            *string   `json:"liquorColour"`
+	Caput                   *int16    `json:"caput"`
+	Moulding                *int16    `json:"moulding"`
+	OxytocinDoseMuPerMin    *float64  `json:"oxytocinDoseMuPerMin"`
+	Analgesic               *string   `json:"analgesic"`
+	Notes                   *string   `json:"notes"`
+	RecordedAt              time.Time `json:"recordedAt"`
+	TenantID                string    `json:"tenantId"`
 }
 
 type CTGRecord struct {
-	ID                    string     `json:"id"`
-	IntrapartumEpisodeID  string     `json:"intrapartumEpisodeId"`
-	ClinicianHpi          string     `json:"clinicianHpi"`
-	BaselineBpm           *int16     `json:"baselineBpm"`
-	BaselineVariability   *string    `json:"baselineVariability"`
-	Accelerations         *bool      `json:"accelerations"`
-	Decelerations         *string    `json:"decelerations"`
-	UterineActivity       *string    `json:"uterineActivity"`
-	CtgClassification     string     `json:"ctgClassification"`
-	InterpretationNotes   *string    `json:"interpretationNotes"`
-	StartedAt             time.Time  `json:"startedAt"`
-	EndedAt               *time.Time `json:"endedAt"`
-	TenantID              string     `json:"tenantId"`
-	CreatedAt             time.Time  `json:"createdAt"`
+	ID                   string     `json:"id"`
+	IntrapartumEpisodeID string     `json:"intrapartumEpisodeId"`
+	ClinicianHpi         string     `json:"clinicianHpi"`
+	BaselineBpm          *int16     `json:"baselineBpm"`
+	BaselineVariability  *string    `json:"baselineVariability"`
+	Accelerations        *bool      `json:"accelerations"`
+	Decelerations        *string    `json:"decelerations"`
+	UterineActivity      *string    `json:"uterineActivity"`
+	CtgClassification    string     `json:"ctgClassification"`
+	InterpretationNotes  *string    `json:"interpretationNotes"`
+	StartedAt            time.Time  `json:"startedAt"`
+	EndedAt              *time.Time `json:"endedAt"`
+	TenantID             string     `json:"tenantId"`
+	CreatedAt            time.Time  `json:"createdAt"`
 }
 
 // intrapartumHandler manages birth episodes, partogram charting, and CTG monitoring.
@@ -522,17 +522,17 @@ func (h *intrapartumHandler) AddCTG(w http.ResponseWriter, r *http.Request) {
 		          accelerations, decelerations, uterine_activity, ctg_classification,
 		          interpretation_notes, started_at, ended_at, tenant_id, created_at
 	`, pgx.NamedArgs{
-		"birth_id":              birthID,
-		"clinician_hpi":         req.ClinicianHpi,
-		"baseline_bpm":          req.BaselineBpm,
-		"baseline_variability":  req.BaselineVariability,
-		"accelerations":         req.Accelerations,
-		"decelerations":         req.Decelerations,
-		"uterine_activity":      req.UterineActivity,
-		"ctg_classification":    req.CtgClassification,
-		"interpretation_notes":  req.InterpretationNotes,
-		"ended_at":              req.EndedAt,
-		"tenant_id":             tenantID,
+		"birth_id":             birthID,
+		"clinician_hpi":        req.ClinicianHpi,
+		"baseline_bpm":         req.BaselineBpm,
+		"baseline_variability": req.BaselineVariability,
+		"accelerations":        req.Accelerations,
+		"decelerations":        req.Decelerations,
+		"uterine_activity":     req.UterineActivity,
+		"ctg_classification":   req.CtgClassification,
+		"interpretation_notes": req.InterpretationNotes,
+		"ended_at":             req.EndedAt,
+		"tenant_id":            tenantID,
 	}).Scan(
 		&c.ID, &c.IntrapartumEpisodeID, &c.ClinicianHpi, &c.BaselineBpm, &c.BaselineVariability,
 		&c.Accelerations, &c.Decelerations, &c.UterineActivity, &c.CtgClassification,

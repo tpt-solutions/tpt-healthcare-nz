@@ -35,55 +35,55 @@ const (
 type EDPresentationStatus string
 
 const (
-	EDStatusArrived    EDPresentationStatus = "arrived"
-	EDStatusTriaged    EDPresentationStatus = "triaged"
-	EDStatusAssigned   EDPresentationStatus = "assigned"     // bed and clinician assigned
-	EDStatusBeingSeen  EDPresentationStatus = "being-seen"
-	EDStatusWaiting    EDPresentationStatus = "waiting"      // awaiting results / review
-	EDStatusDisposed   EDPresentationStatus = "disposed"
+	EDStatusArrived   EDPresentationStatus = "arrived"
+	EDStatusTriaged   EDPresentationStatus = "triaged"
+	EDStatusAssigned  EDPresentationStatus = "assigned" // bed and clinician assigned
+	EDStatusBeingSeen EDPresentationStatus = "being-seen"
+	EDStatusWaiting   EDPresentationStatus = "waiting" // awaiting results / review
+	EDStatusDisposed  EDPresentationStatus = "disposed"
 )
 
 // EDDisposition records the outcome of the ED visit.
 type EDDisposition string
 
 const (
-	EDDispositionAdmit      EDDisposition = "admitted"
-	EDDispositionTransfer   EDDisposition = "transferred"
-	EDDispositionDischarge  EDDisposition = "discharged"
-	EDDispositionDNW        EDDisposition = "did-not-wait"
-	EDDispositionDeceased   EDDisposition = "deceased"
+	EDDispositionAdmit     EDDisposition = "admitted"
+	EDDispositionTransfer  EDDisposition = "transferred"
+	EDDispositionDischarge EDDisposition = "discharged"
+	EDDispositionDNW       EDDisposition = "did-not-wait"
+	EDDispositionDeceased  EDDisposition = "deceased"
 )
 
 // EDPresentation represents a single patient presentation to the emergency department.
 type EDPresentation struct {
-	ID               string               `json:"id"`
-	PatientID        string               `json:"patientId,omitempty"`
-	PatientNHI       string               `json:"patientNhi,omitempty"`
-	TriageCategory   TriageCategory       `json:"triageCategory"`
-	Status           EDPresentationStatus `json:"status"`
-	ChiefComplaint   string               `json:"chiefComplaint"`
-	TriageNotes      string               `json:"triageNotes,omitempty"`
-	TriageNurseHPI   string               `json:"triageNurseHpi,omitempty"`
-	AssignedBedID    string               `json:"assignedBedId,omitempty"`
-	AssignedClinicianHPI string           `json:"assignedClinicianHpi,omitempty"`
-	Disposition      EDDisposition        `json:"disposition,omitempty"`
-	DispositionNotes string               `json:"dispositionNotes,omitempty"`
-	AdmissionID      string               `json:"admissionId,omitempty"` // set if admitted
-	ArrivalMode      string               `json:"arrivalMode,omitempty"` // ambulance, walk-in, air
-	TenantID         string               `json:"tenantId"`
-	ArrivedAt        time.Time            `json:"arrivedAt"`
-	TriagedAt        *time.Time           `json:"triagedAt,omitempty"`
-	DisposedAt       *time.Time           `json:"disposedAt,omitempty"`
-	CreatedAt        time.Time            `json:"createdAt"`
-	UpdatedAt        time.Time            `json:"updatedAt"`
+	ID                   string               `json:"id"`
+	PatientID            string               `json:"patientId,omitempty"`
+	PatientNHI           string               `json:"patientNhi,omitempty"`
+	TriageCategory       TriageCategory       `json:"triageCategory"`
+	Status               EDPresentationStatus `json:"status"`
+	ChiefComplaint       string               `json:"chiefComplaint"`
+	TriageNotes          string               `json:"triageNotes,omitempty"`
+	TriageNurseHPI       string               `json:"triageNurseHpi,omitempty"`
+	AssignedBedID        string               `json:"assignedBedId,omitempty"`
+	AssignedClinicianHPI string               `json:"assignedClinicianHpi,omitempty"`
+	Disposition          EDDisposition        `json:"disposition,omitempty"`
+	DispositionNotes     string               `json:"dispositionNotes,omitempty"`
+	AdmissionID          string               `json:"admissionId,omitempty"` // set if admitted
+	ArrivalMode          string               `json:"arrivalMode,omitempty"` // ambulance, walk-in, air
+	TenantID             string               `json:"tenantId"`
+	ArrivedAt            time.Time            `json:"arrivedAt"`
+	TriagedAt            *time.Time           `json:"triagedAt,omitempty"`
+	DisposedAt           *time.Time           `json:"disposedAt,omitempty"`
+	CreatedAt            time.Time            `json:"createdAt"`
+	UpdatedAt            time.Time            `json:"updatedAt"`
 }
 
 // EDQueueStats is a snapshot of the current ED waiting room.
 type EDQueueStats struct {
-	TotalWaiting   int            `json:"totalWaiting"`
-	ByCategory     map[int]int    `json:"byCategory"`
-	OldestWaitMins int            `json:"oldestWaitMins"`
-	GeneratedAt    time.Time      `json:"generatedAt"`
+	TotalWaiting   int         `json:"totalWaiting"`
+	ByCategory     map[int]int `json:"byCategory"`
+	OldestWaitMins int         `json:"oldestWaitMins"`
+	GeneratedAt    time.Time   `json:"generatedAt"`
 }
 
 type edCreateRequest struct {
@@ -102,8 +102,8 @@ type edUpdateRequest struct {
 }
 
 type edAssignRequest struct {
-	BedID         string `json:"bedId,omitempty"`
-	ClinicianHPI  string `json:"clinicianHpi"`
+	BedID        string `json:"bedId,omitempty"`
+	ClinicianHPI string `json:"clinicianHpi"`
 }
 
 type edDisposeRequest struct {

@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // VaccineScheduleEntry describes the vaccines due at a specific age point in the
@@ -192,6 +194,7 @@ type RecallEntry struct {
 // OutbreakHandler handles /api/v1/outbreaks and /api/v1/recalls.
 type OutbreakHandler struct {
 	logger *slog.Logger
+	pool   *pgxpool.Pool
 }
 
 // Record handles POST /api/v1/outbreaks — register a new disease outbreak.
@@ -223,27 +226,27 @@ func (h *OutbreakHandler) Record(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production:
-	//   1. Validate practitioner HPI scope (must include public health function).
-	//   2. Persist DiseaseOutbreak.
-	//   3. Enqueue a background recall-generation job via core/events.
-	//   4. Write AuditEvent with action="OUTBREAK-RECORDED".
-	//   5. Optionally notify regional public health unit via email/webhook.
-
 	now := time.Now().UTC()
 	outbreak.ID = fmt.Sprintf("outbreak-%d", now.UnixNano())
 	outbreak.ReportedAt = now
 	outbreak.CreatedAt = now
 
+	created, err := createOutbreak(r.Context(), h.pool, outbreak)
+	if err != nil {
+		h.logger.Error("create outbreak failed", "error", err, "request_id", r.Context().Value(requestIDKey))
+		writeError(w, http.StatusInternalServerError, "failed to record outbreak")
+		return
+	}
+
 	h.logger.Info("outbreak recorded",
-		"id", outbreak.ID,
-		"disease", outbreak.Disease,
-		"region", outbreak.Region,
-		"cases", outbreak.CasesCount,
+		"id", created.ID,
+		"disease", created.Disease,
+		"region", created.Region,
+		"cases", created.CasesCount,
 		"request_id", r.Context().Value(requestIDKey),
 	)
 
-	writeJSON(w, http.StatusCreated, outbreak)
+	writeJSON(w, http.StatusCreated, created)
 }
 
 // Recalls handles GET /api/v1/recalls — return the current immunisation recall list.
@@ -265,12 +268,6 @@ func (h *OutbreakHandler) Recalls(w http.ResponseWriter, r *http.Request) {
 	region := r.URL.Query().Get("region")
 	priority := r.URL.Query().Get("priority")
 
-	// In production:
-	//   1. Validate requester's authorization (public health scope via HPI).
-	//   2. Check consent / HIPC Rule 11 exception for outbreak response.
-	//   3. Query recall list from repository, filtered by params.
-	//   4. Write AuditEvent (read recall list) via core/audit.
-
 	h.logger.Info("recall list accessed",
 		"outbreak_id", outbreakID,
 		"region", region,
@@ -278,9 +275,16 @@ func (h *OutbreakHandler) Recalls(w http.ResponseWriter, r *http.Request) {
 		"request_id", r.Context().Value(requestIDKey),
 	)
 
+	recalls, err := listRecalls(r.Context(), h.pool, outbreakID, region, priority)
+	if err != nil {
+		h.logger.Error("list recalls failed", "error", err, "request_id", r.Context().Value(requestIDKey))
+		writeError(w, http.StatusInternalServerError, "failed to list recalls")
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"recalls":     []RecallEntry{},
-		"total":       0,
+		"recalls":     recalls,
+		"total":       len(recalls),
 		"generatedAt": time.Now().UTC(),
 	})
 }

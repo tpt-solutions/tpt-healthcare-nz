@@ -31,12 +31,12 @@ const (
 type AnaesthesiaType string
 
 const (
-	AnaesthesiaGA      AnaesthesiaType = "general"
+	AnaesthesiaGA       AnaesthesiaType = "general"
 	AnaesthesiaRegional AnaesthesiaType = "regional"
-	AnaesthesiaSpinal  AnaesthesiaType = "spinal"
+	AnaesthesiaSpinal   AnaesthesiaType = "spinal"
 	AnaesthesiaEpidural AnaesthesiaType = "epidural"
-	AnaesthesiaLocal   AnaesthesiaType = "local"
-	AnaesthesiaMonitor AnaesthesiaType = "monitored-sedation"
+	AnaesthesiaLocal    AnaesthesiaType = "local"
+	AnaesthesiaMonitor  AnaesthesiaType = "monitored-sedation"
 )
 
 // TheatreBooking represents a surgical theatre booking, aligned to FHIR R5 Appointment.
@@ -603,20 +603,20 @@ func (h *TheatreHandler) insertBooking(ctx context.Context, req theatreCreateReq
 		           scheduled_at, started_at, completed_at, operative_notes, post_op_notes, complications,
 		           tenant_id, created_at, updated_at`,
 		db.NamedArgs{
-			"patient_id":           req.PatientID,
-			"patient_nhi":          req.PatientNHI,
-			"admission_id":         req.AdmissionID,
-			"surgeon_hpi":          req.SurgeonHPI,
-			"assistant_hpi":        req.AssistantHPI,
-			"anaesthetist_hpi":     req.AnaesthetistHPI,
-			"theatre_id":           req.TheatreID,
-			"status":               TheatreStatusPlanned,
-			"procedure_name":       req.ProcedureName,
-			"procedure_codes":      req.ProcedureCodes,
-			"anaesthesia_type":     req.AnaesthesiaType,
+			"patient_id":            req.PatientID,
+			"patient_nhi":           req.PatientNHI,
+			"admission_id":          req.AdmissionID,
+			"surgeon_hpi":           req.SurgeonHPI,
+			"assistant_hpi":         req.AssistantHPI,
+			"anaesthetist_hpi":      req.AnaesthetistHPI,
+			"theatre_id":            req.TheatreID,
+			"status":                TheatreStatusPlanned,
+			"procedure_name":        req.ProcedureName,
+			"procedure_codes":       req.ProcedureCodes,
+			"anaesthesia_type":      req.AnaesthesiaType,
 			"planned_duration_mins": req.PlannedDurationMin,
-			"scheduled_at":         req.ScheduledAt,
-			"tenant_id":            tenantID,
+			"scheduled_at":          req.ScheduledAt,
+			"tenant_id":             tenantID,
 		},
 	)
 	return scanTheatreRow(row)

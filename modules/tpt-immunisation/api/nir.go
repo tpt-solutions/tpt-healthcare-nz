@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/PhillipC05/tpt-healthcare/core/fhir/r4"
 )
 
 // TokenFunc is a function that returns a bearer token for authenticating to the NIR FHIR API.
@@ -125,9 +127,10 @@ func (c *NIRClient) Submit(ctx context.Context, imm Immunisation) error {
 		return fmt.Errorf("NIRClient.Submit: get token: %w", err)
 	}
 
-	// In production: translate Immunisation (R5) → FHIR R4 Immunization via core/fhir/translate
-	// before marshalling and submitting. Here we submit the internal struct as a placeholder.
-	payload, err := json.Marshal(imm)
+	// Translate Immunisation (R5) → FHIR R4 Immunization via core/fhir/translate
+	// before marshalling and submitting.
+	r4Immunization := translateImmunisationToR4(imm)
+	payload, err := json.Marshal(r4Immunization)
 	if err != nil {
 		return fmt.Errorf("NIRClient.Submit: marshal: %w", err)
 	}
@@ -157,6 +160,45 @@ func (c *NIRClient) Submit(ctx context.Context, imm Immunisation) error {
 	}
 
 	return nil
+}
+
+// translateImmunisationToR4 converts the internal Immunisation struct to an R4 Immunization.
+func translateImmunisationToR4(im Immunisation) *r4.Immunization {
+	out := &r4.Immunization{
+		ResourceType:       "Immunization",
+		ID:                 im.ID,
+		Status:             im.Status,
+		VaccineCode:        r4.CodeableConcept{Text: im.VaccineCode.Text},
+		LotNumber:          im.LotNumber,
+	}
+	if !im.OccurrenceDateTime.IsZero() {
+		out.OccurrenceDateTime = &im.OccurrenceDateTime
+	}
+	// Convert vaccine code codings (NZMT)
+	for _, c := range im.VaccineCode.Coding {
+		out.VaccineCode.Coding = append(out.VaccineCode.Coding, r4.Coding{
+			System:  c.System,
+			Code:    c.Code,
+			Display: c.Display,
+		})
+	}
+	// Convert route codings (SNOMED CT)
+	if len(im.Route.Coding) > 0 {
+		c := im.Route.Coding[0]
+		out.Route = &r4.CodeableConcept{
+			Coding: []r4.Coding{{System: c.System, Code: c.Code, Display: c.Display}},
+		}
+	}
+	// Add patient reference with NHI identifier
+	out.Patient = &r4.Reference{
+		Reference: "Patient/" + im.PatientNHI,
+		Type:      "Patient",
+	}
+	// Convert note string to Annotation array
+	if im.Note != "" {
+		out.Note = []r4.Annotation{{Text: im.Note}}
+	}
+	return out
 }
 
 // NIRHandler handles /api/v1/nir routes — proxying to the NIR FHIR API.

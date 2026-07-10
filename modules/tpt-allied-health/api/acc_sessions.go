@@ -179,16 +179,48 @@ func (h *ACCHandler) createSessionTx(ctx context.Context, session *acc.Treatment
 // ListSessions lists treatment sessions for a claim.
 func (h *ACCHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	claimID := r.PathValue("id")
-	limit, offset := parsePagination(r)
+	if claimID == "" {
+		http.Error(w, "claim id path parameter is required", http.StatusBadRequest)
+		return
+	}
 
-	sessions := []acc.TreatmentSession{}
+	sessions, err := h.listSessions(r.Context(), claimID)
+	if err != nil {
+		http.Error(w, "failed to list sessions: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"data":     sessions,
-		"limit":    limit,
-		"offset":   offset,
-		"total":    len(sessions),
 		"claim_id": claimID,
+		"total":    len(sessions),
 	})
+}
+
+// listSessions loads sessions directly from the database (used by ListSessions).
+func (h *ACCHandler) listSessions(ctx context.Context, claimID string) ([]acc.TreatmentSession, error) {
+	const q = `SELECT id, claim_id, patient_nhi, clinician_id, session_date, session_number,
+	                   duration_minutes, charge_code, charge_amount, treatment_type, body_region,
+	                   subjective, objective, assessment, plan, status, submitted_at, paid_at, created_at, updated_at
+	            FROM acc_treatment_sessions
+	            WHERE claim_id = $1`
+	rows, err := h.pool.Query(ctx, q, claimID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []acc.TreatmentSession
+	for rows.Next() {
+		var s acc.TreatmentSession
+		if err := rows.Scan(&s.ID, &s.ClaimID, &s.PatientNHI, &s.ClinicianID, &s.SessionDate,
+			&s.SessionNumber, &s.DurationMinutes, &s.ChargeCode, &s.ChargeAmount,
+			&s.TreatmentType, &s.BodyRegion, &s.Subjective, &s.Objective, &s.Assessment,
+			&s.Plan, &s.Status, &s.SubmittedAt, &s.PaidAt, &s.CreatedAt, &s.UpdatedAt); err != nil {
+			continue
+		}
+		sessions = append(sessions, s)
+	}
+	return sessions, nil
 }

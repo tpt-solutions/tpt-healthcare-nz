@@ -50,15 +50,15 @@ export type FhirSearchParams = Record<
 
 export interface MatchParams {
   /** NHI number as a search parameter */
-  nhi?: string;
+  nhi?: string | undefined;
   /** Given name(s) */
-  given?: string;
+  given?: string | undefined;
   /** Family name */
-  family?: string;
+  family?: string | undefined;
   /** Date of birth (ISO 8601) */
-  birthdate?: string;
+  birthdate?: string | undefined;
   /** Gender code */
-  gender?: string;
+  gender?: string | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -149,10 +149,7 @@ export class TptApiClient {
     const response = await fetch(url.toString(), {
       method,
       headers,
-      body:
-        options.body !== undefined
-          ? JSON.stringify(options.body)
-          : undefined,
+      body: options.body !== undefined ? JSON.stringify(options.body) : null,
     });
 
     if (!response.ok) {

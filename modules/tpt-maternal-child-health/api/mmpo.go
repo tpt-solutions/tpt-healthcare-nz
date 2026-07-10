@@ -36,24 +36,24 @@ const (
 )
 
 type MMPOClaim struct {
-	ID                  string     `json:"id"`
-	MaternityEpisodeID  string     `json:"maternityEpisodeId"`
-	LMCHpi              string     `json:"lmcHpi"`
-	MmpoProviderNumber  string     `json:"mmpoProviderNumber"`
-	ClaimType           string     `json:"claimType"`
-	ServiceDate         string     `json:"serviceDate"`
-	ServiceCode         string     `json:"serviceCode"`
-	Units               float64    `json:"units"`
-	AmountNzd           *float64   `json:"amountNzd"`
-	Status              string     `json:"status"`
-	ClaimReference      *string    `json:"claimReference"`
-	SubmittedAt         *time.Time `json:"submittedAt"`
-	ResponseCode        *string    `json:"responseCode"`
-	ResponseMessage     *string    `json:"responseMessage"`
-	Notes               *string    `json:"notes"`
-	TenantID            string     `json:"tenantId"`
-	CreatedAt           time.Time  `json:"createdAt"`
-	UpdatedAt           time.Time  `json:"updatedAt"`
+	ID                 string     `json:"id"`
+	MaternityEpisodeID string     `json:"maternityEpisodeId"`
+	LMCHpi             string     `json:"lmcHpi"`
+	MmpoProviderNumber string     `json:"mmpoProviderNumber"`
+	ClaimType          string     `json:"claimType"`
+	ServiceDate        string     `json:"serviceDate"`
+	ServiceCode        string     `json:"serviceCode"`
+	Units              float64    `json:"units"`
+	AmountNzd          *float64   `json:"amountNzd"`
+	Status             string     `json:"status"`
+	ClaimReference     *string    `json:"claimReference"`
+	SubmittedAt        *time.Time `json:"submittedAt"`
+	ResponseCode       *string    `json:"responseCode"`
+	ResponseMessage    *string    `json:"responseMessage"`
+	Notes              *string    `json:"notes"`
+	TenantID           string     `json:"tenantId"`
+	CreatedAt          time.Time  `json:"createdAt"`
+	UpdatedAt          time.Time  `json:"updatedAt"`
 }
 
 // mmpoHandler manages MMPO LMC funding claims.
@@ -151,16 +151,16 @@ func (h *mmpoHandler) Create(w http.ResponseWriter, r *http.Request) {
 		          claim_reference, submitted_at, response_code, response_message, notes,
 		          tenant_id, created_at, updated_at
 	`, pgx.NamedArgs{
-		"episode_id":          req.MaternityEpisodeID,
-		"lmc_hpi":             req.LMCHpi,
+		"episode_id":           req.MaternityEpisodeID,
+		"lmc_hpi":              req.LMCHpi,
 		"mmpo_provider_number": req.MmpoProviderNumber,
-		"claim_type":          req.ClaimType,
-		"service_date":        req.ServiceDate,
-		"service_code":        req.ServiceCode,
-		"units":               req.Units,
-		"amount_nzd":          req.AmountNzd,
-		"notes":               req.Notes,
-		"tenant_id":           tenantID,
+		"claim_type":           req.ClaimType,
+		"service_date":         req.ServiceDate,
+		"service_code":         req.ServiceCode,
+		"units":                req.Units,
+		"amount_nzd":           req.AmountNzd,
+		"notes":                req.Notes,
+		"tenant_id":            tenantID,
 	}).Scan(
 		&c.ID, &c.MaternityEpisodeID, &c.LMCHpi, &c.MmpoProviderNumber, &c.ClaimType,
 		&c.ServiceDate, &c.ServiceCode, &c.Units, &c.AmountNzd, &c.Status,

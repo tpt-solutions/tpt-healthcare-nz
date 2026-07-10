@@ -15,7 +15,7 @@ export interface UseBluetoothReturn {
   error: string | null;
   device: BLEDeviceInfo | null;
   getCharacteristic: (serviceUUID: string, charUUID: string) => Promise<BluetoothRemoteGATTCharacteristic>;
-  connect: (filters: BluetoothRequestDeviceFilter[], optionalServices?: string[]) => Promise<BluetoothRemoteGATTServer | null>;
+  connect: (filters: BluetoothLEScanFilter[], optionalServices?: BluetoothServiceUUID[]) => Promise<BluetoothRemoteGATTServer | null>;
   disconnect: () => void;
 }
 
@@ -38,8 +38,8 @@ export function useBluetooth(): UseBluetoothReturn {
   }, []);
 
   const connect = useCallback(async (
-    filters: BluetoothRequestDeviceFilter[],
-    optionalServices: string[] = []
+    filters: BluetoothLEScanFilter[],
+    optionalServices: BluetoothServiceUUID[] = []
   ): Promise<BluetoothRemoteGATTServer | null> => {
     if (status === "unsupported") {
       setError("Web Bluetooth not supported in this browser");

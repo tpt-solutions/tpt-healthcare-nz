@@ -57,6 +57,7 @@ const (
 type NICUAdmission struct {
 	ID                    string     `json:"id"`
 	MaternityEpisodeID    *string    `json:"maternityEpisodeId"`
+	HospitalAdmissionID   *string    `json:"hospitalAdmissionId,omitempty"`
 	PatientNHI            string     `json:"patientNhi"`
 	NeonatologistHpi      string     `json:"neonatologistHpi"`
 	Status                string     `json:"status"`
@@ -108,23 +109,23 @@ type NICUVentilationChart struct {
 }
 
 type NICUDischargePlan struct {
-	ID                        string    `json:"id"`
-	NicuAdmissionID           string    `json:"nicuAdmissionId"`
-	ClinicianHpi              string    `json:"clinicianHpi"`
-	PlannedDischargeDate      *string   `json:"plannedDischargeDate"`
-	DischargeDestination      *string   `json:"dischargeDestination"`
-	DischargeWeightTargetGrams *int     `json:"dischargeWeightTargetGrams"`
-	FeedingPlan               *string   `json:"feedingPlan"`
-	Medications               *string   `json:"medications"`
-	FollowUpAppointments      *string   `json:"followUpAppointments"`
-	CarSeatOrganised          bool      `json:"carSeatOrganised"`
-	HomeOxygenRequired        bool      `json:"homeOxygenRequired"`
-	ApnoeaMonitorRequired     bool      `json:"apnoeaMonitorRequired"`
-	CommunityNurseReferral    bool      `json:"communityNurseReferral"`
-	Notes                     *string   `json:"notes"`
-	TenantID                  string    `json:"tenantId"`
-	CreatedAt                 time.Time `json:"createdAt"`
-	UpdatedAt                 time.Time `json:"updatedAt"`
+	ID                         string    `json:"id"`
+	NicuAdmissionID            string    `json:"nicuAdmissionId"`
+	ClinicianHpi               string    `json:"clinicianHpi"`
+	PlannedDischargeDate       *string   `json:"plannedDischargeDate"`
+	DischargeDestination       *string   `json:"dischargeDestination"`
+	DischargeWeightTargetGrams *int      `json:"dischargeWeightTargetGrams"`
+	FeedingPlan                *string   `json:"feedingPlan"`
+	Medications                *string   `json:"medications"`
+	FollowUpAppointments       *string   `json:"followUpAppointments"`
+	CarSeatOrganised           bool      `json:"carSeatOrganised"`
+	HomeOxygenRequired         bool      `json:"homeOxygenRequired"`
+	ApnoeaMonitorRequired      bool      `json:"apnoeaMonitorRequired"`
+	CommunityNurseReferral     bool      `json:"communityNurseReferral"`
+	Notes                      *string   `json:"notes"`
+	TenantID                   string    `json:"tenantId"`
+	CreatedAt                  time.Time `json:"createdAt"`
+	UpdatedAt                  time.Time `json:"updatedAt"`
 }
 
 // nicuHandler manages NICU admissions, ventilation charting, and discharge planning.
@@ -248,23 +249,23 @@ func (h *nicuHandler) Admit(w http.ResponseWriter, r *http.Request) {
 		          respiratory_support, surfactant_given, tpn_active, phototherapy_active, antibiotics_active,
 		          tenant_id, admitted_at, discharged_at, created_at, updated_at
 	`, pgx.NamedArgs{
-		"maternity_episode_id":    req.MaternityEpisodeID,
-		"patient_nhi":             nhiEnc,
-		"neonatologist_hpi":       req.NeonatologistHpi,
-		"admission_reason":        req.AdmissionReason,
-		"admission_type":          req.AdmissionType,
+		"maternity_episode_id":     req.MaternityEpisodeID,
+		"patient_nhi":              nhiEnc,
+		"neonatologist_hpi":        req.NeonatologistHpi,
+		"admission_reason":         req.AdmissionReason,
+		"admission_type":           req.AdmissionType,
 		"gestation_at_birth_weeks": req.GestationAtBirthWeeks,
-		"birth_weight_grams":      req.BirthWeightGrams,
-		"current_weight_grams":    req.CurrentWeightGrams,
-		"bed_label":               req.BedLabel,
-		"apgar_1min":              req.Apgar1min,
-		"apgar_5min":              req.Apgar5min,
-		"respiratory_support":     req.RespiratorySupport,
-		"surfactant_given":        req.SurfactantGiven,
-		"tpn_active":              req.TpnActive,
-		"phototherapy_active":     req.PhototherapyActive,
-		"antibiotics_active":      req.AntibioticsActive,
-		"tenant_id":               tenantID,
+		"birth_weight_grams":       req.BirthWeightGrams,
+		"current_weight_grams":     req.CurrentWeightGrams,
+		"bed_label":                req.BedLabel,
+		"apgar_1min":               req.Apgar1min,
+		"apgar_5min":               req.Apgar5min,
+		"respiratory_support":      req.RespiratorySupport,
+		"surfactant_given":         req.SurfactantGiven,
+		"tpn_active":               req.TpnActive,
+		"phototherapy_active":      req.PhototherapyActive,
+		"antibiotics_active":       req.AntibioticsActive,
+		"tenant_id":                tenantID,
 	}).Scan(
 		&a.ID, &a.MaternityEpisodeID, &a.PatientNHI, &a.NeonatologistHpi, &a.Status,
 		&a.AdmissionReason, &a.AdmissionType, &a.GestationAtBirthWeeks, &a.BirthWeightGrams,

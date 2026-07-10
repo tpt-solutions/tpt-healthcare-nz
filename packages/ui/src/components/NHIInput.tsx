@@ -1,4 +1,4 @@
-import React, { useState, useId } from "react";
+import { useState, useId } from "react";
 import { validateNHI } from "@tpt/nz-codes";
 
 export interface NHIInputProps {

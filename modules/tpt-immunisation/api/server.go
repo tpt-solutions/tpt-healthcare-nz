@@ -58,9 +58,9 @@ func NewServer(cfg Config, logger *slog.Logger) (*Server, error) {
 }
 
 func (s *Server) registerRoutes() {
-	immHandler := &ImmunisationHandler{logger: s.logger, nir: s.nir}
+	immHandler := &ImmunisationHandler{logger: s.logger, pool: s.pool, nir: s.nir}
 	nirHandler := &NIRHandler{logger: s.logger, nir: s.nir}
-	outbreakHandler := &OutbreakHandler{logger: s.logger}
+	outbreakHandler := &OutbreakHandler{logger: s.logger, pool: s.pool}
 
 	// Immunisation recording
 	s.mux.HandleFunc("GET /api/v1/immunisations", immHandler.List)

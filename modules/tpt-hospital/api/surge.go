@@ -20,10 +20,10 @@ import (
 type SurgeLevel int
 
 const (
-	SurgeLevelNormal        SurgeLevel = 0 // business as usual
-	SurgeLevelExpanded      SurgeLevel = 1 // surge beds activated, electives deferred
-	SurgeLevelCrisis        SurgeLevel = 2 // discharge acceleration, overflow areas open
-	SurgeLevelCatastrophic  SurgeLevel = 3 // crisis standards of care; HEOC notification required
+	SurgeLevelNormal       SurgeLevel = 0 // business as usual
+	SurgeLevelExpanded     SurgeLevel = 1 // surge beds activated, electives deferred
+	SurgeLevelCrisis       SurgeLevel = 2 // discharge acceleration, overflow areas open
+	SurgeLevelCatastrophic SurgeLevel = 3 // crisis standards of care; HEOC notification required
 )
 
 // SurgeLevelName returns a human-readable label for a surge level.
@@ -42,19 +42,19 @@ func SurgeLevelName(l SurgeLevel) string {
 
 // SurgeCapacitySnapshot is a point-in-time hospital capacity record taken during an incident.
 type SurgeCapacitySnapshot struct {
-	ID                  string     `json:"id"`
-	IncidentID          string     `json:"incidentId"`
-	TenantID            string     `json:"tenantId"`
-	SurgeLevel          SurgeLevel `json:"surgeLevel"`
-	SurgeLevelName      string     `json:"surgeLevelName"`
-	TotalBeds           int        `json:"totalBeds"`
-	OccupiedBeds        int        `json:"occupiedBeds"`
-	SurgeBedsActivated  int        `json:"surgeBedsActivated"`
-	ICUTotal            int        `json:"icuTotal"`
-	ICUOccupied         int        `json:"icuOccupied"`
-	EDWaiting           int        `json:"edWaiting"`
-	RecordedBy          string     `json:"recordedBy"`
-	RecordedAt          time.Time  `json:"recordedAt"`
+	ID                 string     `json:"id"`
+	IncidentID         string     `json:"incidentId"`
+	TenantID           string     `json:"tenantId"`
+	SurgeLevel         SurgeLevel `json:"surgeLevel"`
+	SurgeLevelName     string     `json:"surgeLevelName"`
+	TotalBeds          int        `json:"totalBeds"`
+	OccupiedBeds       int        `json:"occupiedBeds"`
+	SurgeBedsActivated int        `json:"surgeBedsActivated"`
+	ICUTotal           int        `json:"icuTotal"`
+	ICUOccupied        int        `json:"icuOccupied"`
+	EDWaiting          int        `json:"edWaiting"`
+	RecordedBy         string     `json:"recordedBy"`
+	RecordedAt         time.Time  `json:"recordedAt"`
 }
 
 // SurgeStatus is the current surge state with the most recent snapshot.
@@ -66,7 +66,7 @@ type SurgeStatus struct {
 }
 
 type surgeSnapshotRequest struct {
-	SurgeBedsActivated int `json:"surgeBedsActivated"`
+	SurgeBedsActivated int    `json:"surgeBedsActivated"`
 	Notes              string `json:"notes,omitempty"`
 }
 

@@ -2,11 +2,14 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // --- Domain types ---
@@ -76,6 +79,7 @@ type NIRSubmitResult struct {
 // ImmunisationHandler handles all /api/v1/immunisations and /api/v1/schedule routes.
 type ImmunisationHandler struct {
 	logger *slog.Logger
+	pool   *pgxpool.Pool
 	nir    *NIRClient
 }
 
@@ -92,19 +96,25 @@ func (h *ImmunisationHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production:
-	//   1. Validate NHI format + checksum via core/nhi.
-	//   2. Check consent via core/consent (HIPC Rule 10 — use only for purpose collected).
-	//   3. Query FHIR repository for Immunization resources with patient NHI.
-	//   4. Write AuditEvent (read) via core/audit.
-
 	h.logger.Info("list immunisations", "nhi", nhi, "request_id", r.Context().Value(requestIDKey))
+
+	records, err := listImmunisations(r.Context(), h.pool, nhi)
+	if err != nil {
+		h.logger.Error("list immunisations failed", "error", err, "request_id", r.Context().Value(requestIDKey))
+		writeError(w, http.StatusInternalServerError, "failed to list immunisations")
+		return
+	}
+
+	entries := make([]map[string]any, 0, len(records))
+	for _, im := range records {
+		entries = append(entries, map[string]any{"resource": im})
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"resourceType": "Bundle",
 		"type":         "searchset",
-		"total":        0,
-		"entry":        []any{},
+		"total":        len(records),
+		"entry":        entries,
 	})
 }
 
@@ -147,29 +157,28 @@ func (h *ImmunisationHandler) Record(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production:
-	//   1. Validate NHI via core/nhi.
-	//   2. Validate practitioner APC + scope of practice via core/hpi.
-	//   3. Validate NZMT vaccine code against core/terminology.
-	//   4. Persist FHIR Immunization resource via core/repo.
-	//   5. Write AuditEvent (write) via core/audit.
-	//   6. Publish domain event via core/events.
-
 	now := time.Now().UTC()
 	imm.ID = fmt.Sprintf("imm-%d", now.UnixNano())
 	imm.NIRSubmitted = false
 	imm.CreatedAt = now
 	imm.UpdatedAt = now
 
+	created, err := createImmunisation(r.Context(), h.pool, imm)
+	if err != nil {
+		h.logger.Error("create immunisation failed", "error", err, "request_id", r.Context().Value(requestIDKey))
+		writeError(w, http.StatusInternalServerError, "failed to record immunisation")
+		return
+	}
+
 	h.logger.Info("immunisation recorded",
-		"id", imm.ID,
-		"patient_nhi", imm.PatientNHI,
-		"vaccine_code", imm.VaccineCode.Coding[0].Code,
-		"practitioner_hpi_cpn", imm.PractitionerHPICPN,
+		"id", created.ID,
+		"patient_nhi", created.PatientNHI,
+		"vaccine_code", created.VaccineCode.Coding[0].Code,
+		"practitioner_hpi_cpn", created.PractitionerHPICPN,
 		"request_id", r.Context().Value(requestIDKey),
 	)
 
-	writeFHIRJSON(w, http.StatusCreated, imm)
+	writeFHIRJSON(w, http.StatusCreated, created)
 }
 
 // Get handles GET /api/v1/immunisations/{id} — fetch a single immunisation record.
@@ -180,20 +189,20 @@ func (h *ImmunisationHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production:
-	//   1. Load Immunization FHIR resource from core/repo.
-	//   2. Check consent for the patient NHI in the resource (HIPC Rule 10).
-	//   3. Write AuditEvent (read) via core/audit.
-
 	h.logger.Info("get immunisation", "id", id, "request_id", r.Context().Value(requestIDKey))
 
-	writeJSON(w, http.StatusOK, Immunisation{
-		ResourceType: "Immunization",
-		ID:           id,
-		Status:       "completed",
-		CreatedAt:    time.Now().UTC(),
-		UpdatedAt:    time.Now().UTC(),
-	})
+	im, err := getImmunisation(r.Context(), h.pool, id)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeError(w, http.StatusNotFound, "immunisation not found")
+			return
+		}
+		h.logger.Error("get immunisation failed", "error", err, "request_id", r.Context().Value(requestIDKey))
+		writeError(w, http.StatusInternalServerError, "failed to get immunisation")
+		return
+	}
+
+	writeFHIRJSON(w, http.StatusOK, im)
 }
 
 // SubmitNIR handles POST /api/v1/immunisations/{id}/submit-nir.
@@ -215,18 +224,22 @@ func (h *ImmunisationHandler) SubmitNIR(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// In production:
-	//   1. Load Immunization FHIR resource from core/repo by id.
-	//   2. Check NIRSubmitted — if true, return 409 with existing NIRReferenceID.
-	//   3. Translate R5 → R4 Immunization via core/fhir/translate.
-	//   4. Call NIRClient.Submit(ctx, imm).
-	//   5. On success: update NIRSubmitted=true, set NIRReferenceID and NIRSubmittedAt.
-	//   6. Write AuditEvent with action="NIR-SUBMIT" and reference ID.
-
 	ctx := r.Context()
-	imm := Immunisation{
-		ResourceType: "Immunization",
-		ID:           id,
+
+	imm, err := getImmunisation(ctx, h.pool, id)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeError(w, http.StatusNotFound, "immunisation not found")
+			return
+		}
+		h.logger.Error("get immunisation for NIR submit failed", "error", err, "request_id", ctx.Value(requestIDKey))
+		writeError(w, http.StatusInternalServerError, "failed to load immunisation")
+		return
+	}
+
+	if imm.NIRSubmitted {
+		writeError(w, http.StatusConflict, fmt.Sprintf("already submitted to NIR: %s", imm.NIRReferenceID))
+		return
 	}
 
 	if err := h.nir.Submit(ctx, imm); err != nil {
@@ -240,9 +253,16 @@ func (h *ImmunisationHandler) SubmitNIR(w http.ResponseWriter, r *http.Request) 
 	}
 
 	now := time.Now().UTC()
+	nirRefID := fmt.Sprintf("nir-ref-%d", now.UnixNano())
+	if err := updateNIRSubmission(ctx, h.pool, id, nirRefID, now); err != nil {
+		h.logger.Error("update NIR submission failed", "error", err, "request_id", ctx.Value(requestIDKey))
+		writeError(w, http.StatusInternalServerError, "failed to update NIR submission status")
+		return
+	}
+
 	result := NIRSubmitResult{
 		ImmunisationID: id,
-		NIRReferenceID: fmt.Sprintf("nir-ref-%d", now.UnixNano()),
+		NIRReferenceID: nirRefID,
 		SubmittedAt:    now,
 	}
 

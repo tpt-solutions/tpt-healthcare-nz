@@ -19,18 +19,18 @@ const (
 )
 
 type LMCRegistration struct {
-	ID               string    `json:"id"`
-	EpisodeID        string    `json:"episodeId"`
-	LMCHpi           string    `json:"lmcHpi"`
-	LMCOrganisation  string    `json:"lmcOrganisation"`
-	RegistrationType string    `json:"registrationType"`
-	AcceptedAt       time.Time `json:"acceptedAt"`
+	ID               string     `json:"id"`
+	EpisodeID        string     `json:"episodeId"`
+	LMCHpi           string     `json:"lmcHpi"`
+	LMCOrganisation  string     `json:"lmcOrganisation"`
+	RegistrationType string     `json:"registrationType"`
+	AcceptedAt       time.Time  `json:"acceptedAt"`
 	HandoverAt       *time.Time `json:"handoverAt"`
-	HandoverToHpi    *string   `json:"handoverToHpi"`
-	HandoverReason   *string   `json:"handoverReason"`
-	TenantID         string    `json:"tenantId"`
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	HandoverToHpi    *string    `json:"handoverToHpi"`
+	HandoverReason   *string    `json:"handoverReason"`
+	TenantID         string     `json:"tenantId"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	UpdatedAt        time.Time  `json:"updatedAt"`
 }
 
 type registerLMCReq struct {

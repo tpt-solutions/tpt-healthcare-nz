@@ -25,3 +25,34 @@ CREATE TABLE IF NOT EXISTS immunisation_records (
 CREATE INDEX IF NOT EXISTS idx_immunisation_patient ON immunisation_records(patient_nhi);
 CREATE INDEX IF NOT EXISTS idx_immunisation_status ON immunisation_records(status);
 CREATE INDEX IF NOT EXISTS idx_immunisation_vaccine ON immunisation_records(vaccine_code);
+
+-- Disease outbreaks for recall tracking.
+CREATE TABLE IF NOT EXISTS outbreaks (
+    id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    disease         TEXT NOT NULL,
+    snomed_code     TEXT NOT NULL DEFAULT '',
+    region          TEXT NOT NULL,
+    reported_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    active_until    TIMESTAMPTZ NOT NULL,
+    cases_count     INTEGER NOT NULL DEFAULT 0,
+    contact_email   TEXT NOT NULL DEFAULT '',
+    notes           TEXT NOT NULL DEFAULT '',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Immunisation recalls generated from active outbreaks.
+CREATE TABLE IF NOT EXISTS recalls (
+    id                  TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    patient_nhi         TEXT NOT NULL,
+    outbreak_id         TEXT NOT NULL REFERENCES outbreaks(id),
+    disease             TEXT NOT NULL,
+    missing_vaccines    TEXT[] NOT NULL DEFAULT '{}',
+    last_contact_at     TIMESTAMPTZ,
+    priority            TEXT NOT NULL DEFAULT 'medium',
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_recalls_outbreak ON recalls(outbreak_id);
+CREATE INDEX IF NOT EXISTS idx_recalls_patient ON recalls(patient_nhi);
+CREATE INDEX IF NOT EXISTS idx_recalls_priority ON recalls(priority);

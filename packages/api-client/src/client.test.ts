@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TptApiClient, TptApiError } from "./client.js";
+import type { OperationOutcome } from "@tpt/fhir-types";
 
 // ---------------------------------------------------------------------------
 // TptApiError
@@ -16,8 +17,8 @@ describe("TptApiError", () => {
   });
 
   it("extracts detail from OperationOutcome", () => {
-    const outcome = {
-      resourceType: "OperationOutcome" as const,
+    const outcome: OperationOutcome = {
+      resourceType: "OperationOutcome",
       issue: [
         {
           severity: "error",

@@ -8,9 +8,9 @@ type Vitals struct {
 	DiastolicBP *float64 `json:"diastolicBp,omitempty"`
 	HeartRate   *float64 `json:"heartRate,omitempty"`
 	Temperature *float64 `json:"temperature,omitempty"` // °C
-	SpO2        *float64 `json:"spo2,omitempty"`         // %
-	RespRate    *float64 `json:"respRate,omitempty"`     // breaths/min
-	Weight      *float64 `json:"weight,omitempty"`       // kg
+	SpO2        *float64 `json:"spo2,omitempty"`        // %
+	RespRate    *float64 `json:"respRate,omitempty"`    // breaths/min
+	Weight      *float64 `json:"weight,omitempty"`      // kg
 }
 
 // HITHEpisodeStatus tracks the patient's HITH care episode.
@@ -42,7 +42,7 @@ type HITHEpisode struct {
 	LinkedAdmissionID string            `json:"linkedAdmissionId,omitempty"` // original inpatient admission
 	LeadClinicianHPI  string            `json:"leadClinicianHpi"`
 	Status            HITHEpisodeStatus `json:"status"`
-	Diagnosis         string            `json:"diagnosis"`          // primary condition being treated at home
+	Diagnosis         string            `json:"diagnosis"` // primary condition being treated at home
 	CareGoals         []string          `json:"careGoals"`
 	DailyVisitFreq    string            `json:"dailyVisitFrequency"` // e.g. "once", "twice", "bd"
 	HomeAddress       string            `json:"homeAddress"`

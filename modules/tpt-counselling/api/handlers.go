@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -131,7 +132,12 @@ func (s *Server) handleEAPListClaims(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, []eap.EAPClaim{})
+	claims, err := s.listEAPClaims(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to list EAP claims"})
+		return
+	}
+	writeJSON(w, http.StatusOK, claims)
 }
 
 func (s *Server) handleEAPCreateClaim(w http.ResponseWriter, r *http.Request) {
@@ -156,8 +162,13 @@ func (s *Server) handleEAPCreateClaim(w http.ResponseWriter, r *http.Request) {
 	claim.ProviderHPI = principal.PractitionerID
 	claim.CreatedAt = time.Now().UTC()
 	claim.UpdatedAt = claim.CreatedAt
-	s.recordEvent(r, principal, "create", "EAPClaim", claim.ID, claim.ClientNHI)
-	writeJSON(w, http.StatusCreated, claim)
+	result, err := s.createEAPClaim(r.Context(), claim)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to create EAP claim"})
+		return
+	}
+	s.recordEvent(r, principal, "create", "EAPClaim", result.ID, result.ClientNHI)
+	writeJSON(w, http.StatusCreated, result)
 }
 
 func (s *Server) handleEAPGetClaim(w http.ResponseWriter, r *http.Request) {
@@ -166,7 +177,16 @@ func (s *Server) handleEAPGetClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	claimID := r.PathValue("claimId")
-	writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("EAP claim %s not found", claimID)})
+	claim, err := s.getEAPClaim(r.Context(), claimID)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("EAP claim %s not found", claimID)})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to get EAP claim"})
+		return
+	}
+	writeJSON(w, http.StatusOK, claim)
 }
 
 func (s *Server) handleEAPUpdateClaim(w http.ResponseWriter, r *http.Request) {
@@ -187,8 +207,17 @@ func (s *Server) handleEAPUpdateClaim(w http.ResponseWriter, r *http.Request) {
 	claim.ID = claimID
 	claim.ProviderHPI = principal.PractitionerID
 	claim.UpdatedAt = time.Now().UTC()
-	s.recordEvent(r, principal, "update", "EAPClaim", claimID, claim.ClientNHI)
-	writeJSON(w, http.StatusOK, claim)
+	result, err := s.updateEAPClaim(r.Context(), claim)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("EAP claim %s not found", claimID)})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to update EAP claim"})
+		return
+	}
+	s.recordEvent(r, principal, "update", "EAPClaim", claimID, result.ClientNHI)
+	writeJSON(w, http.StatusOK, result)
 }
 
 // ---- Session Note Handlers — mental health records, elevated consent required ----
@@ -202,11 +231,15 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// Mental health records require the elevated disclosure consent check.
 	if !s.checkMentalHealthConsent(w, r, patientNHI) {
 		return
 	}
-	writeJSON(w, http.StatusOK, []session.Session{})
+	sessions, err := s.listSessions(r.Context(), patientNHI)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to list sessions"})
+		return
+	}
+	writeJSON(w, http.StatusOK, sessions)
 }
 
 // sessionCreateRequest wraps session.Session with an optional PRIMHD referral ID.
@@ -240,13 +273,18 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UnixMilli()
 	req.CreatedAt = now
 	req.UpdatedAt = now
-	s.recordEvent(r, principal, "create", "CounsellingSession", req.ID, req.ClientNHI)
+	result, err := s.createSession(r.Context(), req.Session)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to create session"})
+		return
+	}
+	s.recordEvent(r, principal, "create", "CounsellingSession", result.ID, result.ClientNHI)
 
 	if s.primhdClient != nil && req.PRIMHDReferralID != "" {
-		s.submitPRIMHDActivity(r, req.Session, req.PRIMHDReferralID)
+		s.submitPRIMHDActivity(r, result, req.PRIMHDReferralID)
 	}
 
-	writeJSON(w, http.StatusCreated, req.Session)
+	writeJSON(w, http.StatusCreated, result)
 }
 
 func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
@@ -262,8 +300,17 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sessionID := r.PathValue("sessionId")
+	sess, err := s.getSession(r.Context(), sessionID, patientNHI)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("session %s not found", sessionID)})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to get session"})
+		return
+	}
 	s.recordEvent(r, principal, "read", "CounsellingSession", sessionID, patientNHI)
-	writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("session %s not found", sessionID)})
+	writeJSON(w, http.StatusOK, sess)
 }
 
 // sessionUpdateRequest wraps session.Session with an optional PRIMHD referral ID.
@@ -296,14 +343,22 @@ func (s *Server) handleUpdateSession(w http.ResponseWriter, r *http.Request) {
 	req.ClientNHI = patientNHI
 	req.ClinicianID = principal.PractitionerID
 	req.UpdatedAt = time.Now().UnixMilli()
+	result, err := s.updateSession(r.Context(), req.Session)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeJSON(w, http.StatusNotFound, apiError{Code: "NOT_FOUND", Message: fmt.Sprintf("session %s not found", sessionID)})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to update session"})
+		return
+	}
 	s.recordEvent(r, principal, "update", "CounsellingSession", sessionID, patientNHI)
 
-	// PRIMHD: report this clinical contact as an activity record.
 	if s.primhdClient != nil && req.PRIMHDReferralID != "" {
-		s.submitPRIMHDActivity(r, req.Session, req.PRIMHDReferralID)
+		s.submitPRIMHDActivity(r, result, req.PRIMHDReferralID)
 	}
 
-	writeJSON(w, http.StatusOK, req.Session)
+	writeJSON(w, http.StatusOK, result)
 }
 
 // submitPRIMHDActivity reports a counselling session as a PRIMHD ActivityRecord.
@@ -362,7 +417,16 @@ func (s *Server) handlePrivateListClients(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, []private.PrivateClientResponse{})
+	clients, err := s.listPrivateClients(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to list private clients"})
+		return
+	}
+	responses := make([]private.PrivateClientResponse, 0, len(clients))
+	for _, c := range clients {
+		responses = append(responses, c.ToResponse(s.enc))
+	}
+	writeJSON(w, http.StatusOK, responses)
 }
 
 func (s *Server) handlePrivateCreateClient(w http.ResponseWriter, r *http.Request) {
@@ -383,7 +447,6 @@ func (s *Server) handlePrivateCreateClient(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusBadRequest, apiError{Code: "INVALID_NHI", Message: "NHI format is invalid"})
 		return
 	}
-	// PHI fields (Name, Email, Phone, NHI) are encrypted before persistence.
 	client, err := private.NewEncryptedClient(req, s.enc)
 	if err != nil {
 		s.logger.Error("PHI encryption failed", slog.Any("error", err))
@@ -394,8 +457,13 @@ func (s *Server) handlePrivateCreateClient(w http.ResponseWriter, r *http.Reques
 	now := time.Now().UnixMilli()
 	client.CreatedAt = now
 	client.UpdatedAt = now
-	s.recordEvent(r, principal, "create", "PrivateClient", client.ID, req.NHI)
-	writeJSON(w, http.StatusCreated, client.ToResponse(s.enc))
+	result, err := s.createPrivateClient(r.Context(), *client)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to create private client"})
+		return
+	}
+	s.recordEvent(r, principal, "create", "PrivateClient", result.ID, req.NHI)
+	writeJSON(w, http.StatusCreated, result.ToResponse(s.enc))
 }
 
 func (s *Server) handlePrivateCreateInvoice(w http.ResponseWriter, r *http.Request) {
@@ -416,6 +484,11 @@ func (s *Server) handlePrivateCreateInvoice(w http.ResponseWriter, r *http.Reque
 	now := time.Now().UnixMilli()
 	inv.CreatedAt = now
 	inv.UpdatedAt = now
-	s.recordEvent(r, principal, "create", "PrivateInvoice", inv.ID, "")
-	writeJSON(w, http.StatusCreated, inv)
+	result, err := s.createPrivateInvoice(r.Context(), inv)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Code: "DB_ERROR", Message: "failed to create private invoice"})
+		return
+	}
+	s.recordEvent(r, principal, "create", "PrivateInvoice", result.ID, "")
+	writeJSON(w, http.StatusCreated, result)
 }

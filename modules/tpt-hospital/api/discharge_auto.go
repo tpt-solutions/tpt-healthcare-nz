@@ -12,9 +12,9 @@ import (
 
 // DischargeSummaryData holds the source data for auto-populating a discharge summary.
 type DischargeSummaryData struct {
-	Admission       Admission            `json:"admission"`
-	Codes           []ClinicalCode       `json:"codes"`
-	Medications     []InpatientMedication `json:"medications"`
+	Admission   Admission             `json:"admission"`
+	Codes       []ClinicalCode        `json:"codes"`
+	Medications []InpatientMedication `json:"medications"`
 }
 
 // AutoPopulateDischargeSummary generates a discharge summary from admission data,

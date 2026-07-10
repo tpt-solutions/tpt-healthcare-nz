@@ -11,15 +11,16 @@ import (
 	"github.com/PhillipC05/tpt-healthcare/core/audit"
 	"github.com/PhillipC05/tpt-healthcare/core/db"
 	"github.com/PhillipC05/tpt-healthcare/core/middleware"
+	"github.com/PhillipC05/tpt-healthcare/core/terminology"
 )
 
 // FundingSource identifies how the admission is funded.
 type FundingSource string
 
 const (
-	FundingSourceDHB     FundingSource = "dhb"      // District Health Board / Te Whatu Ora
+	FundingSourceDHB     FundingSource = "dhb" // District Health Board / Te Whatu Ora
 	FundingSourceACC     FundingSource = "acc"
-	FundingSourcePrivate FundingSource = "private"   // health insurance or self-pay
+	FundingSourcePrivate FundingSource = "private" // health insurance or self-pay
 	FundingSourceMixed   FundingSource = "mixed"
 )
 
@@ -36,17 +37,17 @@ const (
 // DRGAssignment is the result of DRG (Diagnosis Related Group) grouping for an admission.
 // In NZ this maps to the AR-DRG (Australian Refined DRG) classification used by MoH.
 type DRGAssignment struct {
-	AdmissionID string    `json:"admissionId"`
-	MDC         string    `json:"mdc"`          // Major Diagnostic Category e.g. "05"
-	ARDRG       string    `json:"arDrg"`        // AR-DRG code e.g. "F74A"
-	Description string    `json:"description"`  // e.g. "Chest Pain"
-	Complexity  string    `json:"complexity"`   // A (most), B, C, Z (no CC)
-	BaseDays    int       `json:"baseDays"`     // trim points used for outlier calculation
-	BasePrice   float64   `json:"basePrice"`    // NZD, from published NZ casemix price
-	LengthOfStay int      `json:"lengthOfStay"` // days
-	Outlier     bool      `json:"outlier"`      // true if stay > high trim threshold
-	TenantID    string    `json:"tenantId"`
-	GeneratedAt time.Time `json:"generatedAt"`
+	AdmissionID  string    `json:"admissionId"`
+	MDC          string    `json:"mdc"`          // Major Diagnostic Category e.g. "05"
+	ARDRG        string    `json:"arDrg"`        // AR-DRG code e.g. "F74A"
+	Description  string    `json:"description"`  // e.g. "Chest Pain"
+	Complexity   string    `json:"complexity"`   // A (most), B, C, Z (no CC)
+	BaseDays     int       `json:"baseDays"`     // trim points used for outlier calculation
+	BasePrice    float64   `json:"basePrice"`    // NZD, from published NZ casemix price
+	LengthOfStay int       `json:"lengthOfStay"` // days
+	Outlier      bool      `json:"outlier"`      // true if stay > high trim threshold
+	TenantID     string    `json:"tenantId"`
+	GeneratedAt  time.Time `json:"generatedAt"`
 }
 
 // HospitalInvoiceLine is a single billable item on a hospital invoice.
@@ -250,9 +251,30 @@ func (h *BillingHandler) SubmitInvoice(w http.ResponseWriter, r *http.Request) {
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
 
-// deriveDRG computes the AR-DRG grouping from the principal diagnosis on the
-// admission. Full ARDRG grouping logic would call the core/terminology/ DRG
-// grouper; this implementation derives from stored codes and MoH price weights.
+// drgGrouper performs the AR-DRG-style grouping used to derive casemix
+// pricing for an admission. See core/terminology/drg_grouper.go — it groups
+// by MDC/principal-diagnosis category with an MCC (major complication or
+// comorbidity) weight/LOS adjustment; it does not reproduce the full
+// (proprietary) official AR-DRG grouper software byte-for-byte.
+var drgGrouper = &terminology.DRGGrouper{}
+
+// complexityLetter maps the grouper's basic/moderate/high complexity band
+// onto the conventional AR-DRG complexity-split suffix.
+func complexityLetter(band string) string {
+	switch band {
+	case "high":
+		return "A"
+	case "moderate":
+		return "B"
+	default:
+		return "Z" // no CC split
+	}
+}
+
+// deriveDRG computes the AR-DRG grouping from the coded diagnoses on the
+// admission: principal diagnosis selects the MDC/DRG category, and the
+// presence of any additional (secondary) diagnosis is treated as an MCC
+// (major complication/comorbidity) for weight and complexity purposes.
 func (h *BillingHandler) deriveDRG(ctx context.Context, admissionID, tenantID string) (DRGAssignment, error) {
 	row := h.pool.QueryRow(ctx,
 		`SELECT ha.id, ha.patient_id, ha.admitted_at, ha.discharged_at,
@@ -279,57 +301,40 @@ func (h *BillingHandler) deriveDRG(ctx context.Context, admissionID, tenantID st
 		}
 		return DRGAssignment{}, fmt.Errorf("derive DRG query: %w", err)
 	}
+	if principalDx == nil || *principalDx == "" {
+		return DRGAssignment{}, errNotFound
+	}
 
 	var los int
 	if dischargedAt != nil {
 		los = int(dischargedAt.Sub(admittedAt).Hours() / 24)
 	}
 
+	var mccCount int
+	if err := h.pool.QueryRow(ctx,
+		`SELECT count(*) FROM clinical_codes
+		 WHERE admission_id = @admission_id AND tenant_id = @tenant_id
+		   AND code_type = 'additional-diagnosis'`,
+		db.NamedArgs{"admission_id": admissionID, "tenant_id": tenantID},
+	).Scan(&mccCount); err != nil {
+		return DRGAssignment{}, fmt.Errorf("count secondary diagnoses: %w", err)
+	}
+
+	result := drgGrouper.GroupDRG(*principalDx, -1, mccCount > 0)
+
 	drg := DRGAssignment{
-		AdmissionID: admissionID,
+		AdmissionID:  admissionID,
+		MDC:          result.MDC,
+		ARDRG:        result.DRGCode,
+		Description:  result.DRGName,
+		Complexity:   complexityLetter(result.Complexity),
+		BaseDays:     result.LOS,
+		BasePrice:    result.BasePrice,
 		LengthOfStay: los,
-		GeneratedAt: time.Now().UTC(),
-		TenantID:    tenantID,
+		TenantID:     tenantID,
+		GeneratedAt:  time.Now().UTC(),
 	}
-
-	// Placeholder DRG grouping from principal diagnosis first character (MDC mapping).
-	// A production implementation would call core/terminology/drg_grouper.go.
-	if principalDx != nil && len(*principalDx) > 0 {
-		switch (*principalDx)[0] {
-		case 'I':
-			drg.MDC = "05"
-			drg.ARDRG = "F62B"
-			drg.Description = "Heart Failure & Shock"
-			drg.Complexity = "B"
-			drg.BaseDays = 4
-			drg.BasePrice = 4250.00
-		case 'J':
-			drg.MDC = "04"
-			drg.ARDRG = "E65B"
-			drg.Description = "Respiratory Signs & Symptoms"
-			drg.Complexity = "B"
-			drg.BaseDays = 3
-			drg.BasePrice = 2800.00
-		case 'S', 'T':
-			drg.MDC = "21"
-			drg.ARDRG = "W60B"
-			drg.Description = "Other Injury"
-			drg.Complexity = "B"
-			drg.BaseDays = 2
-			drg.BasePrice = 2100.00
-		default:
-			drg.MDC = "99"
-			drg.ARDRG = "Z64B"
-			drg.Description = "Other Factors Influencing Health Status"
-			drg.Complexity = "B"
-			drg.BaseDays = 2
-			drg.BasePrice = 1800.00
-		}
-	} else {
-		return DRGAssignment{}, errNotFound
-	}
-
-	drg.Outlier = los > drg.BaseDays*3
+	drg.Outlier = dischargedAt != nil && los > drg.BaseDays*3
 	return drg, nil
 }
 

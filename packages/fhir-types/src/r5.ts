@@ -168,6 +168,9 @@ export interface DomainResource extends ResourceBase {
   modifierExtension?: Extension[];
 }
 
+/** Any FHIR resource. Alias of ResourceBase for use as a generic constraint/default. */
+export type FhirResource = ResourceBase;
+
 // ---------------------------------------------------------------------------
 // Patient
 // ---------------------------------------------------------------------------
@@ -934,24 +937,24 @@ export interface BundleResponse {
   extension?: Extension[];
 }
 
-export interface BundleEntry {
+export interface BundleEntry<T extends ResourceBase = ResourceBase> {
   link?: BundleLink[];
   fullUrl?: FHIRUri;
-  resource?: ResourceBase;
+  resource?: T;
   search?: BundleSearch;
   request?: BundleRequest;
   response?: BundleResponse;
   extension?: Extension[];
 }
 
-export interface Bundle extends ResourceBase {
+export interface Bundle<T extends ResourceBase = ResourceBase> extends ResourceBase {
   resourceType: "Bundle";
   identifier?: Identifier;
   type: BundleType;
   timestamp?: FHIRInstant;
   total?: FHIRUnsignedInt;
   link?: BundleLink[];
-  entry?: BundleEntry[];
+  entry?: BundleEntry<T>[];
   signature?: unknown;
   issues?: ResourceBase;
 }
@@ -1009,4 +1012,41 @@ export interface OperationOutcomeIssue {
 export interface OperationOutcome extends DomainResource {
   resourceType: "OperationOutcome";
   issue: OperationOutcomeIssue[];
+}
+
+// ---------------------------------------------------------------------------
+// Subscription
+// ---------------------------------------------------------------------------
+
+export type SubscriptionStatus = "requested" | "active" | "error" | "off" | "entered-in-error";
+
+export interface SubscriptionFilterBy {
+  resourceType?: string;
+  filterParameter: string;
+  comparator?: string;
+  modifier?: string;
+  value: string;
+  extension?: Extension[];
+}
+
+export interface Subscription extends DomainResource {
+  resourceType: "Subscription";
+  identifier?: Identifier[];
+  name?: string;
+  status: SubscriptionStatus;
+  topic: FHIRCanonical;
+  contact?: ContactPoint[];
+  end?: FHIRInstant;
+  managingEntity?: Reference;
+  reason?: string;
+  filterBy?: SubscriptionFilterBy[];
+  channelType: Coding;
+  endpoint?: FHIRUrl;
+  parameter?: Array<{ name: string; value: string; extension?: Extension[] }>;
+  header?: string[];
+  heartbeatPeriod?: FHIRUnsignedInt;
+  timeout?: FHIRUnsignedInt;
+  contentType?: string;
+  content?: "empty" | "id-only" | "full-resource";
+  maxCount?: FHIRPositiveInt;
 }

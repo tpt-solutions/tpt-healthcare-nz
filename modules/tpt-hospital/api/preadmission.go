@@ -22,8 +22,8 @@ const (
 	PAStatusScheduled  PAStatus = "scheduled"
 	PAStatusInProgress PAStatus = "in-progress"
 	PAStatusCompleted  PAStatus = "completed"
-	PAStatusApproved   PAStatus = "approved"    // cleared for surgery
-	PAStatusDeferred   PAStatus = "deferred"    // needs further investigation before clearance
+	PAStatusApproved   PAStatus = "approved" // cleared for surgery
+	PAStatusDeferred   PAStatus = "deferred" // needs further investigation before clearance
 	PAStatusCancelled  PAStatus = "cancelled"
 )
 
@@ -31,39 +31,39 @@ const (
 type ASAGrade string
 
 const (
-	ASA1 ASAGrade = "I"    // Normal healthy patient
-	ASA2 ASAGrade = "II"   // Patient with mild systemic disease
-	ASA3 ASAGrade = "III"  // Severe systemic disease
-	ASA4 ASAGrade = "IV"   // Severe disease that is a constant threat to life
-	ASA5 ASAGrade = "V"    // Moribund patient not expected to survive without operation
-	ASA6 ASAGrade = "VI"   // Brain-dead patient (organ donation)
+	ASA1 ASAGrade = "I"   // Normal healthy patient
+	ASA2 ASAGrade = "II"  // Patient with mild systemic disease
+	ASA3 ASAGrade = "III" // Severe systemic disease
+	ASA4 ASAGrade = "IV"  // Severe disease that is a constant threat to life
+	ASA5 ASAGrade = "V"   // Moribund patient not expected to survive without operation
+	ASA6 ASAGrade = "VI"  // Brain-dead patient (organ donation)
 )
 
 // PreAdmissionAssessment documents the pre-operative PAC clinic review.
 type PreAdmissionAssessment struct {
-	ID                   string    `json:"id"`
-	PatientID            string    `json:"patientId"`
-	PatientNHI           string    `json:"patientNhi"`
-	TheatreBookingID     string    `json:"theatreBookingId,omitempty"`
-	AssessorHPI          string    `json:"assessorHpi"` // anaesthetist or PAC nurse
-	Status               PAStatus  `json:"status"`
-	PlannedProcedure     string    `json:"plannedProcedure"`
-	PlannedAnaesthesia   AnaesthesiaType `json:"plannedAnaesthesia"`
-	ASAGrade             ASAGrade  `json:"asaGrade,omitempty"`
-	AllergiesReviewed    bool      `json:"allergiesReviewed"`
-	MedicationsReviewed  bool      `json:"medicationsReviewed"`
-	BloodGroupConfirmed  bool      `json:"bloodGroupConfirmed"`
-	ConsentObtained      bool      `json:"consentObtained"`
-	FastingInstructions  string    `json:"fastingInstructions,omitempty"`
-	SpecialInstructions  string    `json:"specialInstructions,omitempty"`
-	ClinicalNotes        string    `json:"clinicalNotes,omitempty"`
-	DeferralReason       string    `json:"deferralReason,omitempty"`
-	InvestigationsRequired []string `json:"investigationsRequired,omitempty"` // e.g. ECG, bloods
-	TenantID             string    `json:"tenantId"`
-	AssessedAt           *time.Time `json:"assessedAt,omitempty"`
-	ApprovedAt           *time.Time `json:"approvedAt,omitempty"`
-	CreatedAt            time.Time `json:"createdAt"`
-	UpdatedAt            time.Time `json:"updatedAt"`
+	ID                     string          `json:"id"`
+	PatientID              string          `json:"patientId"`
+	PatientNHI             string          `json:"patientNhi"`
+	TheatreBookingID       string          `json:"theatreBookingId,omitempty"`
+	AssessorHPI            string          `json:"assessorHpi"` // anaesthetist or PAC nurse
+	Status                 PAStatus        `json:"status"`
+	PlannedProcedure       string          `json:"plannedProcedure"`
+	PlannedAnaesthesia     AnaesthesiaType `json:"plannedAnaesthesia"`
+	ASAGrade               ASAGrade        `json:"asaGrade,omitempty"`
+	AllergiesReviewed      bool            `json:"allergiesReviewed"`
+	MedicationsReviewed    bool            `json:"medicationsReviewed"`
+	BloodGroupConfirmed    bool            `json:"bloodGroupConfirmed"`
+	ConsentObtained        bool            `json:"consentObtained"`
+	FastingInstructions    string          `json:"fastingInstructions,omitempty"`
+	SpecialInstructions    string          `json:"specialInstructions,omitempty"`
+	ClinicalNotes          string          `json:"clinicalNotes,omitempty"`
+	DeferralReason         string          `json:"deferralReason,omitempty"`
+	InvestigationsRequired []string        `json:"investigationsRequired,omitempty"` // e.g. ECG, bloods
+	TenantID               string          `json:"tenantId"`
+	AssessedAt             *time.Time      `json:"assessedAt,omitempty"`
+	ApprovedAt             *time.Time      `json:"approvedAt,omitempty"`
+	CreatedAt              time.Time       `json:"createdAt"`
+	UpdatedAt              time.Time       `json:"updatedAt"`
 }
 
 type paCreateRequest struct {
@@ -76,16 +76,16 @@ type paCreateRequest struct {
 }
 
 type paUpdateRequest struct {
-	AssessorHPI             string          `json:"assessorHpi,omitempty"`
-	ASAGrade                ASAGrade        `json:"asaGrade,omitempty"`
-	AllergiesReviewed       *bool           `json:"allergiesReviewed,omitempty"`
-	MedicationsReviewed     *bool           `json:"medicationsReviewed,omitempty"`
-	BloodGroupConfirmed     *bool           `json:"bloodGroupConfirmed,omitempty"`
-	ConsentObtained         *bool           `json:"consentObtained,omitempty"`
-	FastingInstructions     string          `json:"fastingInstructions,omitempty"`
-	SpecialInstructions     string          `json:"specialInstructions,omitempty"`
-	ClinicalNotes           string          `json:"clinicalNotes,omitempty"`
-	InvestigationsRequired  []string        `json:"investigationsRequired,omitempty"`
+	AssessorHPI            string   `json:"assessorHpi,omitempty"`
+	ASAGrade               ASAGrade `json:"asaGrade,omitempty"`
+	AllergiesReviewed      *bool    `json:"allergiesReviewed,omitempty"`
+	MedicationsReviewed    *bool    `json:"medicationsReviewed,omitempty"`
+	BloodGroupConfirmed    *bool    `json:"bloodGroupConfirmed,omitempty"`
+	ConsentObtained        *bool    `json:"consentObtained,omitempty"`
+	FastingInstructions    string   `json:"fastingInstructions,omitempty"`
+	SpecialInstructions    string   `json:"specialInstructions,omitempty"`
+	ClinicalNotes          string   `json:"clinicalNotes,omitempty"`
+	InvestigationsRequired []string `json:"investigationsRequired,omitempty"`
 }
 
 type paApproveRequest struct {

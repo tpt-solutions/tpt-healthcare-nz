@@ -27,58 +27,58 @@ const (
 type IsolationType string
 
 const (
-	IsolationContact          IsolationType = "contact"
-	IsolationDroplet          IsolationType = "droplet"
-	IsolationAirborne         IsolationType = "airborne"
-	IsolationProtective       IsolationType = "protective"   // immunocompromised patient
-	IsolationCombined         IsolationType = "combined"     // droplet + contact
-	IsolationEnhancedContact  IsolationType = "enhanced-contact"
+	IsolationContact         IsolationType = "contact"
+	IsolationDroplet         IsolationType = "droplet"
+	IsolationAirborne        IsolationType = "airborne"
+	IsolationProtective      IsolationType = "protective" // immunocompromised patient
+	IsolationCombined        IsolationType = "combined"   // droplet + contact
+	IsolationEnhancedContact IsolationType = "enhanced-contact"
 )
 
 // HAIType lists healthcare-associated infection organism categories.
 type HAIType string
 
 const (
-	HAITypeMRSA   HAIType = "mrsa"
-	HAITypeVRE    HAIType = "vre"
-	HAITypeCDiff  HAIType = "c-difficile"
-	HAITypeCRE    HAIType = "cre"
-	HAITypeESBL   HAIType = "esbl"
-	HAITypeCOVID  HAIType = "covid-19"
+	HAITypeMRSA      HAIType = "mrsa"
+	HAITypeVRE       HAIType = "vre"
+	HAITypeCDiff     HAIType = "c-difficile"
+	HAITypeCRE       HAIType = "cre"
+	HAITypeESBL      HAIType = "esbl"
+	HAITypeCOVID     HAIType = "covid-19"
 	HAITypeInfluenza HAIType = "influenza"
-	HAITypeOther  HAIType = "other"
+	HAITypeOther     HAIType = "other"
 )
 
 // ICAlert is a hospital-wide or ward-specific infection control alert.
 type ICAlert struct {
-	ID           string          `json:"id"`
-	AlertType    HAIType         `json:"alertType"`
-	Severity     ICAlertSeverity `json:"severity"`
-	WardID       string          `json:"wardId,omitempty"` // empty = hospital-wide
-	Title        string          `json:"title"`
-	Description  string          `json:"description"`
-	Actions      []string        `json:"actions,omitempty"`
-	Active       bool            `json:"active"`
-	TenantID     string          `json:"tenantId"`
-	CreatedAt    time.Time       `json:"createdAt"`
-	UpdatedAt    time.Time       `json:"updatedAt"`
-	ResolvedAt   *time.Time      `json:"resolvedAt,omitempty"`
+	ID          string          `json:"id"`
+	AlertType   HAIType         `json:"alertType"`
+	Severity    ICAlertSeverity `json:"severity"`
+	WardID      string          `json:"wardId,omitempty"` // empty = hospital-wide
+	Title       string          `json:"title"`
+	Description string          `json:"description"`
+	Actions     []string        `json:"actions,omitempty"`
+	Active      bool            `json:"active"`
+	TenantID    string          `json:"tenantId"`
+	CreatedAt   time.Time       `json:"createdAt"`
+	UpdatedAt   time.Time       `json:"updatedAt"`
+	ResolvedAt  *time.Time      `json:"resolvedAt,omitempty"`
 }
 
 // IsolationOrder is an active isolation precaution on a patient admission.
 type IsolationOrder struct {
-	ID             string        `json:"id"`
-	AdmissionID    string        `json:"admissionId"`
-	PatientID      string        `json:"patientId"`
-	IsolationType  IsolationType `json:"isolationType"`
-	Reason         string        `json:"reason"`
-	Organism       HAIType       `json:"organism,omitempty"`
-	PPERequired    []string      `json:"ppeRequired"` // e.g. ["gloves","gown","mask","eyewear"]
-	SpecialNotes   string        `json:"specialNotes,omitempty"`
-	OrderedByHPI   string        `json:"orderedByHpi"`
-	TenantID       string        `json:"tenantId"`
-	StartedAt      time.Time     `json:"startedAt"`
-	EndedAt        *time.Time    `json:"endedAt,omitempty"`
+	ID            string        `json:"id"`
+	AdmissionID   string        `json:"admissionId"`
+	PatientID     string        `json:"patientId"`
+	IsolationType IsolationType `json:"isolationType"`
+	Reason        string        `json:"reason"`
+	Organism      HAIType       `json:"organism,omitempty"`
+	PPERequired   []string      `json:"ppeRequired"` // e.g. ["gloves","gown","mask","eyewear"]
+	SpecialNotes  string        `json:"specialNotes,omitempty"`
+	OrderedByHPI  string        `json:"orderedByHpi"`
+	TenantID      string        `json:"tenantId"`
+	StartedAt     time.Time     `json:"startedAt"`
+	EndedAt       *time.Time    `json:"endedAt,omitempty"`
 }
 
 type icAlertCreateRequest struct {

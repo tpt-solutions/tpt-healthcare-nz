@@ -18,7 +18,7 @@ type ClinicalCodeSystem string
 
 const (
 	CodeSystemICD10AM ClinicalCodeSystem = "ICD-10-AM" // diagnoses
-	CodeSystemACHI    ClinicalCodeSystem = "ACHI"       // Australian Classification of Health Interventions (procedures)
+	CodeSystemACHI    ClinicalCodeSystem = "ACHI"      // Australian Classification of Health Interventions (procedures)
 )
 
 // ClinicalCodeType distinguishes the clinical role of the code on an admission.
@@ -35,23 +35,23 @@ const (
 
 // ClinicalCode is a single coded diagnosis or procedure on an admission.
 type ClinicalCode struct {
-	ID           string             `json:"id"`
-	AdmissionID  string             `json:"admissionId"`
-	System       ClinicalCodeSystem `json:"system"`
-	Code         string             `json:"code"`        // e.g. "J18.9" or "92514-00"
-	Description  string             `json:"description"` // human-readable label
-	CodeType     ClinicalCodeType   `json:"codeType"`
-	Sequence     int                `json:"sequence"`    // ordering within type (1 = principal)
-	CoderHPI     string             `json:"coderHpi,omitempty"`
-	TenantID     string             `json:"tenantId"`
-	CodedAt      time.Time          `json:"codedAt"`
+	ID          string             `json:"id"`
+	AdmissionID string             `json:"admissionId"`
+	System      ClinicalCodeSystem `json:"system"`
+	Code        string             `json:"code"`        // e.g. "J18.9" or "92514-00"
+	Description string             `json:"description"` // human-readable label
+	CodeType    ClinicalCodeType   `json:"codeType"`
+	Sequence    int                `json:"sequence"` // ordering within type (1 = principal)
+	CoderHPI    string             `json:"coderHpi,omitempty"`
+	TenantID    string             `json:"tenantId"`
+	CodedAt     time.Time          `json:"codedAt"`
 }
 
 // CodeValidationResult reports whether a submitted code is valid.
 type CodeValidationResult struct {
 	Code        string             `json:"code"`
 	System      ClinicalCodeSystem `json:"system"`
-	Valid        bool              `json:"valid"`
+	Valid       bool               `json:"valid"`
 	Description string             `json:"description,omitempty"`
 	Error       string             `json:"error,omitempty"`
 }

@@ -18,10 +18,10 @@ import (
 type MCITriageCategory string
 
 const (
-	MCIImmediate MCITriageCategory = "immediate"  // life-threatening, can survive with immediate care
-	MCIDelayed   MCITriageCategory = "delayed"    // serious but not immediately life-threatening
-	MCIMinor     MCITriageCategory = "minor"      // walking wounded
-	MCIExpectant MCITriageCategory = "expectant"  // unsurvivable given available resources
+	MCIImmediate MCITriageCategory = "immediate" // life-threatening, can survive with immediate care
+	MCIDelayed   MCITriageCategory = "delayed"   // serious but not immediately life-threatening
+	MCIMinor     MCITriageCategory = "minor"     // walking wounded
+	MCIExpectant MCITriageCategory = "expectant" // unsurvivable given available resources
 	MCIDeceased  MCITriageCategory = "deceased"
 )
 
@@ -56,23 +56,23 @@ type STARTInputs struct {
 
 // MCIPatient is a tagged patient in a mass casualty incident.
 type MCIPatient struct {
-	ID                string            `json:"id"`
-	IncidentID        string            `json:"incidentId"`
-	TenantID          string            `json:"tenantId"`
-	TagNumber         int               `json:"tagNumber"`
-	NHIMasked         string            `json:"nhiMasked,omitempty"` // display only — last 3 chars
-	TriageCategory    MCITriageCategory `json:"triageCategory"`
-	TriageMethod      MCITriageMethod   `json:"triageMethod"`
-	IsPaediatric      bool              `json:"isPaediatric"`
-	AgeYearsApprox    *int              `json:"ageYearsApprox,omitempty"`
-	Sex               string            `json:"sex,omitempty"`
-	PresentingComplaint string          `json:"presentingComplaint,omitempty"`
-	AllocatedZone     string            `json:"allocatedZone,omitempty"`
-	LastReassessedAt  *time.Time        `json:"lastReassessedAt,omitempty"`
-	ReassessedBy      string            `json:"reassessedBy,omitempty"`
-	Notes             string            `json:"notes,omitempty"`
-	CreatedAt         time.Time         `json:"createdAt"`
-	UpdatedAt         time.Time         `json:"updatedAt"`
+	ID                  string            `json:"id"`
+	IncidentID          string            `json:"incidentId"`
+	TenantID            string            `json:"tenantId"`
+	TagNumber           int               `json:"tagNumber"`
+	NHIMasked           string            `json:"nhiMasked,omitempty"` // display only — last 3 chars
+	TriageCategory      MCITriageCategory `json:"triageCategory"`
+	TriageMethod        MCITriageMethod   `json:"triageMethod"`
+	IsPaediatric        bool              `json:"isPaediatric"`
+	AgeYearsApprox      *int              `json:"ageYearsApprox,omitempty"`
+	Sex                 string            `json:"sex,omitempty"`
+	PresentingComplaint string            `json:"presentingComplaint,omitempty"`
+	AllocatedZone       string            `json:"allocatedZone,omitempty"`
+	LastReassessedAt    *time.Time        `json:"lastReassessedAt,omitempty"`
+	ReassessedBy        string            `json:"reassessedBy,omitempty"`
+	Notes               string            `json:"notes,omitempty"`
+	CreatedAt           time.Time         `json:"createdAt"`
+	UpdatedAt           time.Time         `json:"updatedAt"`
 }
 
 // MCISummary is the triage count dashboard for an incident.
@@ -85,13 +85,13 @@ type MCISummary struct {
 }
 
 type mciTagRequest struct {
-	TagNumber           int              `json:"tagNumber"`
-	STARTInputs         STARTInputs      `json:"startInputs"`
-	AgeYearsApprox      *int             `json:"ageYearsApprox,omitempty"`
-	Sex                 string           `json:"sex,omitempty"`
-	PresentingComplaint string           `json:"presentingComplaint,omitempty"`
-	AllocatedZone       string           `json:"allocatedZone,omitempty"`
-	Notes               string           `json:"notes,omitempty"`
+	TagNumber           int         `json:"tagNumber"`
+	STARTInputs         STARTInputs `json:"startInputs"`
+	AgeYearsApprox      *int        `json:"ageYearsApprox,omitempty"`
+	Sex                 string      `json:"sex,omitempty"`
+	PresentingComplaint string      `json:"presentingComplaint,omitempty"`
+	AllocatedZone       string      `json:"allocatedZone,omitempty"`
+	Notes               string      `json:"notes,omitempty"`
 }
 
 type mciUpdateRequest struct {
@@ -319,8 +319,8 @@ func (h *MCIHandler) Summary(w http.ResponseWriter, r *http.Request) {
 //  6. Otherwise → DELAYED
 //
 // JumpSTART modifications (<8 yr / <25 kg):
-//  - Apnoeic + peripheral pulse present → attempt 5 rescue breaths → if breathing IMMEDIATE else EXPECTANT
-//  - AVPU < A → IMMEDIATE (uses AVPU instead of "follow commands")
+//   - Apnoeic + peripheral pulse present → attempt 5 rescue breaths → if breathing IMMEDIATE else EXPECTANT
+//   - AVPU < A → IMMEDIATE (uses AVPU instead of "follow commands")
 func runTriageAlgorithm(in STARTInputs) (MCITriageCategory, MCITriageMethod) {
 	method := MCIMethodSTART
 	if in.IsPaediatric {

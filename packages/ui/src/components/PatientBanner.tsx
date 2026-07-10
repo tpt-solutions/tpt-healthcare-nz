@@ -1,5 +1,3 @@
-import React from "react";
-
 export interface PatientBannerProps {
   name: string;
   nhi: string;

@@ -15,8 +15,8 @@ import (
 type WellChildCheckType string
 
 const (
-	WellChildNeonatal  WellChildCheckType = "neonatal"      // LMC handover check (~4–5 days)
-	WellChildCheck6wk  WellChildCheckType = "6wk"           // 4–6 week GP check
+	WellChildNeonatal  WellChildCheckType = "neonatal" // LMC handover check (~4–5 days)
+	WellChildCheck6wk  WellChildCheckType = "6wk"      // 4–6 week GP check
 	WellChildCheck3mo  WellChildCheckType = "3mo"
 	WellChildCheck5mo  WellChildCheckType = "5mo"
 	WellChildCheck9mo  WellChildCheckType = "9mo"
@@ -46,28 +46,28 @@ const (
 )
 
 type WellChildCheck struct {
-	ID                     string     `json:"id"`
-	MaternityEpisodeID     *string    `json:"maternityEpisodeId"`
-	PatientNHI             string     `json:"patientNhi"`
-	ProviderHpi            string     `json:"providerHpi"`
-	CheckType              string     `json:"checkType"`
-	Status                 string     `json:"status"`
-	AgeAtCheckWeeks        *int16     `json:"ageAtCheckWeeks"`
-	WeightKg               *float64   `json:"weightKg"`
-	HeightCm               *float64   `json:"heightCm"`
-	HeadCircumferenceCm    *float64   `json:"headCircumferenceCm"`
-	DevelopmentalConcerns  bool       `json:"developmentalConcerns"`
-	VisionConcerns         bool       `json:"visionConcerns"`
-	HearingConcerns        bool       `json:"hearingConcerns"`
-	SdqScore               *int16     `json:"sdqScore"`
-	SdqBand                *string    `json:"sdqBand"`
-	ImmunisationsUpToDate  bool       `json:"immunisationsUpToDate"`
-	Referrals              *string    `json:"referrals"`
-	Notes                  *string    `json:"notes"`
-	TenantID               string     `json:"tenantId"`
-	CheckedAt              time.Time  `json:"checkedAt"`
-	CreatedAt              time.Time  `json:"createdAt"`
-	UpdatedAt              time.Time  `json:"updatedAt"`
+	ID                    string    `json:"id"`
+	MaternityEpisodeID    *string   `json:"maternityEpisodeId"`
+	PatientNHI            string    `json:"patientNhi"`
+	ProviderHpi           string    `json:"providerHpi"`
+	CheckType             string    `json:"checkType"`
+	Status                string    `json:"status"`
+	AgeAtCheckWeeks       *int16    `json:"ageAtCheckWeeks"`
+	WeightKg              *float64  `json:"weightKg"`
+	HeightCm              *float64  `json:"heightCm"`
+	HeadCircumferenceCm   *float64  `json:"headCircumferenceCm"`
+	DevelopmentalConcerns bool      `json:"developmentalConcerns"`
+	VisionConcerns        bool      `json:"visionConcerns"`
+	HearingConcerns       bool      `json:"hearingConcerns"`
+	SdqScore              *int16    `json:"sdqScore"`
+	SdqBand               *string   `json:"sdqBand"`
+	ImmunisationsUpToDate bool      `json:"immunisationsUpToDate"`
+	Referrals             *string   `json:"referrals"`
+	Notes                 *string   `json:"notes"`
+	TenantID              string    `json:"tenantId"`
+	CheckedAt             time.Time `json:"checkedAt"`
+	CreatedAt             time.Time `json:"createdAt"`
+	UpdatedAt             time.Time `json:"updatedAt"`
 }
 
 type WellChildGrowthPoint struct {
@@ -182,24 +182,24 @@ func (h *wellChildHandler) Create(w http.ResponseWriter, r *http.Request) {
 		          sdq_score, sdq_band, immunisations_up_to_date, referrals, notes,
 		          tenant_id, checked_at, created_at, updated_at
 	`, pgx.NamedArgs{
-		"maternity_episode_id":    req.MaternityEpisodeID,
-		"patient_nhi":             nhiEnc,
-		"provider_hpi":            req.ProviderHpi,
-		"check_type":              req.CheckType,
-		"status":                  req.Status,
-		"age_at_check_weeks":      req.AgeAtCheckWeeks,
-		"weight_kg":               req.WeightKg,
-		"height_cm":               req.HeightCm,
-		"head_circumference_cm":   req.HeadCircumferenceCm,
-		"developmental_concerns":  req.DevelopmentalConcerns,
-		"vision_concerns":         req.VisionConcerns,
-		"hearing_concerns":        req.HearingConcerns,
-		"sdq_score":               req.SdqScore,
-		"sdq_band":                req.SdqBand,
+		"maternity_episode_id":     req.MaternityEpisodeID,
+		"patient_nhi":              nhiEnc,
+		"provider_hpi":             req.ProviderHpi,
+		"check_type":               req.CheckType,
+		"status":                   req.Status,
+		"age_at_check_weeks":       req.AgeAtCheckWeeks,
+		"weight_kg":                req.WeightKg,
+		"height_cm":                req.HeightCm,
+		"head_circumference_cm":    req.HeadCircumferenceCm,
+		"developmental_concerns":   req.DevelopmentalConcerns,
+		"vision_concerns":          req.VisionConcerns,
+		"hearing_concerns":         req.HearingConcerns,
+		"sdq_score":                req.SdqScore,
+		"sdq_band":                 req.SdqBand,
 		"immunisations_up_to_date": req.ImmunisationsUpToDate,
-		"referrals":               req.Referrals,
-		"notes":                   req.Notes,
-		"tenant_id":               tenantID,
+		"referrals":                req.Referrals,
+		"notes":                    req.Notes,
+		"tenant_id":                tenantID,
 	}).Scan(
 		&c.ID, &c.MaternityEpisodeID, &c.PatientNHI, &c.ProviderHpi, &c.CheckType, &c.Status,
 		&c.AgeAtCheckWeeks, &c.WeightKg, &c.HeightCm, &c.HeadCircumferenceCm,
@@ -296,20 +296,20 @@ func (h *wellChildHandler) Update(w http.ResponseWriter, r *http.Request) {
 		          sdq_score, sdq_band, immunisations_up_to_date, referrals, notes,
 		          tenant_id, checked_at, created_at, updated_at
 	`, pgx.NamedArgs{
-		"status":                  req.Status,
-		"weight_kg":               req.WeightKg,
-		"height_cm":               req.HeightCm,
-		"head_circumference_cm":   req.HeadCircumferenceCm,
-		"developmental_concerns":  req.DevelopmentalConcerns,
-		"vision_concerns":         req.VisionConcerns,
-		"hearing_concerns":        req.HearingConcerns,
-		"sdq_score":               req.SdqScore,
-		"sdq_band":                req.SdqBand,
+		"status":                   req.Status,
+		"weight_kg":                req.WeightKg,
+		"height_cm":                req.HeightCm,
+		"head_circumference_cm":    req.HeadCircumferenceCm,
+		"developmental_concerns":   req.DevelopmentalConcerns,
+		"vision_concerns":          req.VisionConcerns,
+		"hearing_concerns":         req.HearingConcerns,
+		"sdq_score":                req.SdqScore,
+		"sdq_band":                 req.SdqBand,
 		"immunisations_up_to_date": req.ImmunisationsUpToDate,
-		"referrals":               req.Referrals,
-		"notes":                   req.Notes,
-		"id":                      id,
-		"tenant_id":               tenantID,
+		"referrals":                req.Referrals,
+		"notes":                    req.Notes,
+		"id":                       id,
+		"tenant_id":                tenantID,
 	}).Scan(
 		&c.ID, &c.MaternityEpisodeID, &c.PatientNHI, &c.ProviderHpi, &c.CheckType, &c.Status,
 		&c.AgeAtCheckWeeks, &c.WeightKg, &c.HeightCm, &c.HeadCircumferenceCm,
@@ -407,13 +407,13 @@ func (h *wellChildHandler) RecordGrowthPoint(w http.ResponseWriter, r *http.Requ
 		RETURNING id, well_child_check_id, patient_nhi,
 		          weight_kg, height_cm, head_circumference_cm, centile_band, recorded_at, tenant_id
 	`, pgx.NamedArgs{
-		"check_id":             id,
-		"patient_nhi":          nhiEnc,
-		"weight_kg":            req.WeightKg,
-		"height_cm":            req.HeightCm,
+		"check_id":              id,
+		"patient_nhi":           nhiEnc,
+		"weight_kg":             req.WeightKg,
+		"height_cm":             req.HeightCm,
 		"head_circumference_cm": req.HeadCircumferenceCm,
-		"centile_band":         req.CentileBand,
-		"tenant_id":            tenantID,
+		"centile_band":          req.CentileBand,
+		"tenant_id":             tenantID,
 	}).Scan(
 		&p.ID, &p.WellChildCheckID, &p.PatientNHI,
 		&p.WeightKg, &p.HeightCm, &p.HeadCircumferenceCm, &p.CentileBand, &p.RecordedAt, &p.TenantID,

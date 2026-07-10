@@ -1,10 +1,14 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/PhillipC05/tpt-healthcare/core/encryption"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // --- Domain types ---
@@ -107,6 +111,8 @@ type ConsumeSessionRequest struct {
 
 // ACCHandler handles all /api/v1/acc/* routes.
 type ACCHandler struct {
+	pool   *pgxpool.Pool
+	enc    *encryption.Encryptor
 	logger *slog.Logger
 }
 
@@ -128,10 +134,17 @@ func (h *ACCHandler) List(w http.ResponseWriter, r *http.Request) {
 		"request_id", r.Context().Value(requestIDKey),
 	)
 
-	// In production: query billing_acc_claims with the given filters, cursor pagination.
+	q := newQueryDB(h.pool, h.enc)
+	claims, err := q.listACCClaims(r.Context(), tenantID, status, sourceModule)
+	if err != nil {
+		h.logger.Error("list ACC claims", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to list ACC claims")
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"claims": []ACCClaim{},
-		"total":  0,
+		"claims": claims,
+		"total":  len(claims),
 	})
 }
 
@@ -169,13 +182,6 @@ func (h *ACCHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production:
-	//   1. Validate NHI checksum via core/nhi.
-	//   2. Validate provider APC via core/hpi (must be current and match discipline scope).
-	//   3. Encrypt patientNhi with core/encryption before persisting.
-	//   4. Persist to billing_acc_claims with status=pending.
-	//   5. Write AuditEvent.
-
 	now := time.Now().UTC()
 	claim := ACCClaim{
 		ID:                fmt.Sprintf("acc-%d", now.UnixNano()),
@@ -190,6 +196,13 @@ func (h *ACCHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Status:            ACCClaimStatusPending,
 		CreatedAt:         now,
 		UpdatedAt:         now,
+	}
+
+	q := newQueryDB(h.pool, h.enc)
+	if err := q.insertACCClaim(r.Context(), claim); err != nil {
+		h.logger.Error("insert ACC claim", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to create ACC claim")
+		return
 	}
 
 	h.logger.Info("ACC claim created",
@@ -210,10 +223,21 @@ func (h *ACCHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production: load claim from billing_acc_claims by id.
 	h.logger.Info("get ACC claim", "claim_id", id, "request_id", r.Context().Value(requestIDKey))
 
-	writeError(w, http.StatusNotFound, "claim not found")
+	q := newQueryDB(h.pool, h.enc)
+	claim, err := q.getACCClaim(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeError(w, http.StatusNotFound, "claim not found")
+			return
+		}
+		h.logger.Error("get ACC claim", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to get ACC claim")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, claim)
 }
 
 // Submit handles POST /api/v1/acc/claims/{id}/submit — lodge the claim with ACC.
@@ -228,17 +252,38 @@ func (h *ACCHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	q := newQueryDB(h.pool, h.enc)
+	claim, err := q.getACCClaim(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeError(w, http.StatusNotFound, "claim not found")
+			return
+		}
+		h.logger.Error("get ACC claim for submit", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to load ACC claim")
+		return
+	}
+	if string(claim.Status) != string(ACCClaimStatusPending) {
+		writeError(w, http.StatusConflict, "ACC claim must be in pending status to submit")
+		return
+	}
+
 	// In production:
-	//   1. Load claim, assert status == pending.
 	//   2. Construct FHIR R5 Claim resource (core/fhir/r5).
-	//      - Patient identifier: https://standards.digital.health.nz/ns/nhi-id
-	//      - Provider identifier: https://standards.digital.health.nz/ns/hpi-person-id
-	//      - Diagnosis system: http://hl7.org/fhir/sid/icd-10
 	//   3. POST to ACC FHIR endpoint (cfg.ACCBaseURL) with mTLS + SMART bearer token.
 	//   4. Parse ClaimResponse: extract ACC claim number and PO number.
-	//   5. Update billing_acc_claims: status=active, acc_claim_number, lodged_at.
-	//   6. Insert purchase order into billing_acc_purchase_orders.
-	//   7. Write AuditEvent.
+	//   5. Insert purchase order into billing_acc_purchase_orders.
+	//   6. Write AuditEvent.
+
+	// For now, update status to active with placeholder claim/PO numbers.
+	claimNumber := fmt.Sprintf("ACC-%s", id)
+	poNumber := fmt.Sprintf("PO-%s", id)
+
+	if err := q.updateACCClaimStatus(r.Context(), id, ACCClaimStatusActive, claimNumber, poNumber); err != nil {
+		h.logger.Error("update ACC claim status", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to submit ACC claim")
+		return
+	}
 
 	now := time.Now().UTC()
 
@@ -263,17 +308,23 @@ func (h *ACCHandler) Status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production:
-	//   1. Load claim from billing_acc_claims.
-	//   2. If status is active: poll ACC FHIR ClaimResponse endpoint.
-	//   3. Update local status if changed.
-	//   4. Return current status.
+	q := newQueryDB(h.pool, h.enc)
+	claim, err := q.getACCClaim(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeError(w, http.StatusNotFound, "claim not found")
+			return
+		}
+		h.logger.Error("get ACC claim status", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to check ACC claim status")
+		return
+	}
 
 	h.logger.Info("ACC claim status check", "claim_id", id, "request_id", r.Context().Value(requestIDKey))
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"claimId":   id,
-		"status":    string(ACCClaimStatusActive),
+		"status":    string(claim.Status),
 		"checkedAt": time.Now().UTC(),
 	})
 }
@@ -296,10 +347,17 @@ func (h *ACCHandler) ListPurchaseOrders(w http.ResponseWriter, r *http.Request) 
 		"request_id", r.Context().Value(requestIDKey),
 	)
 
-	// In production: query billing_acc_purchase_orders with filters.
+	q := newQueryDB(h.pool, h.enc)
+	pos, err := q.listACCPurchaseOrders(r.Context(), claimID, status, discipline)
+	if err != nil {
+		h.logger.Error("list ACC purchase orders", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to list purchase orders")
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"purchaseOrders": []ACCPurchaseOrder{},
-		"total":          0,
+		"purchaseOrders": pos,
+		"total":          len(pos),
 	})
 }
 
@@ -313,7 +371,19 @@ func (h *ACCHandler) GetPurchaseOrder(w http.ResponseWriter, r *http.Request) {
 
 	h.logger.Info("get ACC purchase order", "po_id", id, "request_id", r.Context().Value(requestIDKey))
 
-	writeError(w, http.StatusNotFound, "purchase order not found")
+	q := newQueryDB(h.pool, h.enc)
+	po, err := q.getACCPurchaseOrder(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeError(w, http.StatusNotFound, "purchase order not found")
+			return
+		}
+		h.logger.Error("get ACC purchase order", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to get purchase order")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, po)
 }
 
 // ConsumePurchaseOrderSession handles POST /api/v1/acc/purchase-orders/{id}/consume.
@@ -339,22 +409,26 @@ func (h *ACCHandler) ConsumePurchaseOrderSession(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// In production:
-	//   1. Load PO from billing_acc_purchase_orders, assert status=active.
-	//   2. Assert used_sessions < max_sessions and (expiry_date is null OR service_date <= expiry_date).
-	//   3. Increment used_sessions; if used_sessions == max_sessions set status=exhausted.
-	//   4. Write AuditEvent.
-	//   5. Return updated PO.
+	q := newQueryDB(h.pool, h.enc)
+	po, err := q.consumeACCPurchaseOrderSession(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, errNotFound) {
+			writeError(w, http.StatusNotFound, "purchase order not found")
+			return
+		}
+		h.logger.Error("consume ACC PO session", "error", err)
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
 
 	h.logger.Info("ACC PO session consumed",
 		"po_id", id,
 		"service_date", req.ServiceDate,
 		"provider_hpi", req.ProviderHPI,
+		"used_sessions", po.UsedSessions,
+		"remaining_sessions", po.RemainingSession,
 		"request_id", r.Context().Value(requestIDKey),
 	)
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"purchaseOrderId": id,
-		"message":         "session recorded",
-	})
+	writeJSON(w, http.StatusOK, po)
 }

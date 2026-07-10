@@ -7,11 +7,17 @@ use (
 	./modules/tpt-addiction
 	./modules/tpt-aged-care
 	./modules/tpt-allied-health
+	./modules/tpt-blood-bank
 	./modules/tpt-cardiology
 	./modules/tpt-chiropractic
+	./modules/tpt-clinical-trials
 	./modules/tpt-community-health
 	./modules/tpt-counselling
+	./modules/tpt-dental
+	./modules/tpt-disability
 	./modules/tpt-doctor
+	./modules/tpt-epidemiology
+	./modules/tpt-health-billing
 	./modules/tpt-hospital
 	./modules/tpt-immunisation
 	./modules/tpt-massage
@@ -22,20 +28,14 @@ use (
 	./modules/tpt-oncology
 	./modules/tpt-osteopathy
 	./modules/tpt-palliative
-	./modules/tpt-blood-bank
-	./modules/tpt-clinical-trials
-	./modules/tpt-dental
-	./modules/tpt-disability
-	./modules/tpt-epidemiology
-	./modules/tpt-health-billing
 	./modules/tpt-pathology
 	./modules/tpt-pharmacy
 	./modules/tpt-practice
-	./modules/tpt-screening
-	./modules/tpt-telehealth
 	./modules/tpt-radiology
 	./modules/tpt-rehabilitation
 	./modules/tpt-renal
+	./modules/tpt-screening
 	./modules/tpt-tcm
+	./modules/tpt-telehealth
 	./modules/tpt-vision
 )

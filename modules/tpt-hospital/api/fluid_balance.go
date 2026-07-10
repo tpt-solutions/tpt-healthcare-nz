@@ -29,29 +29,29 @@ const (
 
 // BalanceEntry records a single fluid input or output event.
 type BalanceEntry struct {
-	ID           string    `json:"id"`
-	AdmissionID  string    `json:"admissionId"`
-	PatientNHI   string    `json:"patientNhi"`
-	Direction    string    `json:"direction"`    // "in" or "out"
-	FluidType    FluidType `json:"fluidType"`
-	VolumeML     int       `json:"volumeMl"`
-	ProductName  string    `json:"productName"`  // e.g. "Normal Saline", "Blood O-"
-	Concentration string   `json:"concentration,omitempty"`
-	RecordedBy   string    `json:"recordedBy"`
-	RecordedAt   time.Time `json:"recordedAt"`
-	Shift        string    `json:"shift"`         // day, evening, night
-	Comments     string    `json:"comments,omitempty"`
+	ID            string    `json:"id"`
+	AdmissionID   string    `json:"admissionId"`
+	PatientNHI    string    `json:"patientNhi"`
+	Direction     string    `json:"direction"` // "in" or "out"
+	FluidType     FluidType `json:"fluidType"`
+	VolumeML      int       `json:"volumeMl"`
+	ProductName   string    `json:"productName"` // e.g. "Normal Saline", "Blood O-"
+	Concentration string    `json:"concentration,omitempty"`
+	RecordedBy    string    `json:"recordedBy"`
+	RecordedAt    time.Time `json:"recordedAt"`
+	Shift         string    `json:"shift"` // day, evening, night
+	Comments      string    `json:"comments,omitempty"`
 }
 
 // FluidBalanceSummary aggregates fluid balance over a period.
 type FluidBalanceSummary struct {
-	AdmissionID    string `json:"admissionId"`
-	PeriodStart    time.Time `json:"periodStart"`
-	PeriodEnd      time.Time `json:"periodEnd"`
-	TotalInputML   int    `json:"totalInputMl"`
-	TotalOutputML  int    `json:"totalOutputMl"`
-	NetBalanceML   int    `json:"netBalanceMl"`   // positive = positive balance
-	EntryCount     int    `json:"entryCount"`
+	AdmissionID   string    `json:"admissionId"`
+	PeriodStart   time.Time `json:"periodStart"`
+	PeriodEnd     time.Time `json:"periodEnd"`
+	TotalInputML  int       `json:"totalInputMl"`
+	TotalOutputML int       `json:"totalOutputMl"`
+	NetBalanceML  int       `json:"netBalanceMl"` // positive = positive balance
+	EntryCount    int       `json:"entryCount"`
 }
 
 // NewBalanceEntry creates a new fluid balance entry.

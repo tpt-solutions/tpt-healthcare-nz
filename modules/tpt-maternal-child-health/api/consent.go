@@ -46,25 +46,25 @@ const (
 // Applies to parent/guardian proxy consent for neonates and children, and to child assent
 // from approximately age 7 onward.
 type ConsentForm struct {
-	ID                   string     `json:"id"`
-	ResourceType         string     `json:"resourceType"`
-	ResourceID           string     `json:"resourceId"`
-	PatientNHI           string     `json:"patientNhi"`
-	ConsentType          string     `json:"consentType"`
-	ConsentGiven         bool       `json:"consentGiven"`
-	GivenByNHI           *string    `json:"givenByNhi"`
-	GivenByName          string     `json:"givenByName"`
-	GivenByRelationship  string     `json:"givenByRelationship"`
-	ClinicianHpi         string     `json:"clinicianHpi"`
-	Description          string     `json:"description"`
-	Notes                *string    `json:"notes"`
-	SignedAt             *time.Time `json:"signedAt"`
-	WithdrawnAt          *time.Time `json:"withdrawnAt"`
-	WithdrawnReason      *string    `json:"withdrawnReason"`
-	Status               string     `json:"status"`
-	TenantID             string     `json:"tenantId"`
-	CreatedAt            time.Time  `json:"createdAt"`
-	UpdatedAt            time.Time  `json:"updatedAt"`
+	ID                  string     `json:"id"`
+	ResourceType        string     `json:"resourceType"`
+	ResourceID          string     `json:"resourceId"`
+	PatientNHI          string     `json:"patientNhi"`
+	ConsentType         string     `json:"consentType"`
+	ConsentGiven        bool       `json:"consentGiven"`
+	GivenByNHI          *string    `json:"givenByNhi"`
+	GivenByName         string     `json:"givenByName"`
+	GivenByRelationship string     `json:"givenByRelationship"`
+	ClinicianHpi        string     `json:"clinicianHpi"`
+	Description         string     `json:"description"`
+	Notes               *string    `json:"notes"`
+	SignedAt            *time.Time `json:"signedAt"`
+	WithdrawnAt         *time.Time `json:"withdrawnAt"`
+	WithdrawnReason     *string    `json:"withdrawnReason"`
+	Status              string     `json:"status"`
+	TenantID            string     `json:"tenantId"`
+	CreatedAt           time.Time  `json:"createdAt"`
+	UpdatedAt           time.Time  `json:"updatedAt"`
 }
 
 // consentHandler manages consent and assent forms for all MCH clinical records.

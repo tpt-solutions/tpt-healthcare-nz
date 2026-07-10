@@ -257,3 +257,45 @@ func scanAdmissionRow(row dbRow) (Admission, error) {
 	}
 	return a, nil
 }
+
+func (h *AdmissionsHandler) markGPNotified(ctx context.Context, summaryID, tenantID string, notifiedAt *time.Time) error {
+	_, err := h.pool.Exec(ctx,
+		`UPDATE hospital_discharge_summaries
+		 SET gp_notified = true, gp_notified_at = @gp_notified_at
+		 WHERE id = @id AND tenant_id = @tenant_id`,
+		db.NamedArgs{
+			"gp_notified_at": notifiedAt,
+			"id":             summaryID,
+			"tenant_id":      tenantID,
+		},
+	)
+	return err
+}
+
+func (h *AdmissionsHandler) listClinicalCodes(ctx context.Context, admissionID, tenantID string) ([]ClinicalCode, error) {
+	rows, err := h.pool.Query(ctx,
+		`SELECT id, admission_id, system, code, description, code_type, sequence, coder_hpi,
+		        tenant_id, coded_at
+		 FROM clinical_codes
+		 WHERE admission_id = @admission_id AND tenant_id = @tenant_id
+		 ORDER BY code_type, sequence`,
+		db.NamedArgs{"admission_id": admissionID, "tenant_id": tenantID},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query clinical codes: %w", err)
+	}
+	defer rows.Close()
+
+	var results []ClinicalCode
+	for rows.Next() {
+		var c ClinicalCode
+		if err := rows.Scan(
+			&c.ID, &c.AdmissionID, &c.System, &c.Code, &c.Description,
+			&c.CodeType, &c.Sequence, &c.CoderHPI, &c.TenantID, &c.CodedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan clinical code: %w", err)
+		}
+		results = append(results, c)
+	}
+	return results, rows.Err()
+}
