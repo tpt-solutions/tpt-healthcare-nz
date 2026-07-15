@@ -34,7 +34,7 @@
  *   without manual translation for every key.
  */
 
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useContext } from 'react'
 
 export type SupportedLanguage = 'en' | 'mi' | 'sm' | 'to' | 'zh' | 'hi' | 'yue' | 'fr' | 'es' | 'ne' | 'vi'
 
@@ -117,7 +117,7 @@ export function useTranslation(): I18nContextValue {
  * loadTranslations loads the translation JSON for the given language.
  * Falls back to English if the language file is not found.
  */
-async function loadTranslations(lang: SupportedLanguage): Promise<TranslationMap> {
+export async function loadTranslations(lang: SupportedLanguage): Promise<TranslationMap> {
   try {
     const mod = await loaders[lang]()
     return mod.default

@@ -137,8 +137,8 @@ export function NavLayout() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+      {/* Sidebar — hidden on mobile, shown on md+ */}
+      <aside className="hidden md:flex md:flex-col w-64 bg-white border-r border-gray-200 flex-shrink-0">
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
           <div className="flex items-center gap-2">
@@ -215,7 +215,7 @@ export function NavLayout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 min-w-0 overflow-auto">
         <Outlet />
       </main>
     </div>
